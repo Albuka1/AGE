@@ -1,0 +1,24 @@
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.100
+      - run: dotnet build Age.slnx -c Release
+      - run: dotnet test --project tests/Age.Tests/Age.Tests.csproj --no-build -c Release
+      - run: dotnet publish samples/Age.Sample/Age.Sample.csproj -c Release -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Age.Sample-${{ github.ref_name }}
+          path: publish/
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: publish/**
