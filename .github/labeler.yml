@@ -1,0 +1,72 @@
+"Area: Core":
+  - changed-files:
+      - any-glob-to-any-file: 'src/Age.Core/**'
+
+"Area: Rendering":
+  - changed-files:
+      - any-glob-to-any-file: 'src/Age.Rendering/**'
+
+"Area: UI":
+  - changed-files:
+      - any-glob-to-any-file: 'src/Age.UI/**'
+
+"Area: Physics":
+  - changed-files:
+      - any-glob-to-any-file: 'src/Age.Physics/**'
+
+"Area: Input":
+  - changed-files:
+      - any-glob-to-any-file: 'src/Age.Input/**'
+
+"Area: Audio":
+  - changed-files:
+      - any-glob-to-any-file: 'src/Age.Audio/**'
+
+"Area: Assets":
+  - changed-files:
+      - any-glob-to-any-file: 'src/Age.Assets/**'
+
+"Area: Sample":
+  - changed-files:
+      - any-glob-to-any-file: 'samples/**'
+
+"Area: Tests":
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+"Area: CI":
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+"Area: Docs":
+  - changed-files:
+      - any-glob-to-any-file: ['docs/**', '*.md']
+
+"T: Bug":
+  - head-branch: ['^fix/', '^bugfix/']
+
+"T: Feature":
+  - head-branch: ['^feat/', '^feature/']
+
+"T: Refactor":
+  - head-branch: ['^refactor/']
+
+"T: Docs":
+  - head-branch: ['^docs/']
+
+"T: CI":
+  - head-branch: ['^ci/']
+
+"T: Chore":
+  - head-branch: ['^chore/']
+
+"T: Dependencies":
+  - changed-files:
+      - any-glob-to-all-files: ['Directory.Packages.props']
+
+"Branch: Main":
+  - base-branch: 'main'
+
+"S: Needs Review":
+  - changed-files:
+      - any-glob-to-any-file: '**'
