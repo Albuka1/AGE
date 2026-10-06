@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IAssetLoader.Load<T>` for UTF-8 text, raw bytes and JSON assets.
 - `ResourceHandle` and `ResourcePool<T>`, the shared versioned store behind engine resources.
 
 ## [0.1.0] - 2026-10-06

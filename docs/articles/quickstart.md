@@ -35,6 +35,23 @@ world.Set(sprite, new TransformComponent { Position = new Vector2(400, 300), Sca
 world.Set(sprite, new SpriteComponent { Size = new Vector2(64, 64), Color = Color.Red, ZOrder = 0 });
 ```
 
+## Load an asset
+
+```csharp
+IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
+assets.Initialize("content");
+
+TransformComponent spawn = assets.Load<TransformComponent>("spawn.json");
+string text = assets.Load<string>("readme.txt");
+byte[] bytes = assets.Load<byte[]>("logo.bin");
+```
+
+`Load<T>` reads UTF-8 text into `string`, the raw bytes into `byte[]` and
+deserializes every other type from JSON, so a component authored as
+`{ "position": { "x": 120, "y": 64 } }` binds to its public fields. Every path
+stays inside the game root that `Initialize` was given, and an escaping path
+throws.
+
 ## Run the loop
 
 ```csharp
