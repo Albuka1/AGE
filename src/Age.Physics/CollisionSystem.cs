@@ -17,7 +17,16 @@ public sealed class CollisionSystem : ISystem
     /// <summary>Gets the collision pairs that were produced by the most recent update.</summary>
     public IReadOnlyList<CollisionPair> LastPairs => _pairs;
 
-    /// <summary>Removes stale collision components, rebuilds the spatial hash and attaches new collision components.</summary>
+    /// <summary>Detects the colliders that overlap in the given world and republishes the result.</summary>
+    /// <param name="world">The world to scan.</param>
+    /// <param name="time">The frame time. Collision detection does not use it.</param>
+    /// <remarks>
+    /// The update runs in three steps. First every <see cref="CollisionComponent"/> is removed, so the result never
+    /// mixes with the previous frame. Then a spatial hash is rebuilt from the <see cref="ColliderComponent"/> boxes,
+    /// with a fixed cell size, which keeps the candidate pairs local, and the candidates in a cell are tested with
+    /// <see cref="Aabb.Intersects"/>. Finally each overlapping pair is added to <see cref="LastPairs"/> and a
+    /// <see cref="CollisionComponent"/> is attached to both entities, keeping the first partner of each entity.
+    /// </remarks>
     public void Update(World world, in GameTime time)
     {
         ArgumentNullException.ThrowIfNull(world);

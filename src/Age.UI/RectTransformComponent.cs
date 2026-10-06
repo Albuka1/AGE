@@ -3,11 +3,16 @@ using Age.Core;
 namespace Age.UI;
 
 /// <summary>
-/// Positions and sizes a UI element in screen space.
+/// Positions and sizes a UI element in screen space, in pixels, with the origin at the top-left corner of the window.
 /// </summary>
+/// <remarks>
+/// Screen space means the element is placed independently of the world camera and the y axis grows downwards. Point
+/// tests such as the ones in <see cref="UIUpdateSystem"/> use the same coordinates, so a pointer position can be
+/// compared with <see cref="Position"/> directly.
+/// </remarks>
 public struct RectTransformComponent : IComponent
 {
-    /// <summary>Gets or sets the position of the top-left corner, in screen coordinates.</summary>
+    /// <summary>Gets or sets the position of the top-left corner of the element, in screen pixels.</summary>
     public Vector2 Position;
 
     /// <summary>Gets or sets the size.</summary>

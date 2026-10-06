@@ -18,9 +18,16 @@ public sealed class UIUpdateSystem : ISystem
         _input = input;
     }
 
-    /// <summary>
-    /// Resets IsHovered and IsPressed on all buttons each frame before setting the top-most one.
-    /// </summary>
+    /// <summary>Recomputes the hover and press state of the buttons in the given world for the current pointer position.</summary>
+    /// <param name="world">The world to update.</param>
+    /// <param name="time">The frame time. The system does not use it.</param>
+    /// <remarks>
+    /// Every button first has <see cref="ButtonComponent.IsHovered"/> and <see cref="ButtonComponent.IsPressed"/> cleared,
+    /// so a button that lost the pointer stops reporting a state. Then the buttons that are interactable and have a
+    /// <see cref="RectTransformComponent"/> containing the pointer are considered, and the one with the highest
+    /// <see cref="RectTransformComponent.ZOrder"/> wins; when two share a ZOrder the later entity wins, which matches the
+    /// order the UI renderer draws them in. That button is marked hovered, and pressed while the left mouse button is held.
+    /// </remarks>
     public void Update(World world, in GameTime time)
     {
         ArgumentNullException.ThrowIfNull(world);

@@ -4,9 +4,14 @@ using System.Text.Json;
 namespace Age.Assets;
 
 /// <summary>
-/// The default asset loader. It resolves paths inside a sandbox rooted at the initialized game root, rejects any path that
-/// escapes it, and reads UTF-8 text, raw bytes and JSON.
+/// The default <see cref="IAssetLoader"/>, registered by <c>AddAgeAssets</c> and used when no other loader is
+/// registered. It resolves paths inside a sandbox rooted at the initialized game root, rejects any path that escapes
+/// it, and reads UTF-8 text, raw bytes and JSON.
 /// </summary>
+/// <remarks>
+/// The sandbox refuses absolute paths, paths that climb out of the root with <c>..</c> and links whose resolved target
+/// leaves the root, so a game cannot reach arbitrary files by choosing an asset path.
+/// </remarks>
 public sealed class NullAssetLoader : IAssetLoader
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
