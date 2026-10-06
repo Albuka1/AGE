@@ -1,0 +1,29 @@
+# Note: dotnet-outdated-tool has known limitations with CPM
+# (Directory.Packages.props). If it fails to update, update
+# versions manually via dotnet add package --version X.Y.Z.
+name: Update NuGet packages (CPM)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 1'
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.100
+      - run: dotnet tool install -g dotnet-outdated-tool
+      - run: dotnet outdated --upgrade --version-lock Major
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          title: 'chore(deps): update NuGet packages'
+          body: 'Automated NuGet package updates via dotnet-outdated.'
+          branch: 'chore/update-nuget'
+          labels: 'T: Dependencies'
+          commit-message: 'chore(deps): update NuGet packages'
+          delete-branch: true

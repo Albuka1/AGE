@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # NuGet is managed by CPM (Directory.Packages.props).
+  # Dependabot has known issues with CPM. NuGet updates are handled
+  # by .github/workflows/update-nuget-cpm.yml instead.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "T: CI"
+      - "T: Dependencies"
+    commit-message:
+      prefix: "chore(ci)"
