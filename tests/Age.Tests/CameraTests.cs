@@ -66,6 +66,24 @@ public sealed class CameraTests
         w.Should().BeApproximately(1f, Tolerance);
     }
 
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(0f)]
+    [InlineData(-1f)]
+    public void Camera2D_GetViewMatrix_ZoomNotGreaterThanZero_ThrowsInvalidOperationException(float zoom)
+    {
+        var camera = new Camera2D
+        {
+            Position = Vector2.Zero,
+            Zoom = zoom,
+            ViewportSize = new Vector2(1280f, 720f),
+        };
+
+        Action act = () => camera.GetViewMatrix();
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
     private static Vector2 Project(Matrix4x4 matrix, Vector2 point)
     {
         (float x, float y, _) = ProjectClip(matrix, point);

@@ -8,9 +8,10 @@ namespace Age.Core;
 /// <typeparam name="T">The resource payload, such as a device identifier or a small descriptor.</typeparam>
 /// <remarks>
 /// <para>
-/// A pool owns the lifetime of its resources. <see cref="Add"/> hands out a handle, <see cref="TryGet"/> resolves one,
-/// <see cref="Release"/> frees a single resource and <see cref="Clear"/> frees all of them while invoking a callback so
-/// the owner can delete the underlying device object.
+/// A pool owns the bookkeeping, not the payload. <see cref="Add"/> hands out a handle and <see cref="TryGet"/> resolves
+/// one. <see cref="Release"/> drops the payload of a single slot and <see cref="Clear"/> drops the payloads of all of
+/// them, but neither frees the underlying resource, and only <see cref="Clear"/> can run a callback, so the caller is
+/// the one that has to delete the device object.
 /// </para>
 /// <para>
 /// The slot of a released resource is reused with a new generation, so a handle left over from before the release stops
@@ -133,9 +134,10 @@ public sealed class ResourcePool<T>
     /// <summary>Releases every live resource, invoking an optional callback so its owner can free the device object.</summary>
     /// <param name="release">Called once for every live resource with the stored payload. Pass null when the payloads need no cleanup.</param>
     /// <remarks>
-    /// Each slot is released before its callback runs, so a callback that throws still leaves the pool consistent: the
-    /// resources that were not reached stay live and reachable. The generations of the slots survive, so handles from
-    /// before the call stay invalid.
+    /// Each slot is released before its callback runs, so a callback that throws still leaves the pool consistent. Only
+    /// the handles of the slots that were already cleared stop resolving; the slots that the call did not reach stay
+    /// live and their handles keep working. The generations of the cleared slots survive, so an older handle never
+    /// points at a resource that is added later.
     /// </remarks>
     public void Clear(Action<T>? release = null)
     {

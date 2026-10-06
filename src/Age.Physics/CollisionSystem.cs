@@ -10,6 +10,7 @@ public sealed class CollisionSystem : ISystem
     private const float CellSize = 64f;
 
     private readonly List<CollisionPair> _pairs = new();
+    private readonly List<Entity> _stale = new();
     private readonly Dictionary<int, Aabb> _boxes = new();
     private readonly Dictionary<(int X, int Y), List<Entity>> _cells = new();
     private readonly HashSet<(int A, int B)> _seen = new();
@@ -31,14 +32,29 @@ public sealed class CollisionSystem : ISystem
     {
         ArgumentNullException.ThrowIfNull(world);
 
-        foreach (Entity entity in world.Enumerate<CollisionComponent>())
-        {
-            world.Remove<CollisionComponent>(entity);
-        }
-
+        RemoveStale(world);
         _pairs.Clear();
         BuildHash(world);
         BuildPairs(world);
+    }
+
+    /// <summary>
+    /// Removes the collision components of the previous update. The entities are buffered first, because the world must
+    /// not change while <see cref="World.Enumerate{T}"/> walks it.
+    /// </summary>
+    private void RemoveStale(World world)
+    {
+        _stale.Clear();
+
+        foreach (Entity entity in world.Enumerate<CollisionComponent>())
+        {
+            _stale.Add(entity);
+        }
+
+        foreach (Entity entity in _stale)
+        {
+            world.Remove<CollisionComponent>(entity);
+        }
     }
 
     private void BuildHash(World world)

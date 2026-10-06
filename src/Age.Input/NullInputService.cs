@@ -8,9 +8,11 @@ namespace Age.Input;
 /// </summary>
 /// <remarks>
 /// Keyboard queries always return <see langword="false"/>. <see cref="MousePosition"/> comes from <see cref="State"/>, and
-/// the left mouse button reports <see cref="UIInputState.MouseDown"/> for both its down and its pressed query, while the
-/// right and middle buttons always report <see langword="false"/>. Because the state is a single flag it cannot express a
-/// press that lasts one frame only, so set it before the update that should see the press.
+/// the left mouse button reports <see cref="UIInputState.MouseDown"/> for both
+/// <see cref="IInputService.IsMouseButtonDown"/> and <see cref="IInputService.IsMouseButtonPressed"/>; the service reads
+/// the held state and never detects press transitions separately, so a press is reported on every frame the flag is set.
+/// The right and middle buttons always report <see langword="false"/>. Set <see cref="State"/> before an update that
+/// should see a press and clear the flag before an update that should not.
 /// </remarks>
 public sealed class NullInputService : IInputService
 {
