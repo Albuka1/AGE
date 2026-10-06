@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `IAssetLoader.Load<T>` for UTF-8 text, raw bytes and JSON assets.
 - `ResourceHandle` and `ResourcePool<T>`, the shared versioned store behind engine resources.
+- `IImageLoader` for decoding PNG, JPEG, BMP, TGA and GIF images into RGBA pixels.
 
 ## [0.1.0] - 2026-10-06
 
