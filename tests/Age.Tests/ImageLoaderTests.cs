@@ -31,9 +31,12 @@ public sealed class ImageLoaderTests : IDisposable
 
         ImageData image = _loader.Load("dot.png");
 
+        // The fixture is a single red pixel with an alpha of 127.
+        byte[] expected = [255, 0, 0, 127];
+
         image.Width.Should().Be(1);
         image.Height.Should().Be(1);
-        image.Pixels.Should().HaveCount(4);
+        image.Pixels.Should().Equal(expected);
     }
 
     [Fact]
