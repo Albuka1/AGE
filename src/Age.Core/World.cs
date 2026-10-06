@@ -37,10 +37,11 @@ public sealed class World
     /// <summary>Determines whether an entity has been created and not yet destroyed.</summary>
     public bool IsAlive(Entity entity) => _alive.TryGetValue(entity.Id, out bool alive) && alive;
 
-    /// <summary>
-    /// Returns the component of type <typeparamref name="T"/> attached to the entity.
-    /// Throws InvalidOperationException if entity is not alive OR if component T is not present. Use Has&lt;T&gt; to check first.
-    /// </summary>
+    /// <summary>Returns the component of type <typeparamref name="T"/> attached to the entity.</summary>
+    /// <typeparam name="T">The component type to read. Components are structs that implement <see cref="IComponent"/>.</typeparam>
+    /// <param name="entity">The entity that owns the component.</param>
+    /// <returns>A copy of the stored component. Use <see cref="GetRef{T}"/> to write to it in place.</returns>
+    /// <exception cref="InvalidOperationException">The entity is not alive, or it has no component of type <typeparamref name="T"/>. Check with <see cref="Has{T}"/> first.</exception>
     public T Get<T>(Entity entity) where T : struct, IComponent
     {
         ComponentStore<T> store = GetStore<T>();
@@ -48,11 +49,15 @@ public sealed class World
         return store.Get(entity.Id);
     }
 
-    /// <summary>
-    /// Returns a reference to the component of type <typeparamref name="T"/> attached to the entity.
-    /// Storage uses Dictionary&lt;Type, Array&gt; per component type. Boxing not allowed; components must be struct.
-    /// Returned ref is invalidated by subsequent Set&lt;T&gt; or CreateEntity calls for the same component type. Same throw semantics as Get.
-    /// </summary>
+    /// <summary>Returns a reference to the component of type <typeparamref name="T"/> attached to the entity, so it can be written in place.</summary>
+    /// <typeparam name="T">The component type to reference. Components are structs that implement <see cref="IComponent"/>, and storage is an <see cref="Array"/> per type, so nothing is boxed.</typeparam>
+    /// <param name="entity">The entity that owns the component.</param>
+    /// <returns>A reference to the stored component.</returns>
+    /// <exception cref="InvalidOperationException">The entity is not alive, or it has no component of type <typeparamref name="T"/>.</exception>
+    /// <remarks>
+    /// The reference stays valid until a later <c>Set&lt;T&gt;</c> resizes the store of <typeparamref name="T"/>, which
+    /// invalidates every reference that was handed out before it. Obtain the reference again after such a call.
+    /// </remarks>
     public ref T GetRef<T>(Entity entity) where T : struct, IComponent
     {
         ComponentStore<T> store = GetStore<T>();
@@ -80,7 +85,9 @@ public sealed class World
         }
     }
 
-    /// <summary>Returns the entities that currently have a component of type <typeparamref name="T"/>, in ascending identifier order.</summary>
+    /// <summary>Returns the entities that currently have a component of type <typeparamref name="T"/>.</summary>
+    /// <typeparam name="T">The component type to filter on.</typeparam>
+    /// <returns>An <see cref="IEnumerable{Entity}"/> over the matching entities, ordered by ascending <see cref="Entity.Id"/>. The sequence is produced lazily, so do not change the world while enumerating it.</returns>
     public IEnumerable<Entity> Enumerate<T>() where T : struct, IComponent
     {
         if (!_stores.TryGetValue(typeof(T), out IComponentStore? existing))

@@ -16,16 +16,21 @@ public interface IRenderer
     /// <summary>Sets the camera that is used by subsequent draws.</summary>
     void SetCamera(Camera2D camera);
 
-    /// <summary>
-    /// May be called multiple times per frame. Only the first call with clear=true performs GL.Clear.
-    /// Clears to Color.Black. Subsequent BeginFrame(false) calls do not clear. The camera is applied from the last SetCamera call.
-    /// </summary>
+    /// <summary>Starts a frame and prepares the renderer for draws.</summary>
+    /// <param name="clear">Requests clearing of the color buffer. The request is honoured only while no earlier call in the frame has cleared it, so an earlier call that passed <see langword="false"/> does not prevent a later clear.</param>
+    /// <remarks>
+    /// May be called more than once per frame, for example once for the world and once for the UI. The first call that
+    /// passes <see langword="true"/> clears to <see cref="Color.Black"/>; every later call leaves the buffer untouched,
+    /// even when it also passes <see langword="true"/>. Draws use the camera of the most recent <see cref="SetCamera"/> call.
+    /// </remarks>
     void BeginFrame(bool clear);
 
-    /// <summary>
-    /// Draws a sprite. position is the top-left corner of the sprite in world coordinates. size is the final pixel size on screen.
-    /// If texture.Id is zero, renders a solid color quad equivalent to DrawRectangle(new Rect(position, size), color).
-    /// </summary>
+    /// <summary>Draws a sprite, either textured or as a solid color quad.</summary>
+    /// <param name="texture">The texture to sample. A handle whose <see cref="TextureHandle.Id"/> is zero selects a solid color quad.</param>
+    /// <param name="position">The top-left corner of the sprite, in world coordinates.</param>
+    /// <param name="size">The size of the quad in world coordinates, after the transform scale has been applied. The camera transform, including its zoom, is applied on top of it.</param>
+    /// <param name="color">The tint. It is multiplied with the sampled texel, or used as it is for a solid color quad.</param>
+    /// <remarks>The whole texture is mapped onto the quad. Without a texture the call draws the same rectangle as <see cref="DrawRectangle"/>.</remarks>
     void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color);
 
     /// <summary>Draws a filled rectangle.</summary>

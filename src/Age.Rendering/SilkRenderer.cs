@@ -4,9 +4,15 @@ using Silk.NET.OpenGL;
 namespace Age.Rendering;
 
 /// <summary>
-/// An OpenGL 3.3 core renderer. It uses a private shader shared by DrawRectangle, DrawSprite and DrawText.
-/// User-facing shaders and materials are planned; fixed-function drawing is not used.
+/// An OpenGL 3.3 core renderer that draws everything through one private shader program.
 /// </summary>
+/// <remarks>
+/// The vertex shader receives a position, a texture coordinate and a color, and projects the position with the matrix
+/// the renderer composes from the camera and the viewport. The fragment shader is a pass-through: it outputs the
+/// interpolated color, or multiplies it with the sampled texel when a texture is bound. Text and the built-in font atlas
+/// are drawn as quads like everything else, so no fixed-function drawing is used. User-facing shaders and materials are
+/// on the roadmap.
+/// </remarks>
 public sealed class SilkRenderer : IRenderer
 {
     private const int FloatsPerVertex = 8;

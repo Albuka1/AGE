@@ -4,9 +4,15 @@ using Age.UI;
 namespace Age.Rendering;
 
 /// <summary>
-/// Draws UI elements after the world. Single sorted pass by ZOrder. Equal ZOrder preserves ECS order.
-/// An element that carries both a button and a label draws the rectangle first and the text on top of it.
+/// Draws the visible UI elements of a world in one sorted pass, on top of the world.
 /// </summary>
+/// <remarks>
+/// Elements come from every entity that has a <see cref="RectTransformComponent"/> together with a
+/// <see cref="ButtonComponent"/> or a <see cref="TextLabelComponent"/>. They are sorted by <see cref="RectTransformComponent.ZOrder"/>
+/// with a stable sort, so elements that share a ZOrder keep their entity order. When an element carries both components,
+/// its rectangle is drawn first and its label on top of it. Call this after the world was rendered: the system installs a
+/// screen-space camera, so the UI does not move with the world camera.
+/// </remarks>
 public sealed class UIRenderSystem
 {
     private readonly IRenderer _renderer;
