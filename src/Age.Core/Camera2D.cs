@@ -1,7 +1,7 @@
 namespace Age.Core;
 
 /// <summary>
-/// A two-dimensional camera. The view matrix is scale(1/Zoom) multiplied by translate(-Position).
+/// A two-dimensional camera. The view matrix translates the world by -Position and then scales it by 1/Zoom.
 /// </summary>
 public struct Camera2D
 {
@@ -15,7 +15,9 @@ public struct Camera2D
     public Vector2 ViewportSize { get; set; }
 
     /// <summary>
-    /// Returns the view matrix: scale(1/Zoom) multiplied by translate(-Position). With a zero position and unit zoom the result is the identity matrix.
+    /// Returns the view matrix: translate(-Position) followed by scale(1/Zoom). Vectors are transformed as rows, so the
+    /// product applies the translation first and the camera position maps to the viewport origin at any zoom. Zoom must
+    /// be greater than zero. With a zero position and unit zoom the result is the identity matrix.
     /// </summary>
     public readonly Matrix4x4 GetViewMatrix()
     {
@@ -24,6 +26,6 @@ public struct Camera2D
             throw new InvalidOperationException("Camera2D.Zoom must be greater than zero.");
         }
 
-        return Matrix4x4.CreateScale(1f / Zoom, 1f / Zoom, 1f) * Matrix4x4.CreateTranslation(-Position.X, -Position.Y, 0f);
+        return Matrix4x4.CreateTranslation(-Position.X, -Position.Y, 0f) * Matrix4x4.CreateScale(1f / Zoom, 1f / Zoom, 1f);
     }
 }
