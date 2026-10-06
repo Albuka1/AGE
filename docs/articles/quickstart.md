@@ -52,6 +52,16 @@ deserializes every other type from JSON, so a component authored as
 stays inside the game root that `Initialize` was given, and an escaping path
 throws.
 
+## Load an image
+
+```csharp
+IImageLoader images = provider.GetRequiredService<IImageLoader>();
+ImageData logo = images.Load("logo.png");
+```
+
+`ImageData` holds tightly packed RGBA bytes with the origin at the top-left, so
+the pixels can be handed to the renderer as they are.
+
 ## Run the loop
 
 ```csharp
