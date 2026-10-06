@@ -17,6 +17,14 @@ namespace Age.Input;
 /// </remarks>
 public interface IInputService
 {
+    /// <summary>Starts a new input frame. Call it once per frame, before the systems run.</summary>
+    /// <remarks>
+    /// The pressed queries answer for the frame this call opens, so the implementation forgets the transitions that were
+    /// recorded while the previous frame was open. A key that goes down and up inside one frame is therefore still
+    /// reported as pressed for that frame.
+    /// </remarks>
+    void BeginFrame();
+
     /// <summary>Determines whether the key is currently held down.</summary>
     /// <param name="key">The key to inspect.</param>
     /// <returns><see langword="true"/> while the key is held, including the frame it was pressed on.</returns>

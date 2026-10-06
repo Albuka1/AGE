@@ -9,6 +9,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Silk.NET.Windowing" />
     <PackageReference Include="Silk.NET.OpenGL" />
+    <PackageReference Include="Silk.NET.Input" />
   </ItemGroup>
 
   <ItemGroup>

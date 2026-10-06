@@ -1,4 +1,5 @@
 using Age.Core;
+using Age.Input;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Age.Rendering;
@@ -19,6 +20,21 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<RenderSystem>();
         services.AddSingleton<UIRenderSystem>();
         services.AddSingleton<IGameLoop, SilkGameLoop>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="SilkInputService"/> as the input service, which reads the window instead of reporting nothing.
+    /// </summary>
+    /// <remarks>
+    /// Call it after <c>AddAgeInput</c>, because the last registration of <see cref="IInputService"/> is the one that a
+    /// single resolve returns. Use it only when the game runs with a window: the service opens the Silk.NET input
+    /// context from that window on the first frame.
+    /// </remarks>
+    public static IServiceCollection AddAgeSilkInput(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddSingleton<IInputService, SilkInputService>();
         return services;
     }
 }

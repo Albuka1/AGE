@@ -7,7 +7,7 @@ planned:
 ## Content pipeline
 
 - Scene serialization (JSON)
-- StbImageSharp and StbTrueTypeSharp integration
+- StbTrueTypeSharp integration
 
 ## Rendering
 
@@ -16,7 +16,6 @@ planned:
 
 ## Input and audio
 
-- `SilkInputService`
 - `OpenALAudioService`
 
 ## Simulation

@@ -23,7 +23,7 @@ AGE is organized as a set of focused assemblies:
 | `Age.Audio` | Sound playback abstraction |
 | `Age.Physics` | Axis-aligned collision detection with a spatial hash |
 | `Age.UI` | Retained UI components and pointer interaction |
-| `Age.Rendering` | Silk.NET window, OpenGL renderer and render systems |
+| `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems and window input |
 | `Age.Sample` | Console sample that wires everything together |
 | `Age.Tests` | Behavioural unit tests |
 
@@ -61,9 +61,8 @@ The following work is planned but not part of the current foundation:
 
 - Scene serialization (JSON)
 - User-defined shaders and materials
-- StbImageSharp, StbTrueTypeSharp
+- StbTrueTypeSharp
 - `OpenALAudioService`
-- `SilkInputService`
 - Entity id pool
 - Incremental spatial hash
 - OBB collision

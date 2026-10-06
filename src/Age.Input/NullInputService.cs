@@ -20,6 +20,12 @@ public sealed class NullInputService : IInputService
     public UIInputState State { get; set; }
 
     /// <inheritdoc />
+    /// <remarks>This double has no frame boundary: it keeps reporting the held state while the flag is set.</remarks>
+    public void BeginFrame()
+    {
+    }
+
+    /// <inheritdoc />
     public Vector2 MousePosition => State.MousePosition;
 
     /// <inheritdoc />
