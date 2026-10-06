@@ -2,4 +2,10 @@ blank_issues_enabled: false
 contact_links:
   - name: Discussions
     url: https://github.com/Albuka1/Age/discussions
-    about: Задай вопрос или предложи идею
+    about: Ask a question or suggest an idea
+  - name: Documentation
+    url: https://albuka1.github.io/AGE/
+    about: Read the API reference and articles
+  - name: Security policy
+    url: https://github.com/Albuka1/Age/blob/main/SECURITY.md
+    about: Report a vulnerability privately

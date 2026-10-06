@@ -3,14 +3,50 @@ description: Suggest an idea for AGE
 title: "[Feature]: "
 labels: ["T: Feature", "S: Needs Triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first, then the solution. Ideas that fit the
+        roadmap are easier to schedule.
   - type: textarea
     id: problem
-    attributes: { label: Проблема }
-    validations: { required: true }
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+      placeholder: I cannot ... because ...
+    validations:
+      required: true
   - type: textarea
     id: solution
-    attributes: { label: Предлагаемое решение }
-    validations: { required: true }
+    attributes:
+      label: Proposed solution
+      description: What would you like AGE to do? Sketches of a public API help.
+      placeholder: |
+        A new component such as ...
+    validations:
+      required: true
   - type: textarea
     id: alternatives
-    attributes: { label: Альтернативы }
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or other designs you have considered.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the engine does this concern?
+      options:
+        - Core
+        - Rendering
+        - UI
+        - Physics
+        - Input
+        - Audio
+        - Assets
+        - Sample
+        - Tooling and CI
+        - Documentation
+    validations:
+      required: false
