@@ -1,10 +1,22 @@
+using System.Text;
+using System.Text.Json;
+
 namespace Age.Assets;
 
 /// <summary>
-/// The default asset loader. It resolves paths inside a sandbox rooted at the initialized game root and rejects any path that escapes it.
+/// The default asset loader. It resolves paths inside a sandbox rooted at the initialized game root, rejects any path that
+/// escapes it, and reads UTF-8 text, raw bytes and JSON.
 /// </summary>
 public sealed class NullAssetLoader : IAssetLoader
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        AllowTrailingCommas = true,
+        IncludeFields = true,
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+    };
+
     private string? _root;
 
     /// <inheritdoc />
@@ -19,6 +31,33 @@ public sealed class NullAssetLoader : IAssetLoader
 
     /// <inheritdoc />
     public Stream OpenRead(string relativePath) => File.OpenRead(Resolve(relativePath));
+
+    /// <inheritdoc />
+    public T Load<T>(string relativePath)
+    {
+        using Stream stream = OpenRead(relativePath);
+
+        if (typeof(T) == typeof(string))
+        {
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            return (T)(object)reader.ReadToEnd();
+        }
+
+        if (typeof(T) == typeof(byte[]))
+        {
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            return (T)(object)buffer.ToArray();
+        }
+
+        T? value = JsonSerializer.Deserialize<T>(stream, JsonOptions);
+        if (value is null)
+        {
+            throw new InvalidOperationException($"The asset '{relativePath}' does not contain a {typeof(T).Name}.");
+        }
+
+        return value;
+    }
 
     private string Resolve(string relativePath)
     {

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `IAssetLoader.Load<T>` for UTF-8 text, raw bytes and JSON assets.
+
 ## [0.1.0] - 2026-10-06
 
 ### Added
