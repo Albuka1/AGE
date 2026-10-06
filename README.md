@@ -1,3 +1,7 @@
+<p align="center">
+  <img alt="AGE" width="250" src="docs/images/logo-big.svg" />
+</p>
+
 # Auae Game Engine (AGE)
 
 A small 2D game engine for .NET 10, built around an entity-component-system
