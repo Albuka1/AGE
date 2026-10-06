@@ -5,6 +5,7 @@ namespace Age.Rendering;
 
 /// <summary>
 /// Draws UI elements after the world. Single sorted pass by ZOrder. Equal ZOrder preserves ECS order.
+/// An element that carries both a button and a label draws the rectangle first and the text on top of it.
 /// </summary>
 public sealed class UIRenderSystem
 {
@@ -42,13 +43,13 @@ public sealed class UIRenderSystem
         foreach (UiItem item in _items)
         {
             RectTransformComponent rect = world.Get<RectTransformComponent>(item.Entity);
-            Rect bounds = new(rect.Position, rect.Size);
 
-            if (item.IsButton)
+            if (item.HasButton)
             {
-                _renderer.DrawRectangle(bounds, world.Get<ButtonComponent>(item.Entity).BaseColor);
+                _renderer.DrawRectangle(new Rect(rect.Position, rect.Size), world.Get<ButtonComponent>(item.Entity).BaseColor);
             }
-            else
+
+            if (item.HasLabel)
             {
                 TextLabelComponent label = world.Get<TextLabelComponent>(item.Entity);
                 _renderer.DrawText(label.Text ?? string.Empty, rect.Position, label.Color);
@@ -75,9 +76,13 @@ public sealed class UIRenderSystem
                 continue;
             }
 
-            _items.Add(new UiItem(entity, rect.ZOrder, world.Has<ButtonComponent>(entity)));
+            _items.Add(new UiItem(
+                entity,
+                rect.ZOrder,
+                world.Has<ButtonComponent>(entity),
+                world.Has<TextLabelComponent>(entity)));
         }
     }
 
-    private readonly record struct UiItem(Entity Entity, int ZOrder, bool IsButton);
+    private readonly record struct UiItem(Entity Entity, int ZOrder, bool HasButton, bool HasLabel);
 }
