@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-06
+
 ### Added
 
 - Entity component system core with `World`, `Entity` and `SystemPipeline`.
@@ -22,3 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets: sandboxed `IAssetLoader` and `NullAssetLoader`.
 - Dependency injection extensions for every assembly.
 - CI, release, documentation, labeling workflows and issue templates.
+
+### Fixed
+
+- `Camera2D.GetViewMatrix` scaled before translating, so the camera position only
+  landed on the viewport origin at unit zoom, and `Matrix4x4.CreateTranslation`
+  wrote the translation to the last column while the rest of the pipeline treats
+  vectors as rows.
+- The renderer multiplied the projection matrix on the left, which sent the
+  camera translation into `w` and collapsed the world onto a diagonal.
+- `UIRenderSystem` treated a button and a label as mutually exclusive, so a
+  button with a caption never drew its text.
