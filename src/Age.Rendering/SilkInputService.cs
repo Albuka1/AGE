@@ -13,10 +13,10 @@ namespace Age.Rendering;
 /// Reads keyboard and mouse state from a Silk.NET window and answers <see cref="IInputService"/> from it.
 /// </summary>
 /// <remarks>
-/// Silk.NET exposes input through polling, so the device is sampled once per <see cref="BeginFrame"/>. That is why the
-/// frame boundary is part of the input contract: a key that is held stays down, and a key that went down since the
-/// previous frame is reported as pressed once. The device is opened on the first frame, so the window has to exist by
-/// then. Requires Silk.NET.Input, which the windowing package brings in.
+/// Silk.NET exposes input through polling, so the device is sampled once per <see cref="BeginFrame"/>, and that is why the
+/// frame boundary is part of the input contract. The device events are used as well: a press is recorded the moment the
+/// platform reports it, so a key that goes down and up between two samples is still reported as pressed for the frame it
+/// happened in. The device is opened on the first frame, so the window has to exist by then.
 /// </remarks>
 public sealed class SilkInputService : IInputService, IDisposable
 {
@@ -56,6 +56,15 @@ public sealed class SilkInputService : IInputService, IDisposable
         (SilkKey.Number9, Key.Digit9),
     ];
 
+    private static readonly (SilkMouseButton Silk, MouseButton Engine)[] MouseMap =
+    [
+        (SilkMouseButton.Left, MouseButton.Left),
+        (SilkMouseButton.Right, MouseButton.Right),
+        (SilkMouseButton.Middle, MouseButton.Middle),
+    ];
+
+    private static readonly Key[] EngineKeys = [.. KeyMap.Select(entry => entry.Engine).Distinct()];
+
     private readonly IWindowService _windowService;
     private readonly InputStateTracker _tracker = new();
 
@@ -84,13 +93,35 @@ public sealed class SilkInputService : IInputService, IDisposable
         Attach();
         _tracker.BeginFrame();
 
-        foreach ((SilkKey silk, Key engine) in KeyMap)
+        foreach (Key engine in EngineKeys)
         {
-            _tracker.SetKey(engine, _keyboard!.IsKeyPressed(silk));
+            _tracker.SetKey(engine, IsKeyboardKeyDown(engine));
         }
 
-        _tracker.SetMouseButton(MouseButton.Left, _mouse!.IsButtonPressed(SilkMouseButton.Left));
-        _tracker.MouseMove(new Vector2(_mouse.Position.X, _mouse.Position.Y));
+        foreach ((SilkMouseButton silk, MouseButton engine) in MouseMap)
+        {
+            _tracker.SetMouseButton(engine, _mouse!.IsButtonPressed(silk));
+        }
+
+        _tracker.MouseMove(new Vector2(_mouse!.Position.X, _mouse.Position.Y));
+    }
+
+    /// <summary>
+    /// Returns whether any physical key that maps to the engine key is down. Both Shift keys map to <see cref="Key.Shift"/>,
+    /// and Control and Alt work the same way, so their states have to be combined: sampling them one after another would
+    /// let the released right Shift clear the held left one.
+    /// </summary>
+    private bool IsKeyboardKeyDown(Key engine)
+    {
+        foreach ((SilkKey silk, Key mapped) in KeyMap)
+        {
+            if (mapped == engine && _keyboard!.IsKeyPressed(silk))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <inheritdoc />
@@ -129,5 +160,42 @@ public sealed class SilkInputService : IInputService, IDisposable
         _mouse = _context.Mice.Count > 0
             ? _context.Mice[0]
             : throw new InvalidOperationException("The window has no mouse.");
+
+        _keyboard.KeyDown += OnKeyDown;
+        _keyboard.KeyUp += OnKeyUp;
+        _mouse.MouseDown += OnMouseDown;
+        _mouse.MouseUp += OnMouseUp;
+    }
+
+    private void OnKeyDown(IKeyboard keyboard, SilkKey key, int scancode) => RecordKey(key, isDown: true);
+
+    private void OnKeyUp(IKeyboard keyboard, SilkKey key, int scancode) => RecordKey(key, isDown: false);
+
+    private void OnMouseDown(IMouse mouse, SilkMouseButton button) => RecordButton(button, isDown: true);
+
+    private void OnMouseUp(IMouse mouse, SilkMouseButton button) => RecordButton(button, isDown: false);
+
+    private void RecordKey(SilkKey key, bool isDown)
+    {
+        foreach ((SilkKey silk, Key engine) in KeyMap)
+        {
+            if (silk == key)
+            {
+                _tracker.SetKey(engine, isDown);
+                return;
+            }
+        }
+    }
+
+    private void RecordButton(SilkMouseButton button, bool isDown)
+    {
+        foreach ((SilkMouseButton silk, MouseButton engine) in MouseMap)
+        {
+            if (silk == button)
+            {
+                _tracker.SetMouseButton(engine, isDown);
+                return;
+            }
+        }
     }
 }
