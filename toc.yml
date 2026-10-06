@@ -1,0 +1,10 @@
+- name: Home
+  href: docs/index.md
+- name: Quickstart
+  href: docs/articles/quickstart.md
+- name: Adding a system
+  href: docs/articles/adding-a-system.md
+- name: Roadmap
+  href: docs/articles/roadmap.md
+- name: API Reference
+  href: api/

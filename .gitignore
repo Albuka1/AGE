@@ -1,6 +1,7 @@
 bin/
 obj/
 _site/
+api/
 publish/
 *.user
 *.suo
