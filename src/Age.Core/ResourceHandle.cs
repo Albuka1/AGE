@@ -1,16 +1,16 @@
 namespace Age.Core;
 
 /// <summary>
-/// Identifies a resource inside a <see cref="ResourcePool{T}"/>. The handle records the pool that created it, the slot
-/// and the slot generation, so a handle that was forged, taken from another pool, or left behind by a resource that was
-/// released and replaced no longer matches anything.
+/// Identifies a resource inside a <see cref="ResourcePool{T}"/>. Only the pool creates handles and each handle records
+/// that pool, its slot and the slot generation, so a handle taken from another pool, or left behind by a resource that
+/// was released and replaced, no longer matches anything.
 /// </summary>
 public readonly struct ResourceHandle : IEquatable<ResourceHandle>
 {
     private static int _nextOwner;
 
-    /// <summary>Initializes a handle. Handles normally come from a pool; a forged handle is rejected on lookup.</summary>
-    public ResourceHandle(int owner, int id, int generation)
+    /// <summary>Initializes a handle. Only a <see cref="ResourcePool{T}"/> creates handles, so a caller cannot forge one.</summary>
+    internal ResourceHandle(int owner, int id, int generation)
     {
         Owner = owner;
         Id = id;

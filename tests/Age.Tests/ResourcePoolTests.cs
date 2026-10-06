@@ -44,16 +44,6 @@ public sealed class ResourcePoolTests
     }
 
     [Fact]
-    public void ResourcePool_ForgedHandle_IsNotFound()
-    {
-        var pool = new ResourcePool<string>();
-        pool.Add("texture");
-
-        pool.TryGet(new ResourceHandle(0, 99, 1), out _).Should().BeFalse();
-        pool.Release(new ResourceHandle(0, 99, 1)).Should().BeFalse();
-    }
-
-    [Fact]
     public void ResourcePool_TryGetHandle_ResolvesRegisteredPath()
     {
         var pool = new ResourcePool<string>();
