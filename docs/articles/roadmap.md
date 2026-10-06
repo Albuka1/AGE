@@ -8,7 +8,6 @@ planned:
 
 - Scene serialization (JSON)
 - StbImageSharp and StbTrueTypeSharp integration
-- `IAssetLoader.Load<T>`
 
 ## Rendering
 
