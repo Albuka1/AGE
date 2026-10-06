@@ -9,6 +9,7 @@ namespace Age.Core;
 /// </summary>
 public sealed class ResourcePool<T>
 {
+    private readonly int _owner = ResourceHandle.NextOwner();
     private Slot[] _slots = new Slot[4];
     private readonly Dictionary<string, ResourceHandle> _byPath = new(StringComparer.Ordinal);
     private int _count;
@@ -40,7 +41,7 @@ public sealed class ResourcePool<T>
         slot.InUse = true;
         _count++;
 
-        var handle = new ResourceHandle(id, slot.Generation);
+        var handle = new ResourceHandle(_owner, id, slot.Generation);
         if (path is not null)
         {
             _byPath[path] = handle;
@@ -95,7 +96,8 @@ public sealed class ResourcePool<T>
 
     /// <summary>
     /// Releases every live resource, invoking <paramref name="release"/> for each value so that its owner can free the
-    /// underlying device object. The generations of the slots survive, so handles from before the call stay invalid.
+    /// underlying device object. The slot is released before the callback runs, so a callback that throws still leaves
+    /// the pool consistent. The generations of the slots survive, so handles from before the call stay invalid.
     /// </summary>
     public void Clear(Action<T>? release = null)
     {
@@ -107,23 +109,32 @@ public sealed class ResourcePool<T>
                 continue;
             }
 
-            if (release is not null)
+            T value = slot.Value;
+            if (slot.Path is not null)
             {
-                release(slot.Value);
+                _byPath.Remove(slot.Path);
             }
 
             slot.Value = default!;
             slot.Path = null;
             slot.InUse = false;
-        }
+            _count--;
 
-        _byPath.Clear();
-        _count = 0;
+            if (release is not null)
+            {
+                release(value);
+            }
+        }
     }
 
     private bool TryGetSlot(ResourceHandle handle, out Slot slot)
     {
         slot = default;
+
+        if (handle.Owner != _owner)
+        {
+            return false;
+        }
 
         int index = handle.Id - 1;
         if (handle.Id <= 0 || index >= _slots.Length)

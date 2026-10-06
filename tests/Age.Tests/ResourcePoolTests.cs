@@ -31,13 +31,26 @@ public sealed class ResourcePoolTests
     }
 
     [Fact]
-    public void ResourcePool_OutOfRangeHandle_IsNotFound()
+    public void ResourcePool_HandleFromAnotherPool_IsNotFound()
+    {
+        var first = new ResourcePool<string>();
+        var second = new ResourcePool<string>();
+        ResourceHandle handle = first.Add("texture");
+
+        second.TryGet(handle, out _).Should().BeFalse();
+        second.Release(handle).Should().BeFalse();
+        first.TryGet(handle, out string? value).Should().BeTrue();
+        value.Should().Be("texture");
+    }
+
+    [Fact]
+    public void ResourcePool_ForgedHandle_IsNotFound()
     {
         var pool = new ResourcePool<string>();
         pool.Add("texture");
 
-        pool.TryGet(new ResourceHandle(99, 1), out _).Should().BeFalse();
-        pool.Release(new ResourceHandle(99, 1)).Should().BeFalse();
+        pool.TryGet(new ResourceHandle(0, 99, 1), out _).Should().BeFalse();
+        pool.Release(new ResourceHandle(0, 99, 1)).Should().BeFalse();
     }
 
     [Fact]
@@ -125,6 +138,21 @@ public sealed class ResourcePoolTests
 
         released.Should().Equal("first", "second");
         pool.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResourcePool_ClearWhenReleaseThrows_KeepsPoolConsistent()
+    {
+        var pool = new ResourcePool<string>();
+        pool.Add("first", "first.txt");
+        pool.Add("second", "second.txt");
+
+        Action act = () => pool.Clear(value => throw new InvalidOperationException(value));
+
+        act.Should().Throw<InvalidOperationException>();
+        pool.Count.Should().Be(1);
+        pool.TryGetHandle("first.txt", out _).Should().BeFalse();
+        pool.TryGetHandle("second.txt", out _).Should().BeTrue();
     }
 
     [Fact]
