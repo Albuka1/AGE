@@ -11,4 +11,7 @@
     <Project Path="src/Age.Rendering/Age.Rendering.csproj" />
     <Project Path="src/Age.UI/Age.UI.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Age.Tests/Age.Tests.csproj" />
+  </Folder>
 </Solution>

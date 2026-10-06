@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Age.Tests</RootNamespace>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Age.Core\Age.Core.csproj" />
+    <ProjectReference Include="..\..\src\Age.Assets\Age.Assets.csproj" />
+    <ProjectReference Include="..\..\src\Age.Input\Age.Input.csproj" />
+    <ProjectReference Include="..\..\src\Age.Audio\Age.Audio.csproj" />
+    <ProjectReference Include="..\..\src\Age.Physics\Age.Physics.csproj" />
+    <ProjectReference Include="..\..\src\Age.UI\Age.UI.csproj" />
+    <ProjectReference Include="..\..\src\Age.Rendering\Age.Rendering.csproj" />
+  </ItemGroup>
+
+</Project>
