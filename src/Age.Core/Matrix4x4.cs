@@ -1,7 +1,8 @@
 namespace Age.Core;
 
 /// <summary>
-/// Represents a four by four matrix stored in row-major order.
+/// Represents a four by four matrix stored in row-major order. Vectors are treated as rows, so a matrix is applied as
+/// v * M and a translation occupies the last row.
 /// </summary>
 public struct Matrix4x4 : IEquatable<Matrix4x4>
 {
@@ -78,9 +79,9 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
         M22 = 1f,
         M33 = 1f,
         M44 = 1f,
-        M14 = x,
-        M24 = y,
-        M34 = z,
+        M41 = x,
+        M42 = y,
+        M43 = z,
     };
 
     /// <summary>

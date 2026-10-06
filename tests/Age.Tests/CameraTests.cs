@@ -20,4 +20,23 @@ public sealed class CameraTests
 
         matrix.Should().Be(Matrix4x4.Identity);
     }
+
+    [Fact]
+    public void Camera2D_GetViewMatrix_MovesCameraPositionToViewOrigin()
+    {
+        var camera = new Camera2D
+        {
+            Position = new Vector2(120f, 64f),
+            Zoom = 1f,
+            ViewportSize = new Vector2(1280f, 720f),
+        };
+
+        Vector2 origin = Project(camera.GetViewMatrix(), new Vector2(120f, 64f));
+
+        origin.Should().Be(Vector2.Zero);
+    }
+
+    private static Vector2 Project(Matrix4x4 matrix, Vector2 point) => new(
+        (point.X * matrix.M11) + (point.Y * matrix.M21) + matrix.M41,
+        (point.X * matrix.M12) + (point.Y * matrix.M22) + matrix.M42);
 }
