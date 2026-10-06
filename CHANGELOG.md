@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ResourceHandle` and `ResourcePool<T>`, the shared versioned store behind engine resources.
+
 ## [0.1.0] - 2026-10-06
 
 ### Added
