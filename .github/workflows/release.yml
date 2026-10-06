@@ -19,6 +19,6 @@ jobs:
         with:
           name: Age.Sample-${{ github.ref_name }}
           path: publish/
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: publish/**
