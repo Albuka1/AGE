@@ -14,7 +14,7 @@ AGE is organized as a set of focused assemblies:
 | Project | Responsibility |
 | ------- | -------------- |
 | `Age.Core` | Entities, components, systems, math primitives, game loop |
-| `Age.Assets` | Sandboxed path-based asset access |
+| `Age.Assets` | Sandboxed path-based asset access and loading |
 | `Age.Input` | Keyboard and mouse abstraction |
 | `Age.Audio` | Sound playback abstraction |
 | `Age.Physics` | Axis-aligned collision detection with a spatial hash |
@@ -67,7 +67,6 @@ The following work is planned but not part of the current foundation:
 - Camera culling
 - AOT
 - AssemblyLoadContext isolation for plugins
-- `IAssetLoader.Load<T>`
 
 ## Contributing
 
