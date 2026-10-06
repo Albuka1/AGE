@@ -80,6 +80,17 @@ public sealed class ImageLoaderTests : IDisposable
         act.Should().Throw<InvalidDataException>();
     }
 
+    [Theory]
+    [InlineData(2, 2, 4)]
+    [InlineData(2, 2, 17)]
+    [InlineData(1, 1, 3)]
+    public void ImageData_PixelBufferSizeMismatch_ThrowsArgumentException(int width, int height, int length)
+    {
+        Action act = () => new ImageData(width, height, new byte[length]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
     private static byte[] CreateBmp(int width, int height, (int R, int G, int B)[] pixels)
     {
         int stride = (((width * 3) + 3) / 4) * 4;

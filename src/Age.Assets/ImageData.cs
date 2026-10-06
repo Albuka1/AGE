@@ -5,12 +5,20 @@ namespace Age.Assets;
 /// </summary>
 public sealed class ImageData
 {
-    /// <summary>Initializes decoded image data.</summary>
+    /// <summary>Initializes decoded image data. The buffer must hold four bytes for every pixel.</summary>
     public ImageData(int width, int height, byte[] pixels)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentNullException.ThrowIfNull(pixels);
+
+        if (pixels.LongLength != (long)width * height * 4)
+        {
+            throw new ArgumentException(
+                $"The buffer holds {pixels.LongLength} bytes, but {width} x {height} RGBA pixels need {(long)width * height * 4}.",
+                nameof(pixels));
+        }
+
         Width = width;
         Height = height;
         Pixels = pixels;
