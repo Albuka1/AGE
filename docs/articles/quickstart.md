@@ -52,3 +52,13 @@ provider.GetRequiredService<IGameLoop>().Run(time =>
 ```
 
 `World` is never registered in the container; the caller owns its lifetime.
+
+## Load an image
+
+```csharp
+IImageLoader images = provider.GetRequiredService<IImageLoader>();
+ImageData logo = images.Load("logo.png");
+```
+
+`ImageData` holds tightly packed RGBA bytes with the origin at the top-left, so
+the pixels can be handed to the renderer as they are.

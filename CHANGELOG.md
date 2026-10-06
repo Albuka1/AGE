@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `IImageLoader` for decoding PNG, JPEG, BMP, TGA and GIF images into RGBA pixels.
+
 ## [0.1.0] - 2026-10-06
 
 ### Added
