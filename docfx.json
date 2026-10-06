@@ -1,0 +1,19 @@
+{
+  "metadata": [
+    {
+      "src": [{ "src": "src", "files": ["**/*.csproj"] }],
+      "dest": "api"
+    }
+  ],
+  "build": {
+    "content": [
+      { "files": ["docs/**/*.md", "api/**/*.yml", "README.md"] }
+    ],
+    "dest": "_site",
+    "template": ["default", "modern"],
+    "globalMetadata": {
+      "_appTitle": "Auae Game Engine",
+      "_appFooter": "Copyright (c) 2026 Albuka1. MIT License."
+    }
+  }
+}
