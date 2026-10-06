@@ -21,13 +21,16 @@ public sealed class CameraTests
         matrix.Should().Be(Matrix4x4.Identity);
     }
 
-    [Fact]
-    public void Camera2D_GetViewMatrix_MovesCameraPositionToViewOrigin()
+    [Theory]
+    [InlineData(0.5f)]
+    [InlineData(1f)]
+    [InlineData(2f)]
+    public void Camera2D_GetViewMatrix_MovesCameraPositionToViewOrigin(float zoom)
     {
         var camera = new Camera2D
         {
             Position = new Vector2(120f, 64f),
-            Zoom = 1f,
+            Zoom = zoom,
             ViewportSize = new Vector2(1280f, 720f),
         };
 
