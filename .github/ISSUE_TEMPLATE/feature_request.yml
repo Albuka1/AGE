@@ -1,0 +1,16 @@
+name: Feature Request
+description: Suggest an idea for AGE
+title: "[Feature]: "
+labels: ["T: Feature", "S: Needs Triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Проблема }
+    validations: { required: true }
+  - type: textarea
+    id: solution
+    attributes: { label: Предлагаемое решение }
+    validations: { required: true }
+  - type: textarea
+    id: alternatives
+    attributes: { label: Альтернативы }

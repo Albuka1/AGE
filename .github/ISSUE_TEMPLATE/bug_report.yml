@@ -1,0 +1,29 @@
+name: Bug Report
+description: Report a bug in AGE
+title: "[Bug]: "
+labels: ["T: Bug", "S: Needs Triage"]
+body:
+  - type: textarea
+    id: description
+    attributes: { label: Описание }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Ожидаемое поведение }
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes: { label: Шаги воспроизведения }
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: Версия AGE }
+    validations: { required: true }
+  - type: input
+    id: dotnet
+    attributes: { label: Версия .NET }
+    validations: { required: true }
+  - type: input
+    id: os
+    attributes: { label: ОС }
+    validations: { required: true }
