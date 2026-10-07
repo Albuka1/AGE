@@ -9,7 +9,7 @@ public sealed class TrueTypeFontTests
     [Fact]
     public void TrueTypeFontBake_AsciiRange_ProducesAnAtlasWithGlyphMetrics()
     {
-        FontAtlas atlas = TrueTypeFontBake.Bake(SystemFont(), 24f, TrueTypeFontBake.AsciiCharacters);
+        FontAtlas atlas = TrueTypeFontBake.Bake(ShippedFont(), 24f, TrueTypeFontBake.AsciiCharacters);
 
         atlas.First.Should().Be(' ');
         atlas.Glyphs.Should().HaveCount(TrueTypeFontBake.AsciiCharacters.Length);
@@ -23,8 +23,12 @@ public sealed class TrueTypeFontTests
         FontGlyph wide = atlas.Glyphs[TrueTypeFontBake.AsciiCharacters.IndexOf('M')];
         FontGlyph narrow = atlas.Glyphs[TrueTypeFontBake.AsciiCharacters.IndexOf('i')];
 
-        wide.Advance.Should().BeGreaterThan(narrow.Advance);
-        wide.Size.X.Should().BeGreaterThan(narrow.Size.X);
+        // The shipped font is monospaced, so both letters share an advance and a box. What is checked here is that every
+        // glyph was measured and placed, and that the box of a letter has ink.
+        wide.Advance.Should().BeGreaterThan(0f);
+        narrow.Advance.Should().BeGreaterThan(0f);
+        wide.Size.X.Should().BeGreaterThan(0f);
+        wide.Size.Y.Should().BeGreaterThan(0f);
         narrow.Size.Y.Should().BeGreaterThan(0f, "the dot of the i is part of the glyph");
         wide.Bearing.Y.Should().BeLessThanOrEqualTo(0f, "a glyph sits on the baseline or above it");
         wide.Source.X.Should().BeInRange(0f, 1f);
@@ -34,7 +38,7 @@ public sealed class TrueTypeFontTests
     [Fact]
     public void TrueTypeFontBake_LargerHeight_ProducesLargerGlyphs()
     {
-        byte[] font = SystemFont();
+        byte[] font = ShippedFont();
 
         FontAtlas small = TrueTypeFontBake.Bake(font, 12f, "ABC");
         FontAtlas large = TrueTypeFontBake.Bake(font, 48f, "ABC");
@@ -46,7 +50,7 @@ public sealed class TrueTypeFontTests
     [Fact]
     public void TrueTypeFontBake_RangeThatIsNotContiguous_Throws()
     {
-        byte[] font = SystemFont();
+        byte[] font = ShippedFont();
 
         FluentActions.Invoking(() => TrueTypeFontBake.Bake(font, 16f, "ABD"))
             .Should().Throw<ArgumentException>();
@@ -55,7 +59,7 @@ public sealed class TrueTypeFontTests
     [Fact]
     public void TrueTypeFontBake_NoCharacterAtAll_Throws()
     {
-        byte[] font = SystemFont();
+        byte[] font = ShippedFont();
 
         FluentActions.Invoking(() => TrueTypeFontBake.Bake(font, 16f, string.Empty))
             .Should().Throw<ArgumentException>();
@@ -71,27 +75,25 @@ public sealed class TrueTypeFontTests
     [InlineData(-1f)]
     public void TrueTypeFontBake_HeightThatIsNotPositive_Throws(float pixelHeight)
     {
-        byte[] font = SystemFont();
+        byte[] font = ShippedFont();
 
         FluentActions.Invoking(() => TrueTypeFontBake.Bake(font, pixelHeight, TrueTypeFontBake.AsciiCharacters))
             .Should().Throw<ArgumentOutOfRangeException>();
     }
 
-    /// <summary>Reads a font of the operating system, or skips the test when the machine has none.</summary>
-    private static byte[] SystemFont()
+    [Fact]
+    public void TrueTypeFontTests_ShippedFont_IsATrueTypeFile()
     {
-        string folder = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+        byte[] font = ShippedFont();
 
-        foreach (string name in new[] { "segoeui.ttf", "arial.ttf", "DejaVuSans.ttf", "LiberationSans-Regular.ttf" })
-        {
-            string path = Path.Combine(folder, name);
-            if (File.Exists(path))
-            {
-                return File.ReadAllBytes(path);
-            }
-        }
-
-        Assert.Skip("No TrueType font was found in the font folder of this machine.");
-        return [];
+        font.Should().HaveCountGreaterThan(1000);
+        font[0].Should().Be(0, "a TrueType file starts with 0x00010000");
+        font[1].Should().Be(1);
+        font[2].Should().Be(0);
+        font[3].Should().Be(0);
     }
+
+    /// <summary>Reads the font that the repository ships with the sample, which the tests bake instead of a system font.</summary>
+    private static byte[] ShippedFont() =>
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "fonts", "Cousine-Regular.ttf"));
 }

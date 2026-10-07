@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The sample content ships `Cousine-Regular.ttf`, a monospaced font by Steve Matteson under the SIL Open Font License
+  1.1, which the font tests bake and the sample draws text with; the license text and the source are recorded next to it.
 - `TrueTypeFontBake` and `GlyphPacking`, which rasterize the glyphs of a TrueType or OpenType font into one atlas with
   `StbTrueTypeSharp`, so text stops being limited to the built-in 8x8 bitmap font; the glyph atlas is a texture like any
   other, so it is tinted and drawn through `IRenderer.DrawTextureRegion`.
