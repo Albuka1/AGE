@@ -23,11 +23,16 @@ internal static class TrueTypeFontBake
     /// <param name="characters">The characters to bake. They have to form a contiguous range, and at least one has to be given.</param>
     /// <returns>The atlas and the metrics of the glyphs, ordered from the first character of the range.</returns>
     /// <exception cref="ArgumentException"><paramref name="font"/> does not hold a font that can be read, the characters are not a contiguous range, or none was given.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelHeight"/> is zero or negative, or a glyph of the font needs more pixels at that size than the atlas of a font supports.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelHeight"/> is zero, negative or not a finite number, or a glyph of the font needs more pixels at that size than the atlas of a font supports.</exception>
     public static unsafe FontAtlas Bake(byte[] font, float pixelHeight, ReadOnlySpan<char> characters)
     {
         ArgumentNullException.ThrowIfNull(font);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pixelHeight);
+
+        if (!float.IsFinite(pixelHeight))
+        {
+            throw new ArgumentOutOfRangeException(nameof(pixelHeight), pixelHeight, "The height of a line has to be a finite number of pixels.");
+        }
 
         char[] wanted = Range(characters);
         var info = new StbTrueType.stbtt_fontinfo();

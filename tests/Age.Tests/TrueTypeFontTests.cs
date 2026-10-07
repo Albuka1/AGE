@@ -81,6 +81,18 @@ public sealed class TrueTypeFontTests
             .Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    public void TrueTypeFontBake_HeightThatIsNotFinite_Throws(float pixelHeight)
+    {
+        byte[] font = ShippedFont();
+
+        FluentActions.Invoking(() => TrueTypeFontBake.Bake(font, pixelHeight, TrueTypeFontBake.AsciiCharacters))
+            .Should().Throw<ArgumentOutOfRangeException>("a line height has to be a finite number of pixels");
+    }
+
     [Fact]
     public void TrueTypeFontBake_HeightTooLargeForTheAtlas_Throws()
     {
