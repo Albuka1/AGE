@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-07
+
 ### Added
 
 - `IFontService` and `FontHandle`, so a game loads a TrueType or OpenType font at a height and draws text with it:
@@ -57,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The sample shows what this release brought: the second sprite spins, both sprites tint while their colliders touch,
+  `E` spawns a short-lived sprite, and the HUD, drawn with the TrueType font of the content folder, reports the engine
+  version, the live entity count, the contacts of the frame and which entity was spawned last, with its generation.
 - `ResourcePool.Clear` runs the release callback of a slot after the lock was released, so a slow callback, or one that
   calls back into the pool, no longer holds the pool against other threads. The bookkeeping itself stays under the lock,
   and the call walks a snapshot, so a resource that another thread adds while it runs stays live.

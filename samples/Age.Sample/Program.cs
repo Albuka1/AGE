@@ -22,7 +22,8 @@ using ServiceProvider provider = services.BuildServiceProvider();
 
 var world = new World();
 SystemPipeline pipeline = provider.GetRequiredService<SystemPipeline>();
-pipeline.Add(provider.GetRequiredService<CollisionSystem>());
+CollisionSystem collisions = provider.GetRequiredService<CollisionSystem>();
+pipeline.Add(collisions);
 pipeline.Add(provider.GetRequiredService<UIUpdateSystem>());
 
 IWindowService windowService = provider.GetRequiredService<IWindowService>();
@@ -53,10 +54,12 @@ var camera = new Camera2D
 Entity first = world.CreateEntity();
 world.Set(first, new TransformComponent { Position = new Vector2(400f, 300f), Scale = new Vector2(1f, 1f) });
 world.Set(first, new SpriteComponent { Texture = tiles, Size = new Vector2(64f, 64f), Color = Color.White, ZOrder = 0 });
+world.Set(first, new ColliderComponent { Size = new Vector2(64f, 64f) });
 
 Entity second = world.CreateEntity();
-world.Set(second, new TransformComponent { Position = new Vector2(600f, 300f), Scale = new Vector2(1f, 1f) });
+world.Set(second, new TransformComponent { Position = new Vector2(430f, 315f), Scale = new Vector2(1f, 1f) });
 world.Set(second, new SpriteComponent { Size = new Vector2(64f, 64f), Color = Color.Green, ZOrder = 1 });
+world.Set(second, new ColliderComponent { Size = new Vector2(64f, 64f) });
 
 Entity panel = world.CreateEntity();
 world.Set(panel, new RectTransformComponent { Position = new Vector2(100f, 100f), Size = new Vector2(200f, 50f), ZOrder = 0, Visible = true });
@@ -83,6 +86,17 @@ if (File.Exists(scenePath))
 }
 
 const float MoveSpeed = 240f;
+const float SpawnLifetime = 2f;
+
+// Sprites that `E` puts on screen and that are destroyed a couple of seconds later, so the slot of a destroyed entity
+// is handed out again for the next one. The string of the HUD remembers which entity that was, with its generation.
+var spawned = new List<(Entity Entity, float Age)>();
+Entity lastSpawned = default;
+string version = typeof(World).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+// One sprite is already on its way when the game starts, so the HUD has something to report and the slot logic runs
+// before the first key press.
+lastSpawned = Spawn(world, spawned);
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
@@ -98,7 +112,12 @@ gameLoop.Run(
         }
 
         MoveFirstSprite(world, first, input, step);
+        SpinSprite(world, second, step);
+        AgeSpawned(world, spawned, step.Delta, SpawnLifetime);
         world.Update(step, pipeline);
+
+        // The collision system resolved the contacts of this step, so the sprites show whether they touch right now.
+        TintByCollision(world, first, second);
     },
     render: time =>
     {
@@ -127,6 +146,11 @@ gameLoop.Run(
             Console.WriteLine("Loaded the scene again.");
         }
 
+        if (input.IsKeyPressed(Key.E))
+        {
+            lastSpawned = Spawn(world, spawned);
+        }
+
         if (input.IsKeyPressed(Key.Escape))
         {
             gameLoop.Stop();
@@ -139,7 +163,12 @@ gameLoop.Run(
 
         // Text of this game, baked from the TrueType font in content/fonts. The UI pass above draws with the built-in
         // bitmap font, so both are visible in the same frame.
-        fonts.Draw(font, "AGE - WASD to move, Space to play, F to save, R to load", new Vector2(24f, 24f), Color.White);
+        string spawnText = lastSpawned == default
+            ? "nothing spawned yet"
+            : $"last spawn is entity {lastSpawned.Id}, generation {lastSpawned.Generation}, {(world.IsAlive(lastSpawned) ? "alive" : "destroyed")}";
+
+        fonts.Draw(font, $"AGE {version} - WASD to move, E to spawn, Space to play, F to save, R to load", new Vector2(24f, 24f), Color.White);
+        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, {spawnText}", new Vector2(24f, 56f), Color.White);
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open:
@@ -212,4 +241,72 @@ static Entity MoveTarget(World world, TextureHandle texture)
     ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
     sprite.Texture = texture;
     return entity;
+}
+
+// Spins the second sprite: the renderer reads the rotation of a transform and turns the quad around its centre.
+static void SpinSprite(World world, Entity entity, GameTime time)
+{
+    if (!world.IsAlive(entity) || !world.Has<TransformComponent>(entity))
+    {
+        return;
+    }
+
+    ref TransformComponent transform = ref world.GetRef<TransformComponent>(entity);
+    transform.Rotation += (float)(time.Delta * 1.4d);
+}
+
+// Ages the spawned sprites and destroys the ones that lived long enough.
+static void AgeSpawned(World world, List<(Entity Entity, float Age)> spawned, double delta, float lifetime)
+{
+    for (int index = spawned.Count - 1; index >= 0; index--)
+    {
+        (Entity entity, float age) = spawned[index];
+
+        if (!world.IsAlive(entity))
+        {
+            spawned.RemoveAt(index);
+            continue;
+        }
+
+        age += (float)delta;
+        if (age >= lifetime)
+        {
+            world.DestroyEntity(entity);
+            spawned.RemoveAt(index);
+            continue;
+        }
+
+        spawned[index] = (entity, age);
+    }
+}
+
+// Puts a short-lived sprite on screen. The slot it uses was handed out before, so the identifier of the entity that
+// used it comes back with a new generation.
+static Entity Spawn(World world, List<(Entity Entity, float Age)> spawned)
+{
+    Entity entity = world.CreateEntity();
+
+    world.Set(entity, new TransformComponent { Position = new Vector2(200f + ((spawned.Count * 37f) % 800f), 560f), Scale = new Vector2(1f, 1f) });
+    world.Set(entity, new SpriteComponent { Size = new Vector2(32f, 32f), Color = Color.Blue, ZOrder = 2 });
+    spawned.Add((entity, 0f));
+
+    return entity;
+}
+
+// Tints a sprite while its collider touches another one, so the contacts of the collision system are visible.
+static void TintByCollision(World world, Entity first, Entity second)
+{
+    Tint(world, first, Color.White, Color.Blue);
+    Tint(world, second, Color.Green, Color.Red);
+
+    static void Tint(World world, Entity entity, Color calm, Color touching)
+    {
+        if (!world.IsAlive(entity) || !world.Has<SpriteComponent>(entity))
+        {
+            return;
+        }
+
+        ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
+        sprite.Color = world.Has<CollisionComponent>(entity) ? touching : calm;
+    }
 }
