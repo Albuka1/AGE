@@ -128,6 +128,23 @@ public sealed class WavSoundLoaderTests : IDisposable
     }
 
     [Fact]
+    public void SoundLoader_LoadBytesBehindTheForm_IgnoresThem()
+    {
+        byte[] wav = CreateWav(8000, channels: 1, bitsPerSample: 16, Samples16(1, 2, 3));
+        byte[] bytes = new byte[wav.Length + 4];
+        wav.CopyTo(bytes, 0);
+
+        // The data chunk claims the four bytes that belong to whatever was appended to the file, which are not part of
+        // the RIFF form and so are not samples.
+        WriteInt32(bytes, 40, 10);
+        Write("appended.wav", bytes);
+
+        SoundData sound = _loader.Load("appended.wav");
+
+        sound.Samples.Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
     public void SoundLoader_LoadDataChunkThatClaimsMoreThanTheFile_ReadsWhatIsThere()
     {
         byte[] bytes = CreateWav(8000, channels: 1, bitsPerSample: 16, Samples16(1, 2, 3));

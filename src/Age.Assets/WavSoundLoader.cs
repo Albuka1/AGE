@@ -23,6 +23,9 @@ public sealed class WavSoundLoader : ISoundLoader
     /// <summary>The tag of a WAVE_FORMAT_EXTENSIBLE header, whose real format sits in its sub format field.</summary>
     private const int ExtensibleFormat = 0xFFFE;
 
+    /// <summary>The offset of the size field of the RIFF header, which closes the form when it is added to its value.</summary>
+    private const int RiffFormOffset = 8;
+
     /// <summary>The length of a format chunk that carries a WAVE_FORMAT_EXTENSIBLE header, in bytes.</summary>
     private const int ExtensibleFormatSize = 40;
 
@@ -50,6 +53,11 @@ public sealed class WavSoundLoader : ISoundLoader
             throw new InvalidDataException($"The file '{relativePath}' is not a RIFF WAVE sound.");
         }
 
+        // The declared size closes the RIFF form, so anything behind it belongs to something else, such as a second
+        // form in a file that was appended to. A form that is truncated is still read up to the end of the file.
+        long declaredSize = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(4));
+        int formEnd = (int)Math.Min(bytes.Length, RiffFormOffset + declaredSize);
+
         int format = 0;
         int channels = 0;
         int sampleRate = 0;
@@ -59,16 +67,16 @@ public sealed class WavSoundLoader : ISoundLoader
 
         int offset = RiffHeaderSize;
 
-        while (offset + ChunkHeaderSize <= bytes.Length)
+        while (offset + ChunkHeaderSize <= formEnd)
         {
             string tag = Tag(bytes, offset);
             long length = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset + 4));
             long body = offset + ChunkHeaderSize;
-            long remaining = bytes.Length - body;
+            long remaining = formEnd - body;
 
             if (remaining < 0)
             {
-                throw new InvalidDataException($"The chunk '{tag}' of '{relativePath}' starts past the end of the file.");
+                throw new InvalidDataException($"The chunk '{tag}' of '{relativePath}' starts past the end of the RIFF form.");
             }
 
             if (tag == "fmt ")

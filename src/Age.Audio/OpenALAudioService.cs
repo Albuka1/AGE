@@ -75,11 +75,23 @@ public sealed unsafe class OpenALAudioService : IAudioService, IDisposable
             return;
         }
 
-        // A source keeps the buffer it plays alive, so the sound is detached from every playback first: that is what
-        // lets the device release it, and a refusal that still happens is reported for the caller to retry.
-        foreach (uint source in _sources)
+        // A source keeps the buffer it plays alive, and detaching a source that plays another sound would silence it,
+        // so only the sources that hold this sound are stopped and deleted. A refusal of the deletion itself is
+        // reported for the caller to retry.
+        for (int index = _sources.Count - 1; index >= 0; index--)
         {
+            uint source = _sources[index];
+            _al.GetSourceProperty(source, GetSourceInteger.Buffer, out int bound);
+
+            if (bound != soundId)
+            {
+                continue;
+            }
+
+            _al.SourceStop(source);
             _al.SetSourceProperty(source, SourceInteger.Buffer, 0u);
+            _al.DeleteSource(source);
+            _sources.RemoveAt(index);
         }
 
         _ = _al.GetError();
