@@ -10,13 +10,13 @@ namespace Age.Rendering;
 public static class RenderingServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the window service, the renderer, the texture service, the splash screen, the render pipeline, the
-    /// render systems, the components of this assembly and the Silk.NET game loop as singletons.
+    /// Registers the window service, the renderer, the texture service, the font service, the splash screen, the render
+    /// pipeline, the render systems, the components of this assembly and the Silk.NET game loop as singletons.
     /// </summary>
     /// <remarks>
-    /// <see cref="ITextureService"/> decodes through <see cref="T:Age.Assets.IImageLoader"/>, so register the asset
-    /// services with <c>AddAgeAssets</c> as well. <see cref="SilkGameLoop"/> takes the <see cref="FixedTimestep"/> that
-    /// <c>AddAgeCore</c> registers.
+    /// <see cref="ITextureService"/> decodes through <see cref="T:Age.Assets.IImageLoader"/> and <see cref="IFontService"/>
+    /// reads through <see cref="T:Age.Assets.IAssetLoader"/>, so register the asset services with <c>AddAgeAssets</c> as
+    /// well. <see cref="SilkGameLoop"/> takes the <see cref="FixedTimestep"/> that <c>AddAgeCore</c> registers.
     /// </remarks>
     public static IServiceCollection AddAgeRendering(this IServiceCollection services)
     {
@@ -24,6 +24,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<IWindowService, SilkWindowService>();
         services.AddSingleton<IRenderer, SilkRenderer>();
         services.AddSingleton<ITextureService, TextureService>();
+        services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<SplashScreen>();
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
         services.AddSingleton<RenderPipeline>();

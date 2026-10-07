@@ -55,7 +55,7 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 | `Age.Audio` | Sound resources, WAVE, MP3 and Ogg Vorbis decoding, and playback through OpenAL |
 | `Age.Physics` | Axis-aligned collision detection with an incremental spatial hash |
 | `Age.UI` | Retained UI components and pointer interaction |
-| `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, icon, splash |
+| `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, icon, splash, fonts |
 | `Age.Sample` | Console sample that wires everything together |
 | `Age.Tests` | Behavioural unit tests |
 
@@ -96,7 +96,6 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 The following work is planned but not part of the current foundation: the features the engine does
 not have yet, then the platform work.
 
-- StbTrueTypeSharp.
 - User-defined shaders and materials.
 - OBB collision and multiple contacts.
 - AOT.

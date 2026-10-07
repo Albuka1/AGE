@@ -48,4 +48,18 @@ internal sealed class FontAtlas
 
     /// <summary>Gets the distance between two baselines, in pixels.</summary>
     public float LineHeight { get; }
+
+    /// <summary>Returns the glyph of a character, or a space when the character is outside the range of the atlas.</summary>
+    /// <param name="value">The character to look up.</param>
+    /// <returns>The glyph of the character. A character outside the range is drawn as a space, so text that holds one does not change the placement of the rest of the line.</returns>
+    public FontGlyph Glyph(char value)
+    {
+        if (value >= First && value - First < Glyphs.Length)
+        {
+            return Glyphs[value - First];
+        }
+
+        int space = ' ' - First;
+        return space >= 0 && space < Glyphs.Length ? Glyphs[space] : Glyphs[0];
+    }
 }
