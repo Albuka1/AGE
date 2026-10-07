@@ -37,6 +37,9 @@ assets.Initialize(Path.Combine(AppContext.BaseDirectory, "content"));
 ITextureService textures = provider.GetRequiredService<ITextureService>();
 TextureHandle tiles = textures.Load("tiles.bmp");
 
+IFontService fonts = provider.GetRequiredService<IFontService>();
+FontHandle font = fonts.Load("fonts/Cousine-Regular.ttf", 24f);
+
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
 SoundHandle click = sounds.Load("click.wav");
 
@@ -133,12 +136,17 @@ gameLoop.Run(
         // agree, including after the window was resized.
         camera.ViewportSize = renderer.ViewportSize;
         renderPipeline.Render(world, camera);
+
+        // Text of this game, baked from the TrueType font in content/fonts. The UI pass above draws with the built-in
+        // bitmap font, so both are visible in the same frame.
+        fonts.Draw(font, "AGE - WASD to move, Space to play, F to save, R to load", new Vector2(24f, 24f), Color.White);
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open:
 // the logo of the splash, the textures that were loaded, and finally the renderer. The container disposes the services
 // when it goes out of scope, and every one of those calls is a no-op by then.
 splash.Dispose();
+fonts.UnloadAll();
 textures.UnloadAll();
 renderer.Dispose();
 windowService.Close();

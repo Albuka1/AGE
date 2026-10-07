@@ -145,6 +145,27 @@ world.Set(sprite, new SpriteComponent { Texture = playerTexture, Size = new Vect
 `ITextureService` decodes the file once, uploads it and caches it by path, so loading the same
 image twice returns the same texture. Release it with `Unload` when the level that used it ends.
 
+## Draw text
+
+```csharp
+IFontService fonts = provider.GetRequiredService<IFontService>();
+FontHandle font = fonts.Load("fonts/Cousine-Regular.ttf", 24f);
+
+Vector2 size = fonts.Measure(font, "Hello AGE");
+fonts.Draw(font, "Hello AGE", new Vector2(32f, 32f), Color.White);
+```
+
+`IFontService` reads the file through `IAssetLoader`, bakes its glyphs into one atlas with `StbTrueTypeSharp` and
+uploads that atlas as a texture, so text is tinted and drawn like any other sprite. A font is cached by its path and its
+height, so the same file at the same size returns the same atlas. The bake covers the printable ASCII range, and a
+character outside it is drawn as a space, which keeps the rest of the line where it was. `Measure` reports what a line
+advances and how tall it is, which is what places the text of a menu. Draw between `BeginFrame` and `EndFrame`, from the
+render callback of the loop or from a render pass. The sample ships `content/fonts/Cousine-Regular.ttf` under the SIL
+Open Font License 1.1 for exactly this call.
+
+The built-in 8x8 bitmap font is still there for a game that ships no font: `IRenderer.DrawText` draws with it, which is
+what the UI pass uses.
+
 ## Load and play a sound
 
 ```csharp
