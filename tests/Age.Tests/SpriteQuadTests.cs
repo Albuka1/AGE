@@ -88,6 +88,17 @@ public sealed class SpriteQuadTests
     }
 
     [Fact]
+    public void SpriteQuad_Bounds_OfANegativeSize_IsNormalized()
+    {
+        Aabb bounds = SpriteQuad.Bounds(new Vector2(10f, 20f), new Vector2(-30f, -40f), 0f);
+
+        bounds.Left.Should().Be(-20f);
+        bounds.Top.Should().Be(-20f);
+        bounds.Right.Should().Be(10f);
+        bounds.Bottom.Should().Be(20f);
+    }
+
+    [Fact]
     public void SpriteQuad_TooFewCorners_Throws() =>
         FluentActions.Invoking(() => SpriteQuad.Corners(Vector2.Zero, new Vector2(1f, 1f), 0f, new Vector2[3]))
             .Should().Throw<ArgumentOutOfRangeException>();

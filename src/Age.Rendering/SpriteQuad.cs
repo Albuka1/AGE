@@ -57,7 +57,14 @@ public static class SpriteQuad
     {
         if (rotation == 0f)
         {
-            return Aabb.FromRect(new Rect(position, size));
+            // The endpoints are normalized, because a negative scale turns the size into a negative one and a box whose
+            // left edge lies to the right of its right edge overlaps nothing.
+            float minX = MathF.Min(position.X, position.X + size.X);
+            float minY = MathF.Min(position.Y, position.Y + size.Y);
+            float maxX = MathF.Max(position.X, position.X + size.X);
+            float maxY = MathF.Max(position.Y, position.Y + size.Y);
+
+            return Aabb.FromRect(new Rect(new Vector2(minX, minY), new Vector2(maxX - minX, maxY - minY)));
         }
 
         Span<Vector2> corners = stackalloc Vector2[4];

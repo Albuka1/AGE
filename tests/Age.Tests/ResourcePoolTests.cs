@@ -178,6 +178,27 @@ public sealed class ResourcePoolTests
     }
 
     [Fact]
+    public void ResourcePool_ClearWithACallbackThatAdds_KeepsTheNewResource()
+    {
+        var pool = new ResourcePool<string>();
+        pool.Add("first", "first.txt");
+        ResourceHandle? added = null;
+
+        pool.Clear(value =>
+        {
+            if (value == "first")
+            {
+                added = pool.Add("second", "second.txt");
+            }
+        });
+
+        pool.Count.Should().Be(1);
+        added.Should().NotBeNull();
+        pool.TryGet(added!.Value, out string? resource).Should().BeTrue();
+        resource.Should().Be("second");
+    }
+
+    [Fact]
     public void ResourcePool_ParallelCalls_KeepThePoolConsistent()
     {
         var pool = new ResourcePool<int>();

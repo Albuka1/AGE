@@ -129,6 +129,9 @@ gameLoop.Run(
             gameLoop.Stop();
         }
 
+        // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
+        // agree, including after the window was resized.
+        camera.ViewportSize = renderer.ViewportSize;
         renderPipeline.Render(world, camera);
     });
 

@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ResourcePool.Clear` runs the release callback of a slot after the lock was released, so a slow callback, or one that
+  calls back into the pool, no longer holds the pool against other threads. The bookkeeping itself stays under the lock,
+  and the call walks a snapshot, so a resource that another thread adds while it runs stays live.
 - `ResourcePool` guards its slots, its path index and its counter with a lock, so a background loader cannot corrupt the
   pool while the thread that owns the device creates and deletes the resources. The payloads and the device objects
   themselves stay unsynchronized, and the documentation says who owns them.
