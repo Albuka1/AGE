@@ -13,14 +13,17 @@ namespace Age.Rendering;
 /// <remarks>
 /// The slot of every baked font lives in a <see cref="ResourcePool{T}"/>, keyed by the path and the height, so a handle
 /// from before an unload stops resolving instead of pointing at the atlas that replaced it. The service owns the device
-/// textures of the atlases: disposing it releases them all. It is not thread-safe, so call it from the thread that owns
-/// the renderer's context. An atlas whose release the renderer refused stays loaded, so a later call can retry it.
+/// textures of the atlases: disposing it releases them all, and a disposed service refuses to load another font while
+/// <see cref="UnloadAll"/> stays available for what a renderer refused to release. It is not thread-safe, so call it
+/// from the thread that owns the renderer's context. An atlas whose release the renderer refused stays loaded, so a
+/// later call can retry it.
 /// </remarks>
 public sealed class FontService : IFontService, IDisposable
 {
     private readonly IAssetLoader _assets;
     private readonly IRenderer _renderer;
     private readonly ResourcePool<FontData> _fonts = new();
+    private bool _disposed;
 
     /// <summary>Initializes the service with the loader of the font files and the renderer it draws through.</summary>
     /// <param name="assets">The loader that reads the bytes of the font files.</param>
@@ -40,6 +43,7 @@ public sealed class FontService : IFontService, IDisposable
     /// <inheritdoc />
     public FontHandle Load(string relativePath, float pixelHeight)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pixelHeight);
 
@@ -157,8 +161,16 @@ public sealed class FontService : IFontService, IDisposable
         }
     }
 
-    /// <summary>Releases every atlas. The service cannot be used afterwards.</summary>
-    public void Dispose() => UnloadAll();
+    /// <summary>Releases every atlas and marks the service as disposed, so it cannot load another font.</summary>
+    /// <remarks>
+    /// The call is idempotent, and <see cref="UnloadAll"/> stays available afterwards, which is what retries an atlas
+    /// that the renderer refused to release.
+    /// </remarks>
+    public void Dispose()
+    {
+        _disposed = true;
+        UnloadAll();
+    }
 
     /// <summary>Returns the font behind the handle, or throws when the handle is stale.</summary>
     private FontData Require(FontHandle font)

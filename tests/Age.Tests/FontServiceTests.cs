@@ -155,6 +155,33 @@ public sealed class FontServiceTests : IDisposable
         FluentActions.Invoking(() => _fonts.Load("fonts/not-a-font.ttf", 16f)).Should().Throw<ArgumentException>();
     }
 
+    [Fact]
+    public void FontService_LoadAfterDispose_Throws()
+    {
+        _fonts.Load(FontPath, 16f);
+
+        _fonts.Dispose();
+
+        FluentActions.Invoking(() => _fonts.Load(FontPath, 16f)).Should().Throw<ObjectDisposedException>();
+        FluentActions.Invoking(() => _fonts.UnloadAll()).Should().NotThrow("a disposed service still retries what it could not release");
+        _fonts.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void FontService_UnloadThatTheRendererRefuses_KeepsTheFontLoaded()
+    {
+        FontHandle font = _fonts.Load(FontPath, 16f);
+        _renderer.FailNextRelease = true;
+
+        FluentActions.Invoking(() => _fonts.Unload(font)).Should().Throw<InvalidOperationException>();
+
+        _fonts.IsAlive(font).Should().BeTrue("the slot was not forgotten, so the unload can be retried");
+
+        _fonts.Unload(font).Should().BeTrue();
+        _fonts.IsAlive(font).Should().BeFalse();
+        _renderer.Released.Should().Equal(font.Atlas);
+    }
+
     private sealed class RecordingRenderer : IRenderer
     {
         public List<(int Id, int Width, int Height)> Created { get; } = [];
@@ -201,7 +228,18 @@ public sealed class FontServiceTests : IDisposable
             return new TextureHandle(id);
         }
 
-        public void ReleaseTexture(TextureHandle texture) => Released.Add(texture.Id);
+        public bool FailNextRelease { get; set; }
+
+        public void ReleaseTexture(TextureHandle texture)
+        {
+            if (FailNextRelease)
+            {
+                FailNextRelease = false;
+                throw new InvalidOperationException("The renderer refused to release the texture.");
+            }
+
+            Released.Add(texture.Id);
+        }
 
         public void Dispose()
         {

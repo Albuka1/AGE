@@ -46,6 +46,11 @@ public interface IFontService
     /// <summary>Deletes the atlas behind the handle and forgets its path and height, so loading it again bakes it anew.</summary>
     /// <param name="font">The handle of the font to delete.</param>
     /// <returns><see langword="true"/> when a loaded font was deleted, <see langword="false"/> when the handle was stale or not owned by this service.</returns>
+    /// <remarks>
+    /// A renderer that refuses to release the atlas of the font stops the call with its own exception, and the font then
+    /// stays loaded: its slot was not forgotten, so <see cref="IsAlive"/> still reports it and another call can retry the
+    /// unload. Every other font is unaffected, because only this one is released here.
+    /// </remarks>
     bool Unload(FontHandle font);
 
     /// <summary>Deletes every font that this service loaded.</summary>

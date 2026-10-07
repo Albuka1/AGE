@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `IFontService` and `FontHandle`, so a game loads a TrueType or OpenType font at a height and draws text with it:
   `Load` bakes and caches the glyph atlas, `Measure` reports what a line advances and how tall it is, and `Draw` issues
   one textured quad per glyph through `IRenderer.DrawTextureRegion`. The built-in bitmap font stays as the zero-config
-  fallback of `IRenderer.DrawText`.
+  fallback of `IRenderer.DrawText`. A disposed service refuses to load another font, while unloading what a renderer
+  refused to release stays available.
 - The sample content ships `Cousine-Regular.ttf`, a monospaced font by Steve Matteson under the SIL Open Font License
   1.1, which the font tests bake and the sample draws text with; the license text and the source are recorded next to it.
 - `TrueTypeFontBake` and `GlyphPacking`, which rasterize the glyphs of a TrueType or OpenType font into one atlas with
