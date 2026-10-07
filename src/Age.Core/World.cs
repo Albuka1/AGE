@@ -3,6 +3,22 @@ namespace Age.Core;
 /// <summary>
 /// Owns entities and their components. A world is not registered in the dependency injection container.
 /// </summary>
+/// <remarks>
+/// <para>
+/// A world is not thread-safe. Its storage is not synchronized and nothing serializes two calls that arrive at the same
+/// time, so a world belongs to one thread: the one that runs the <see cref="IGameLoop"/> and calls the
+/// <see cref="SystemPipeline"/>, which runs its systems in order on that thread. Calls that change the world come from
+/// the update callback of the loop, and <see cref="Enumerate{T}"/> states the same rule for the sequence it hands out.
+/// </para>
+/// <para>
+/// A game that touches a world from more than one thread serializes the calls itself, with a lock or a queue. The
+/// generation checks of <see cref="IsAlive"/>, <see cref="GetRef{T}"/>, <see cref="Borrow{T}"/> and
+/// <see cref="ComponentRef{T}"/> are correctness in that sequential use: they keep an identifier or a borrow that
+/// outlived its entity from reaching the component of the entity that took the slot. They are not a concurrency
+/// guarantee, because validation and access are two steps, so a destruction on another thread that lands between them
+/// is a race that no check inside a single call can close.
+/// </para>
+/// </remarks>
 public sealed class World
 {
     private readonly List<bool> _alive = new();
@@ -109,7 +125,8 @@ public sealed class World
     /// <remarks>
     /// A borrow costs a generation check per access, which a raw reference from <see cref="GetRef{T}"/> does not have, so
     /// take one where the entity can be destroyed between the borrow and the write. A borrow of an entity that was
-    /// destroyed in the meantime throws instead of reaching the component of the entity that holds the slot now.
+    /// destroyed in the meantime throws instead of reaching the component of the entity that holds the slot now. The
+    /// check is for a world that one thread touches at a time: see the threading model on <see cref="World"/>.
     /// </remarks>
     public ComponentRef<T> Borrow<T>(Entity entity) where T : struct, IComponent
     {

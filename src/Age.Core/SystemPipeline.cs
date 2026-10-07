@@ -3,6 +3,16 @@ namespace Age.Core;
 /// <summary>
 /// Runs an ordered list of systems. A pipeline is a singleton per application and must not be shared across worlds.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The systems run in insertion order, one after another, on the thread that calls <see cref="Update"/>, so a system
+/// sees the world as the system before it left it.
+/// </para>
+/// <para>
+/// A <see cref="World"/> is not thread-safe, so its owner calls the pipeline from the update callback of the game loop
+/// and serializes whatever touches the same world from another thread.
+/// </para>
+/// </remarks>
 public sealed class SystemPipeline
 {
     private readonly List<ISystem> _systems = new();

@@ -19,6 +19,10 @@ namespace Age.Core;
 /// Take a borrow where the entity can be destroyed between two statements. <see cref="World.GetRef{T}"/> hands out a raw
 /// reference, which is what an inner loop wants, but nothing checks it after the call.
 /// </para>
+/// <para>
+/// The check is correctness for a world that one thread touches at a time. It is not a concurrency guarantee: the
+/// validation and the access are two steps, so a world shared between threads has to be serialized by its callers.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>

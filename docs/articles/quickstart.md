@@ -66,6 +66,12 @@ transform.Value = value;
 
 A borrow cannot be stored in a field or a collection, which is what keeps it from outliving the frame that took it.
 
+A `World` is not thread-safe. It belongs to the thread that runs the game loop, and everything that changes it comes from
+the update callback of that loop; a game that touches one world from more than one thread serializes the calls itself.
+The generation checks of `IsAlive`, `Borrow` and `GetRef` are correctness for that sequential use — they keep an
+identifier or a borrow that outlived its entity from reaching the component of the entity that took the slot — and they
+are not a concurrency guarantee, because validation and access are two separate steps.
+
 ## Save and load a scene
 
 ```csharp

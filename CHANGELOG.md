@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `World` states its threading model: its storage is not synchronized and the world belongs to the thread that runs the
+  loop, so a game that touches one from more than one thread serializes the calls itself, and the generation checks of an
+  identifier or a borrow are correctness in sequential use rather than a concurrency guarantee. `SystemPipeline` says
+  that it runs its systems in order, on the thread that calls it.
 - `World.GetRef` documents the lifetime of the reference it hands out in one place: any structural change to the entity
   invalidates it, the storage of its slot is handed out again, and a reference held across the destruction of its entity
   therefore reaches the component of the next entity that takes the slot. `World.Borrow` is the checked alternative.
