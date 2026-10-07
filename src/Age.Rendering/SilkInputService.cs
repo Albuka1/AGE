@@ -65,6 +65,9 @@ public sealed class SilkInputService : IInputService, IDisposable
 
     private static readonly Key[] EngineKeys = [.. KeyMap.Select(entry => entry.Engine).Distinct()];
 
+    private static readonly HashSet<Key> GroupedKeys =
+        [.. KeyMap.GroupBy(entry => entry.Engine).Where(group => group.Count() > 1).Select(group => group.Key)];
+
     private readonly IWindowService _windowService;
     private readonly InputStateTracker _tracker = new();
 
@@ -179,11 +182,21 @@ public sealed class SilkInputService : IInputService, IDisposable
     {
         foreach ((SilkKey silk, Key engine) in KeyMap)
         {
-            if (silk == key)
+            if (silk != key)
             {
-                _tracker.SetKey(engine, isDown);
+                continue;
+            }
+
+            if (GroupedKeys.Contains(engine))
+            {
+                // Both physical keys of a modifier map to one engine key, so the state is read back from the device,
+                // which already reflects this event: otherwise releasing the right Shift would clear a held left one.
+                _tracker.SetKey(engine, IsKeyboardKeyDown(engine));
                 return;
             }
+
+            _tracker.SetKey(engine, isDown);
+            return;
         }
     }
 
