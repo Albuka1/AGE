@@ -90,8 +90,9 @@ internal static class Win32Icon
     /// <param name="window">The window handle.</param>
     /// <param name="icon">The icon to show.</param>
     /// <param name="large">Whether the icon is the large one instead of the small one.</param>
-    internal static void Apply(nint window, nint icon, bool large) =>
-        _ = SendMessage(window, WmSetIcon, large ? IconBig : IconSmall, icon);
+    /// <returns>The icon the window showed before, which the caller releases when it owns it.</returns>
+    internal static nint Apply(nint window, nint icon, bool large) =>
+        SendMessage(window, WmSetIcon, large ? IconBig : IconSmall, icon);
 
     /// <summary>Releases an icon and the bitmaps it was built from.</summary>
     internal static void Release(IconBitmaps bitmaps)

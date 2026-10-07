@@ -91,7 +91,7 @@ public sealed class SilkWindowService : IWindowService
         SetIcon(handle, small, false);
     }
 
-    /// <summary>Sends one icon to the window and keeps it alive while the window uses it.</summary>
+    /// <summary>Sends one icon to the window, keeps it alive while the window uses it, and releases the icon it replaced.</summary>
     [SupportedOSPlatform("windows")]
     private void SetIcon(nint handle, Win32Icon.IconBitmaps icon, bool large)
     {
@@ -100,8 +100,29 @@ public sealed class SilkWindowService : IWindowService
             return;
         }
 
-        Win32Icon.Apply(handle, icon.Icon, large);
+        // The window answers with the icon it showed before, which is one of ours when an earlier call set it: release
+        // that one, so a game that replaces its icon while it runs does not pile icons up. A handle the window owned
+        // itself is left alone.
+        nint replaced = Win32Icon.Apply(handle, icon.Icon, large);
+        ReleaseIcon(replaced);
         _icons.Add(icon);
+    }
+
+    /// <summary>Releases the remembered icon that carries the handle, when it is one of ours.</summary>
+    [SupportedOSPlatform("windows")]
+    private void ReleaseIcon(nint replaced)
+    {
+        for (int index = 0; index < _icons.Count; index++)
+        {
+            if (_icons[index].Icon != replaced)
+            {
+                continue;
+            }
+
+            Win32Icon.Release(_icons[index]);
+            _icons.RemoveAt(index);
+            return;
+        }
     }
 
     /// <summary>Releases the icons of the window.</summary>
