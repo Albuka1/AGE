@@ -1,41 +1,71 @@
 <p align="center">
-  <img alt="AGE" width="250" src="docs/images/logo-big.svg" />
+  <img alt="AGE — Auae Game Engine" width="220" src="docs/images/logo-big.svg" />
 </p>
 
-# Auae Game Engine (AGE)
+<h1 align="center">Auae Game Engine</h1>
 
-A small 2D game engine for .NET 10, built around an entity-component-system
-core, a Silk.NET rendering backend and a dependency-injection friendly service
-model.
+<p align="center">
+  <em>A compact 2D game engine for .NET 10 — ECS core, Silk.NET renderer, DI-first design.</em>
+</p>
 
-Documentation: [albuka1.github.io/AGE](https://albuka1.github.io/AGE/) — API reference, quickstart and roadmap.
+<p align="center">
+  <a href="https://github.com/Albuka1/Age/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Albuka1/Age/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://albuka1.github.io/AGE/"><img alt="Docs" src="https://img.shields.io/badge/docs-online-3fb950" /></a>
+  <img alt=".NET" src="https://img.shields.io/badge/.NET-10.0-512BD4" />
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue" />
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" />
+</p>
 
-![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
-![License](https://img.shields.io/badge/license-MIT-blue)
+---
 
-## Overview
+AGE is a small, opinionated 2D engine written in C#. It pairs an
+entity-component-system core with a Silk.NET + OpenGL 3.3 renderer, a
+dependency-injection service model, and a testable design where the renderer
+is the only piece that ever touches the GPU.
 
-AGE is organized as a set of focused assemblies:
+It is not a Unity competitor. It is what you reach for when you want to
+understand every line, ship a focused 2D game, and not fight a 500 MB editor.
+
+## Highlights
+
+- **ECS core.** `World` owns entity ids and struct components. `SystemPipeline`
+  runs an ordered list of `ISystem` instances once per frame.
+- **Renderer that stays out of the way.** Silk.NET window + OpenGL 3.3 core,
+  a minimal sprite batch, and a retained UI pass — all behind `IRenderer`.
+- **Sandboxed assets.** `IAssetLoader` resolves every path inside the game root
+  and rejects traversal; image and audio decoding are separate services.
+- **Audio built in.** WAVE, MP3 and Ogg Vorbis decoding through `Age.Audio`,
+  playback through OpenAL. Drop `AddAgeOpenALAudio` on headless machines and
+  it stays silent.
+- **Scene serialization.** Worlds round-trip through JSON with a
+  `JsonSerializerContext`, so the format is AOT-friendly by construction.
+- **DI-first.** Every subsystem registers through an `AddAge*` extension.
+  `World` is deliberately *not* in the container — its lifetime belongs to the
+  caller.
+- **Testable by design.** Renderer, audio device and window are never
+  instantiated by the test suite; null services cover the rest.
+
+## Projects
 
 | Project | Responsibility |
-| ------- | -------------- |
-| `Age.Core` | Entities, components, scene serialization, systems, math primitives, game loop |
+| --- | --- |
+| `Age.Core` | Entities, components, scene serialization, systems, math, game loop |
 | `Age.Assets` | Sandboxed path-based asset access and loading |
 | `Age.Input` | Keyboard and mouse abstraction |
 | `Age.Audio` | Sound resources, WAVE, MP3 and Ogg Vorbis decoding, and playback through OpenAL |
 | `Age.Physics` | Axis-aligned collision detection with an incremental spatial hash |
 | `Age.UI` | Retained UI components and pointer interaction |
-| `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, window icon and splash screen |
+| `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, icon, splash |
 | `Age.Sample` | Console sample that wires everything together |
 | `Age.Tests` | Behavioural unit tests |
 
 ## Requirements
 
-- .NET SDK 10.0.100 or later
-- A GPU with OpenGL 3.3 core profile support to run `Age.Sample`
-- An audio device with OpenAL for the sound of `Age.Sample`; without one, drop `AddAgeOpenALAudio` and it stays silent
+- .NET SDK **10.0.100** or later
+- A GPU with **OpenGL 3.3 core profile** to run `Age.Sample`
+- An **OpenAL** device for sound — optional; without it, the sample stays silent
 
-## Getting started
+## Quick start
 
 ```bash
 git clone https://github.com/Albuka1/Age.git
