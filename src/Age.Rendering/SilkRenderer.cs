@@ -130,16 +130,12 @@ public sealed class SilkRenderer : IRenderer
     }
 
     /// <inheritdoc />
-    public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
-    {
-        if (texture.Id == 0)
-        {
-            DrawQuad(position, size, color, default, 0u, rotation);
-            return;
-        }
+    public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f) =>
+        DrawTextureRegion(texture, new Rect(Vector2.Zero, new Vector2(1f, 1f)), position, size, color, rotation);
 
-        DrawQuad(position, size, color, new Rect(Vector2.Zero, new Vector2(1f, 1f)), (uint)texture.Id, rotation);
-    }
+    /// <inheritdoc />
+    public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f) =>
+        DrawQuad(position, size, color, texture.Id == 0 ? default : source, (uint)texture.Id, rotation);
 
     /// <inheritdoc />
     public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height)

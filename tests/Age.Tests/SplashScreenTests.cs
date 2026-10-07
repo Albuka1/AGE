@@ -159,6 +159,7 @@ public sealed class SplashScreenTests
         public Vector2 LastSize { get; private set; }
         public Color LastColor { get; private set; }
         public float LastRotation { get; private set; }
+        public Rect LastSource { get; private set; }
         public bool Cleared { get; private set; }
         public bool FrameEnded { get; private set; }
 
@@ -181,6 +182,12 @@ public sealed class SplashScreenTests
             LastSize = size;
             LastColor = color;
             LastRotation = rotation;
+        }
+
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+            LastSource = source;
+            DrawSprite(texture, position, size, color, rotation);
         }
 
         public void DrawRectangle(Rect rect, Color color)

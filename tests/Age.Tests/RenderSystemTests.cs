@@ -146,6 +146,9 @@ public sealed class RenderSystemTests
         public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f) =>
             Starts.Add(position);
 
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f) =>
+            DrawSprite(texture, position, size, color, rotation);
+
         public void DrawRectangle(Rect rect, Color color)
         {
         }

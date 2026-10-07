@@ -39,9 +39,23 @@ public interface IRenderer : IDisposable
     /// <param name="rotation">The rotation of the quad around its centre, in radians. A renderer that ignores it draws the quad upright.</param>
     /// <remarks>
     /// The whole texture is mapped onto the quad, so a rotation turns the image with it. Without a texture the call draws
-    /// the same rectangle as <see cref="DrawRectangle"/>, rotated.
+    /// the same rectangle as <see cref="DrawRectangle"/>, rotated. <see cref="DrawTextureRegion"/> draws a part of a
+    /// texture instead, which is what an atlas needs.
     /// </remarks>
     void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f);
+
+    /// <summary>Draws a part of a texture, which is how a sprite sheet or a glyph atlas reaches the screen.</summary>
+    /// <param name="texture">The texture to sample. A handle whose <see cref="TextureHandle.Id"/> is zero selects a solid color quad and ignores the region.</param>
+    /// <param name="source">The part of the texture that is mapped onto the quad, in normalized coordinates: (0, 0) is the top-left corner of the texture and (1, 1) its bottom-right.</param>
+    /// <param name="position">The top-left corner of the quad, in world coordinates.</param>
+    /// <param name="size">The size of the quad, in world coordinates.</param>
+    /// <param name="color">The tint.</param>
+    /// <param name="rotation">The rotation of the quad around its centre, in radians.</param>
+    /// <remarks>
+    /// <see cref="DrawSprite"/> is this call with the region that covers the whole texture, so a renderer that
+    /// implements one of the two implements both through the other.
+    /// </remarks>
+    void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f);
 
     /// <summary>Uploads pixel data as a texture that the renderer owns.</summary>
     /// <param name="pixels">The pixels, four RGBA bytes each, in row-major order from the top-left corner.</param>

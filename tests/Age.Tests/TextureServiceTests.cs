@@ -212,6 +212,10 @@ public sealed class TextureServiceTests
         {
         }
 
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+        }
+
         public void DrawRectangle(Rect rect, Color color)
         {
         }
