@@ -80,11 +80,17 @@ public sealed class SilkRenderer : IRenderer
     {
         ArgumentNullException.ThrowIfNull(window);
 
+        // A second Attach would otherwise leave the objects of the first window behind.
+        ReleaseResources();
+
         _windowService = window;
         _gl = GL.GetApi(window.Window);
         ViewportSize = new Vector2(window.Window.Size.X, window.Window.Size.Y);
         CreateResources();
     }
+
+    /// <inheritdoc />
+    public void Dispose() => ReleaseResources();
 
     /// <inheritdoc />
     public void SetCamera(Camera2D camera) => _camera = camera;
@@ -270,6 +276,44 @@ public sealed class SilkRenderer : IRenderer
     }
 
     private GL RequireContext() => _gl ?? throw new InvalidOperationException("The renderer has not been attached to a window.");
+
+    /// <summary>Deletes the program, the buffers and the font texture of this renderer. Safe to call when nothing was created.</summary>
+    private void ReleaseResources()
+    {
+        if (_gl is null)
+        {
+            return;
+        }
+
+        GL gl = _gl;
+
+        if (_fontTexture != 0)
+        {
+            gl.DeleteTexture(_fontTexture);
+            _fontTexture = 0;
+        }
+
+        if (_vbo != 0)
+        {
+            gl.DeleteBuffer(_vbo);
+            _vbo = 0;
+        }
+
+        if (_vao != 0)
+        {
+            gl.DeleteVertexArray(_vao);
+            _vao = 0;
+        }
+
+        if (_program != 0)
+        {
+            gl.DeleteProgram(_program);
+            _program = 0;
+        }
+
+        _gl = null;
+        ViewportSize = Vector2.Zero;
+    }
 
     private static uint CreateProgram(GL gl)
     {

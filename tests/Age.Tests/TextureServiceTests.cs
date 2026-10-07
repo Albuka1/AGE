@@ -237,6 +237,10 @@ public sealed class TextureServiceTests
 
         public Func<int, bool>? FailRelease { get; set; }
 
+        public void Dispose()
+        {
+        }
+
         public void ReleaseTexture(TextureHandle texture)
         {
             Released.Add(texture.Id);

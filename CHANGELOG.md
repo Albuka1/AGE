@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IRenderer` is disposable: `SilkRenderer` deletes its shader program, its buffers and the font atlas, so closing a
+  window, or attaching a renderer a second time, no longer leaks video memory. Dispose the renderer before the window is
+  closed, while the OpenGL context is alive.
 - Camera culling: `Camera2D.ViewportSize` is the rectangle that the camera covers (`Camera2D.VisibleWorld`), and
   `RenderSystem` skips a sprite whose box, rotated by its transform, does not overlap it. A camera without a viewport
   size culls nothing, so a game that never set it keeps drawing everything.

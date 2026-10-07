@@ -222,6 +222,17 @@ provider.GetRequiredService<IGameLoop>().Run(
 The render pipeline runs its passes in the order they were added, so the UI lands on top of the world. Add a pass of
 your own after those two, for post-processing or an overlay, and it draws last.
 
+Dispose the renderer before the window is closed, and unload the textures and the splash logo before that: their device
+objects live in the OpenGL context of the window. The container disposes the services when it goes out of scope, which
+is after the window is gone, so a game that wants a clean shutdown releases them itself:
+
+```csharp
+splash.Dispose();
+textures.UnloadAll();
+renderer.Dispose();
+windowService.Close();
+```
+
 The loop accumulates the time each frame took in its `FixedTimestep` and calls the update callback a whole number of
 times with one sixtieth of a second, so the simulation advances by the same amount at any frame rate, and the render
 callback runs once per frame after those steps. A frame that took longer than a quarter of a second counts as if it

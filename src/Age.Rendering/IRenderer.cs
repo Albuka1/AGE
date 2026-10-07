@@ -5,7 +5,13 @@ namespace Age.Rendering;
 /// <summary>
 /// Draws two-dimensional content through the graphics device.
 /// </summary>
-public interface IRenderer
+/// <remarks>
+/// The renderer owns the device objects it creates, so dispose it before the window it was attached to is closed: the
+/// shader program, the vertex buffers and the built-in font texture are deleted then, while the context is still alive.
+/// Disposing twice, and disposing a renderer that was never attached, both do nothing, and a disposed renderer can be
+/// attached to another window, which creates its objects again.
+/// </remarks>
+public interface IRenderer : IDisposable
 {
     /// <summary>Gets the current viewport size, in pixels.</summary>
     Vector2 ViewportSize { get; }

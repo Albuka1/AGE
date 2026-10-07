@@ -205,6 +205,10 @@ public sealed class SplashScreenTests
         }
 
         public void ReleaseTexture(TextureHandle texture) => Released.Add(texture.Id);
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class FakeInput : IInputService

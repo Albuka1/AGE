@@ -163,5 +163,9 @@ public sealed class RenderSystemTests
         public void ReleaseTexture(TextureHandle texture)
         {
         }
+
+        public void Dispose()
+        {
+        }
     }
 }
