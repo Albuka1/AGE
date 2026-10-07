@@ -78,42 +78,47 @@ if (File.Exists(scenePath))
 
 const float MoveSpeed = 240f;
 
-gameLoop.Run(time =>
-{
-    if (splash.Draw(renderer, time, input))
+// The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
+// frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame.
+gameLoop.Run(
+    update: step =>
     {
-        return;
-    }
-
-    MoveFirstSprite(world, first, input, time);
-
-    if (input.IsKeyPressed(Key.Space))
+        MoveFirstSprite(world, first, input, step);
+        world.Update(step, pipeline);
+    },
+    render: time =>
     {
-        sounds.Play(click);
-    }
+        if (splash.Draw(renderer, time, input))
+        {
+            return;
+        }
 
-    if (input.IsKeyPressed(Key.F))
-    {
-        File.WriteAllText(scenePath, scenes.Save(world));
-        Console.WriteLine($"Saved the scene to {scenePath}.");
-    }
+        if (input.IsKeyPressed(Key.Space))
+        {
+            sounds.Play(click);
+        }
 
-    if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
-    {
-        world = LoadScene(scenes, scenePath);
-        first = MoveTarget(world, tiles);
-        Console.WriteLine("Loaded the scene again.");
-    }
+        if (input.IsKeyPressed(Key.F))
+        {
+            File.WriteAllText(scenePath, scenes.Save(world));
+            Console.WriteLine($"Saved the scene to {scenePath}.");
+        }
 
-    if (input.IsKeyPressed(Key.Escape))
-    {
-        gameLoop.Stop();
-    }
+        if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
+        {
+            world = LoadScene(scenes, scenePath);
+            first = MoveTarget(world, tiles);
+            Console.WriteLine("Loaded the scene again.");
+        }
 
-    world.Update(time, pipeline);
-    renderSystem.Render(world, camera);
-    uiRenderSystem.Render(world);
-});
+        if (input.IsKeyPressed(Key.Escape))
+        {
+            gameLoop.Stop();
+        }
+
+        renderSystem.Render(world, camera);
+        uiRenderSystem.Render(world);
+    });
 
 windowService.Close();
 

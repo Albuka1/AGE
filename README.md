@@ -65,7 +65,6 @@ The following work is planned but not part of the current foundation. The order 
 game needs first: the entries at the top keep a project stable as it grows, and the rest cover the
 limits of the current design.
 
-- Fixed timestep in the game loop.
 - Entity id pool and generations for stale handles.
 - Render passes ordered by the loop instead of by hand.
 - Incremental spatial hash.

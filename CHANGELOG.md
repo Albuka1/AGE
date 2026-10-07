@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `FixedTimestep` and `IGameLoop.Run(update, render)`, so a simulation advances by a fixed step whatever the frame rate
+  is while the frame is drawn once, with a limit on the time that a single frame may contribute and `Alpha` left over
+  for interpolation.
 - Scene serialization: `ISceneSerializer` and the `ComponentRegistry` that every assembly fills with its own
   components, so a world is saved, loaded and edited as JSON.
 - `ISoundService` and `SoundHandle`, so a game loads a sound once and plays it from anywhere; `IAudioService` gained

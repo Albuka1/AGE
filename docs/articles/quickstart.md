@@ -149,16 +149,17 @@ services.AddAgeOpenALAudio();    // the device that plays, where the machine has
 ```csharp
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
 
-gameLoop.Run(time =>
-{
-    if (splash.Draw(renderer, time))
+gameLoop.Run(
+    update: step => world.Update(step, pipeline),
+    render: time =>
     {
-        return;
-    }
+        if (splash.Draw(renderer, time))
+        {
+            return;
+        }
 
-    world.Update(time, pipeline);
-    renderSystem.Render(world, camera);
-});
+        renderSystem.Render(world, camera);
+    });
 ```
 
 `Draw` keeps the frame for 2.5 seconds and returns `false` once it is over, so the game draws
@@ -184,11 +185,16 @@ pipeline.Add(provider.GetRequiredService<CollisionSystem>());
 RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
 var camera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = new Vector2(1280, 720) };
 
-provider.GetRequiredService<IGameLoop>().Run(time =>
-{
-    world.Update(time, pipeline);
-    renderSystem.Render(world, camera);
-});
+provider.GetRequiredService<IGameLoop>().Run(
+    update: step => world.Update(step, pipeline),
+    render: time => renderSystem.Render(world, camera));
 ```
 
 `World` is never registered in the container; the caller owns its lifetime.
+
+The loop accumulates the time each frame took in its `FixedTimestep` and calls the update callback a whole number of
+times with one sixtieth of a second, so the simulation advances by the same amount at any frame rate, and the render
+callback runs once per frame after those steps. A frame that took longer than a quarter of a second counts as if it
+took that long, so a breakpoint or a window drag does not produce a burst of steps. Register a `FixedTimestep` of your
+own before the loop is resolved to change the step, and read `FixedTimestep.Alpha` to draw a position between two steps.
+Call `Run(tick)` instead to receive the time of every frame directly.

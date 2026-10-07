@@ -12,6 +12,7 @@ public sealed class SilkGameLoop : IGameLoop
 {
     private readonly IWindowService _windowService;
     private readonly IInputService[] _inputServices;
+    private readonly FixedTimestep _timestep;
     private volatile bool _stopRequested;
 
     /// <summary>
@@ -19,19 +20,40 @@ public sealed class SilkGameLoop : IGameLoop
     /// </summary>
     /// <param name="windowService">The window that provides the frame timing.</param>
     /// <param name="inputServices">The input services to open each frame with. The sequence is empty when no input is registered.</param>
-    public SilkGameLoop(IWindowService windowService, IEnumerable<IInputService> inputServices)
+    /// <param name="timestep">The fixed step that the two-callback overload advances with. Register your own before resolving the loop to change it.</param>
+    public SilkGameLoop(IWindowService windowService, IEnumerable<IInputService> inputServices, FixedTimestep timestep)
     {
         ArgumentNullException.ThrowIfNull(windowService);
         ArgumentNullException.ThrowIfNull(inputServices);
+        ArgumentNullException.ThrowIfNull(timestep);
         _windowService = windowService;
         _inputServices = [.. inputServices];
+        _timestep = timestep;
     }
 
     /// <inheritdoc />
     public void Run(Action<GameTime> tick)
     {
         ArgumentNullException.ThrowIfNull(tick);
+        RunFrames(tick);
+    }
 
+    /// <inheritdoc />
+    public void Run(Action<GameTime> update, Action<GameTime> render)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        ArgumentNullException.ThrowIfNull(render);
+
+        RunFrames(time =>
+        {
+            _timestep.Advance(time, update);
+            render(time);
+        });
+    }
+
+    /// <summary>Runs the window pump until the window closes or Stop is called, passing the time of each frame to the callback.</summary>
+    private void RunFrames(Action<GameTime> tick)
+    {
         IWindow window = _windowService.Window;
         window.Closing += () => _stopRequested = true;
         window.GLContext?.MakeCurrent();
