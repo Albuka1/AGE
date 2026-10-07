@@ -30,7 +30,7 @@ pipeline.Add(new MovementSystem(120f));
 ## Ordering and lifetime
 
 `SystemPipeline.Add` appends in call order and is not idempotent: adding the
-same instance twice runs it twice per frame. A pipeline is a singleton per
+same instance twice runs it twice per update step. A pipeline is a singleton per
 application and must not be shared between worlds.
 
 ## Component access rules

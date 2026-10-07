@@ -29,7 +29,7 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 ## Highlights
 
 - **ECS core.** `World` owns entity ids and struct components. `SystemPipeline`
-  runs an ordered list of `ISystem` instances once per frame.
+  runs an ordered list of `ISystem` instances once per update step.
 - **Renderer that stays out of the way.** Silk.NET window + OpenGL 3.3 core,
   a minimal sprite batch, and a retained UI pass — all behind `IRenderer`.
 - **Sandboxed assets.** `IAssetLoader` resolves every path inside the game root
@@ -83,7 +83,9 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 - A `World` owns entity identifiers and component storage. Components are
   structs that implement `IComponent`; storage is a
   `Dictionary<Type, Array>` keyed by component type.
-- `SystemPipeline` runs an ordered list of `ISystem` instances once per frame.
+- `SystemPipeline` runs an ordered list of `ISystem` instances once per update
+  step, in insertion order. A step is one `GameTime.Delta`, so a pipeline that the
+  loop drives with a fixed step runs that many times per frame.
 - Services are resolved from dependency injection. `World` is deliberately not
   registered there because its lifetime belongs to the caller.
 - The renderer is the only component that touches OpenGL. It is never

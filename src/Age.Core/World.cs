@@ -98,9 +98,14 @@ public sealed class World
         IsAlive(entity) && _stores.TryGetValue(typeof(T), out IComponentStore? store) && store.Has(entity.Id);
 
     /// <summary>Removes the component of type <typeparamref name="T"/> from the entity if it is present.</summary>
+    /// <remarks>
+    /// Removing a component that the entity does not have does nothing. So does an identifier of a destroyed entity,
+    /// even when the slot it names was handed out again: its components went with the entity, and the ones now stored in
+    /// the slot belong to another entity.
+    /// </remarks>
     public void Remove<T>(Entity entity) where T : struct, IComponent
     {
-        if (_stores.TryGetValue(typeof(T), out IComponentStore? store))
+        if (IsAlive(entity) && _stores.TryGetValue(typeof(T), out IComponentStore? store))
         {
             store.Remove(entity.Id);
         }

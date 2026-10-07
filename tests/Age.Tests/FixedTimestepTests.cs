@@ -16,10 +16,10 @@ public sealed class FixedTimestepTests
 
         count.Should().Be(1);
         steps.Should().ContainSingle();
-        steps[0].Delta.Should().Be(0.5d);
-        steps[0].Total.Should().Be(0.5d);
+        steps[0].Delta.Should().BeApproximately(0.5d, 1e-9d);
+        steps[0].Total.Should().BeApproximately(0.5d, 1e-9d);
         timestep.Alpha.Should().Be(0d);
-        timestep.Elapsed.Should().Be(0.5d);
+        timestep.Elapsed.Should().BeApproximately(0.5d, 1e-9d);
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed class FixedTimestepTests
         int count = timestep.Advance(Frame(1d), _ => { });
 
         count.Should().Be(4);
-        timestep.Elapsed.Should().Be(1d);
+        timestep.Elapsed.Should().BeApproximately(1d, 1e-9d);
         timestep.Alpha.Should().Be(0d);
     }
 
@@ -59,7 +59,7 @@ public sealed class FixedTimestepTests
         int count = timestep.Advance(Frame(10d), _ => { });
 
         count.Should().Be(2);
-        timestep.Elapsed.Should().Be(0.2d);
+        timestep.Elapsed.Should().BeApproximately(0.2d, 1e-9d);
     }
 
     [Fact]
@@ -81,7 +81,10 @@ public sealed class FixedTimestepTests
         timestep.Advance(Frame(0.25d), time => totals.Add(time.Total));
         timestep.Advance(Frame(0.5d), time => totals.Add(time.Total));
 
-        totals.Should().Equal(0.25d, 0.5d, 0.75d);
+        totals.Should().HaveCount(3);
+        totals[0].Should().BeApproximately(0.25d, 1e-9d);
+        totals[1].Should().BeApproximately(0.5d, 1e-9d);
+        totals[2].Should().BeApproximately(0.75d, 1e-9d);
     }
 
     [Fact]

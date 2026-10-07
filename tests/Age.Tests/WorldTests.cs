@@ -117,4 +117,34 @@ public sealed class WorldTests
         world.Enumerate<TransformComponent>().Should().Equal(second);
         world.Enumerate().Should().OnlyContain(entity => world.IsAlive(entity));
     }
+
+    [Fact]
+    public void World_RemoveWithTheIdentifierOfADestroyedEntity_LeavesTheReusedSlotAlone()
+    {
+        var world = new World();
+        Entity first = world.CreateEntity();
+        world.Set(first, new TransformComponent { Position = new Vector2(4f, 8f) });
+        world.DestroyEntity(first);
+        Entity second = world.CreateEntity();
+        world.Set(second, new TransformComponent { Position = new Vector2(1f, 2f) });
+
+        world.Remove<TransformComponent>(first);
+
+        world.Has<TransformComponent>(second).Should().BeTrue();
+        world.Get<TransformComponent>(second).Position.Should().Be(new Vector2(1f, 2f));
+    }
+
+    [Fact]
+    public void World_RemoveOfAComponentTheEntityDoesNotHave_DoesNothing()
+    {
+        var world = new World();
+        Entity withTransform = world.CreateEntity();
+        world.Set(withTransform, new TransformComponent());
+        Entity withoutTransform = world.CreateEntity();
+
+        FluentActions.Invoking(() => world.Remove<TransformComponent>(withoutTransform)).Should().NotThrow();
+
+        world.Has<TransformComponent>(withTransform).Should().BeTrue();
+        world.Has<TransformComponent>(withoutTransform).Should().BeFalse();
+    }
 }

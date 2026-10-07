@@ -205,26 +205,38 @@ public sealed class CollisionSystemTests
 
             system.Update(world, new GameTime(0d, 0d));
 
-            system.LastPairs.Should().HaveCount(CountOverlaps(world), "frame {0}", frame);
+            Pairs(system).Should().Equal(Overlaps(world), "frame {0}", frame);
         }
     }
 
-    /// <summary>Counts the overlaps of every pair of colliders, as the reference of the spatial hash.</summary>
-    private static int CountOverlaps(World world)
+    /// <summary>The pairs that the system reported, ordered by slot and generation.</summary>
+    private static List<(Entity A, Entity B)> Pairs(CollisionSystem system) =>
+        [.. system.LastPairs.Select(pair => (pair.A, pair.B)).OrderBy(pair => pair.A.Id).ThenBy(pair => pair.B.Id)];
+
+    /// <summary>The overlapping pairs of a plain scan of every collider, in the same order, as the reference of the hash.</summary>
+    private static List<(Entity A, Entity B)> Overlaps(World world)
     {
         List<Entity> boxes =
         [
             .. world.Enumerate<ColliderComponent>().Where(entity => world.Has<TransformComponent>(entity)),
         ];
-        int pairs = 0;
+        var pairs = new List<(Entity A, Entity B)>();
 
         for (int first = 0; first < boxes.Count; first++)
         {
             for (int second = first + 1; second < boxes.Count; second++)
             {
-                if (BoxOf(world, boxes[first]).Intersects(BoxOf(world, boxes[second])))
+                Entity a = boxes[first];
+                Entity b = boxes[second];
+
+                if (a.Id > b.Id)
                 {
-                    pairs++;
+                    (a, b) = (b, a);
+                }
+
+                if (BoxOf(world, a).Intersects(BoxOf(world, b)))
+                {
+                    pairs.Add((a, b));
                 }
             }
         }

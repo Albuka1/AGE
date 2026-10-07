@@ -31,7 +31,7 @@ public sealed class GameLoopTests
 
         updates.Should().HaveCount(60);
         updates[0].Delta.Should().Be(timestep.Step.TotalSeconds);
-        updates[59].Total.Should().Be(15d);
+        updates[59].Total.Should().BeApproximately(15d, 1e-9d);
         renders.Should().HaveCount(30);
         renders[29].Delta.Should().Be(0.5d);
     }

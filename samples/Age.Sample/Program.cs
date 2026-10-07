@@ -82,10 +82,18 @@ if (File.Exists(scenePath))
 const float MoveSpeed = 240f;
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
-// frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame.
+// frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
+// stays paused until the splash is over, so nothing moves behind the logo.
+bool started = false;
+
 gameLoop.Run(
     update: step =>
     {
+        if (!started)
+        {
+            return;
+        }
+
         MoveFirstSprite(world, first, input, step);
         world.Update(step, pipeline);
     },
@@ -95,6 +103,8 @@ gameLoop.Run(
         {
             return;
         }
+
+        started = true;
 
         if (input.IsKeyPressed(Key.Space))
         {
