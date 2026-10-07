@@ -8,11 +8,10 @@ The order below is what a real game needs first: the first group blocks building
 keeps a project stable as it grows, the third covers the limits of the current design, and the
 last is platform work.
 
-- Scene serialization (JSON)
-- StbTrueTypeSharp integration
+## Blocks building a game
 
-- Texture upload in `IRenderer` and a texture service on top of it, so decoded images reach the
-  GPU; the same resource pattern serves the sound service next.
+- A texture service on top of `IRenderer.CreateTexture`: a cache with a lifetime, so decoded images
+  reach the GPU; the same resource pattern serves the sound service next.
 - `OpenALAudioService`, with a sound resource to play.
 - Scene serialization (JSON), so a world can be saved, loaded and edited.
 
@@ -23,7 +22,7 @@ last is platform work.
 - Render passes ordered by the loop instead of by hand.
 - Incremental spatial hash in `CollisionSystem`.
 
-- `OpenALAudioService`
+## Limits of the current design
 
 - Camera culling.
 - StbTrueTypeSharp, so text is not limited to the built-in 8x8 font.

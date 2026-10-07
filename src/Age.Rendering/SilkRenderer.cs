@@ -140,9 +140,10 @@ public sealed class SilkRenderer : IRenderer
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
-        if (pixels.Length != width * height * 4)
+        long required = (long)width * height * 4;
+        if (required > int.MaxValue || pixels.Length != required)
         {
-            throw new ArgumentException($"The buffer holds {pixels.Length} bytes, but {width} x {height} RGBA pixels need {width * height * 4}.", nameof(pixels));
+            throw new ArgumentException($"The buffer holds {pixels.Length} bytes, but {width} x {height} RGBA pixels need {required} bytes, which is not a supported texture size.", nameof(pixels));
         }
 
         GL gl = RequireContext();
