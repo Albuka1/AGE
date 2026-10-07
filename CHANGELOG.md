@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ResourcePool` guards its slots, its path index and its counter with a lock, so a background loader cannot corrupt the
+  pool while the thread that owns the device creates and deletes the resources. The payloads and the device objects
+  themselves stay unsynchronized, and the documentation says who owns them.
 - `World` states its threading model: its storage is not synchronized and the world belongs to the thread that runs the
   loop, so a game that touches one from more than one thread serializes the calls itself, and the generation checks of an
   identifier or a borrow are correctness in sequential use rather than a concurrency guarantee. `SystemPipeline` says
