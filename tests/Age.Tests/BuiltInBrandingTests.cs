@@ -44,6 +44,6 @@ public sealed class BuiltInBrandingTests
         ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha)!;
 
         image.Data[3].Should().Be(0, "the top-left corner of the logo has no background");
-        image.Data[4 * (319 * 320)].Should().Be(0, "the bottom-left corner of the logo has no background");
+        image.Data[(4 * (319 * 320)) + 3].Should().Be(0, "the bottom-left corner of the logo has no background");
     }
 }
