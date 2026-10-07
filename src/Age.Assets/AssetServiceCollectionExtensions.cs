@@ -18,9 +18,6 @@ public static class AssetServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton<IAssetLoader, NullAssetLoader>();
         services.AddSingleton<IImageLoader, StbImageLoader>();
-        services.AddSingleton<WavSoundLoader>();
-        services.AddSingleton<Mp3SoundLoader>();
-        services.AddSingleton<OggSoundLoader>();
         services.AddSingleton<ISoundLoader, SoundLoader>();
         return services;
     }

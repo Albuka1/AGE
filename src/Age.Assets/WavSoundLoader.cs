@@ -4,11 +4,10 @@ using System.Text;
 namespace Age.Assets;
 
 /// <summary>
-/// The default <see cref="ISoundLoader"/>. It reads RIFF WAVE files and converts their samples to signed 16-bit values.
-/// The file itself is read through <see cref="IAssetLoader"/>, so every path stays inside the game root. Register
-/// another <see cref="ISoundLoader"/> when a different format is needed.
+/// The decoder of RIFF WAVE sounds, which <see cref="SoundLoader"/> picks when a file starts with a RIFF form. It converts
+/// the samples of every depth it understands to signed 16-bit values.
 /// </summary>
-public sealed class WavSoundLoader : ISoundLoader
+internal sealed class WavSoundLoader : ISoundLoader
 {
     private const int RiffHeaderSize = 12;
     private const int ChunkHeaderSize = 8;

@@ -4,19 +4,19 @@ using Xunit;
 
 namespace Age.Tests;
 
-public sealed class WavSoundLoaderTests : IDisposable
+public sealed class WavSoundTests : IDisposable
 {
     private readonly string _root;
-    private readonly WavSoundLoader _loader;
+    private readonly ISoundLoader _loader;
 
-    public WavSoundLoaderTests()
+    public WavSoundTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "age-sounds-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
 
         var assets = new NullAssetLoader();
         assets.Initialize(_root);
-        _loader = new WavSoundLoader(assets);
+        _loader = new SoundLoader(assets);
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);

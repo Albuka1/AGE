@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="sounds\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Age.Core\Age.Core.csproj" />
     <ProjectReference Include="..\..\src\Age.Assets\Age.Assets.csproj" />
     <ProjectReference Include="..\..\src\Age.Input\Age.Input.csproj" />

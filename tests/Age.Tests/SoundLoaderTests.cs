@@ -16,10 +16,27 @@ public sealed class SoundLoaderTests : IDisposable
 
         var assets = new NullAssetLoader();
         assets.Initialize(_root);
-        _loader = new SoundLoader(assets, new WavSoundLoader(assets), new Mp3SoundLoader(assets), new OggSoundLoader(assets));
+        _loader = new SoundLoader(assets);
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
+
+    [Theory]
+    [InlineData("sample.ogg")]
+    [InlineData("sample.mp3")]
+    public void SoundLoader_LoadACompressedSound_DecodesTheRecording(string name)
+    {
+        Copy(name);
+
+        SoundData sound = _loader.Load(name);
+
+        // Two seconds of the fixture, in the format both of them are stored in. The WAVE fixtures are covered by their
+        // own test class, and a decoder that was handed the wrong format would fail here instead of throwing quietly.
+        sound.SampleRate.Should().Be(44100);
+        sound.Channels.Should().Be(2);
+        sound.Duration.Should().BeCloseTo(TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(250));
+        sound.Samples.Count(sample => sample != 0).Should().BeGreaterThan(sound.Samples.Length / 2, "the decoded samples carry the recording");
+    }
 
     [Fact]
     public void SoundLoader_LoadOgg_HandsTheFileToTheOggDecoder()
@@ -61,6 +78,10 @@ public sealed class SoundLoaderTests : IDisposable
 
         act.Should().Throw<InvalidDataException>().WithMessage("*not a sound in a supported format*");
     }
+
+    /// <summary>Puts a fixture next to the temporary root, because the asset loader works inside the game root.</summary>
+    private void Copy(string name) =>
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "sounds", name), Path.Combine(_root, name), overwrite: true);
 
     private void Write(string relativePath, byte[] content) => File.WriteAllBytes(Path.Combine(_root, relativePath), content);
 
