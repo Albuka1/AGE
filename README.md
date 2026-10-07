@@ -8,6 +8,8 @@ A small 2D game engine for .NET 10, built around an entity-component-system
 core, a Silk.NET rendering backend and a dependency-injection friendly service
 model.
 
+Documentation: [albuka1.github.io/AGE](https://albuka1.github.io/AGE/) — API reference, quickstart and roadmap.
+
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -42,7 +44,8 @@ dotnet test tests/Age.Tests/Age.Tests.csproj -c Release
 dotnet run --project samples/Age.Sample/Age.Sample.csproj
 ```
 
-See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour.
+See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour, or the
+[published documentation](https://albuka1.github.io/AGE/) for the API reference.
 
 ## Architecture
 
@@ -57,19 +60,26 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 
 ## Roadmap
 
-The following work is planned but not part of the current foundation:
+The following work is planned but not part of the current foundation. The order is
+what a real game needs first: the entries at the top block building one, the rest
+make the engine hold up under load and cover the limits of the current design.
 
-- Scene serialization (JSON)
-- User-defined shaders and materials
-- StbTrueTypeSharp
-- `OpenALAudioService`
-- Entity id pool
-- Incremental spatial hash
-- OBB collision
-- Multiple contacts
-- Camera culling
-- AOT
-- AssemblyLoadContext isolation for plugins
+- Texture upload in `IRenderer` and a texture service, so decoded images reach the GPU and set
+  the resource pattern a sound service will follow.
+- `OpenALAudioService`, with a sound resource to play.
+- Scene serialization (JSON).
+- Fixed timestep in the game loop.
+- Entity id pool and generations for stale handles.
+- Render passes ordered by the loop instead of by hand.
+- Incremental spatial hash.
+- Camera culling.
+- StbTrueTypeSharp.
+- User-defined shaders and materials.
+- OBB collision and multiple contacts.
+- Sprite rotation, so `TransformComponent.Rotation` is not ignored.
+- Asset cache and AOT friendly JSON.
+- AOT.
+- AssemblyLoadContext isolation for plugins.
 
 ## Contributing
 
