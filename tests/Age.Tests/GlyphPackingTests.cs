@@ -72,6 +72,43 @@ public sealed class GlyphPackingTests
     }
 
     [Fact]
+    public void GlyphPacking_BoxWithAnUnsupportedDimension_Throws()
+    {
+        var placements = new (int X, int Y)[1];
+
+        FluentActions.Invoking(() => GlyphPacking.Place([new Vector2(20000f, 10f)], placements, out _, out _))
+            .Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    [InlineData(-4f)]
+    public void GlyphPacking_BoxThatIsNotAFiniteSize_Throws(float value)
+    {
+        var placements = new (int X, int Y)[1];
+
+        FluentActions.Invoking(() => GlyphPacking.Place([new Vector2(value, value)], placements, out _, out _))
+            .Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void GlyphPacking_BoxesThatDoNotFit_ThrowsInsteadOfGrowingForever()
+    {
+        var sizes = new Vector2[50];
+        for (int index = 0; index < sizes.Length; index++)
+        {
+            sizes[index] = new Vector2(4000f, 4000f);
+        }
+
+        var placements = new (int X, int Y)[sizes.Length];
+
+        FluentActions.Invoking(() => GlyphPacking.Place(sizes, placements, out _, out _))
+            .Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public void GlyphPacking_TooFewPlacements_Throws() =>
         FluentActions.Invoking(() => GlyphPacking.Place([new Vector2(4f, 4f), new Vector2(4f, 4f)], new (int X, int Y)[1], out _, out _))
             .Should().Throw<ArgumentException>();

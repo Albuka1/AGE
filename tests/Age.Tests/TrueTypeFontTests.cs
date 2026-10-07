@@ -82,6 +82,15 @@ public sealed class TrueTypeFontTests
     }
 
     [Fact]
+    public void TrueTypeFontBake_HeightTooLargeForTheAtlas_Throws()
+    {
+        byte[] font = ShippedFont();
+
+        FluentActions.Invoking(() => TrueTypeFontBake.Bake(font, 100000f, "A"))
+            .Should().Throw<ArgumentOutOfRangeException>("a glyph of that size does not fit in a supported atlas");
+    }
+
+    [Fact]
     public void TrueTypeFontTests_ShippedFont_IsATrueTypeFile()
     {
         byte[] font = ShippedFont();

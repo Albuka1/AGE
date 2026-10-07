@@ -23,7 +23,7 @@ internal static class TrueTypeFontBake
     /// <param name="characters">The characters to bake. They have to form a contiguous range, and at least one has to be given.</param>
     /// <returns>The atlas and the metrics of the glyphs, ordered from the first character of the range.</returns>
     /// <exception cref="ArgumentException"><paramref name="font"/> does not hold a font that can be read, the characters are not a contiguous range, or none was given.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelHeight"/> is zero or negative.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelHeight"/> is zero or negative, or a glyph of the font needs more pixels at that size than the atlas of a font supports.</exception>
     public static unsafe FontAtlas Bake(byte[] font, float pixelHeight, ReadOnlySpan<char> characters)
     {
         ArgumentNullException.ThrowIfNull(font);
@@ -48,7 +48,7 @@ internal static class TrueTypeFontBake
 
             var placements = new (int X, int Y)[wanted.Length];
             GlyphPacking.Place(sizes, placements, out int width, out int height);
-            byte[] pixels = new byte[width * height * 4];
+            byte[] pixels = new byte[AtlasBytes(width, height)];
 
             for (int index = 0; index < wanted.Length; index++)
             {
@@ -104,6 +104,32 @@ internal static class TrueTypeFontBake
         }
     }
 
+    /// <summary>Returns the number of pixels of a glyph, rejecting a size that the rasterizer cannot fill.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The glyph needs more pixels than <see cref="GlyphPacking.MaximumPixels"/>.</exception>
+    private static int CoverageBytes(int width, int height)
+    {
+        long pixels = (long)width * height;
+        if (pixels > GlyphPacking.MaximumPixels)
+        {
+            throw new ArgumentOutOfRangeException(nameof(width), $"A glyph of {width} by {height} pixels needs more than the {GlyphPacking.MaximumPixels} pixels that are supported.");
+        }
+
+        return (int)pixels;
+    }
+
+    /// <summary>Returns the size of an atlas in bytes, rejecting a size that does not fit in an array.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The atlas does not fit in an array.</exception>
+    private static int AtlasBytes(int width, int height)
+    {
+        long bytes = (long)width * height * 4;
+        if (bytes > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(width), $"An atlas of {width} by {height} pixels does not fit in an array.");
+        }
+
+        return (int)bytes;
+    }
+
     /// <summary>Returns the characters as a sorted contiguous range.</summary>
     private static char[] Range(ReadOnlySpan<char> characters)
     {
@@ -150,7 +176,7 @@ internal static class TrueTypeFontBake
             return;
         }
 
-        byte[] coverage = new byte[glyphWidth * glyphHeight];
+        byte[] coverage = new byte[CoverageBytes(glyphWidth, glyphHeight)];
 
         fixed (byte* pointer = coverage)
         {
