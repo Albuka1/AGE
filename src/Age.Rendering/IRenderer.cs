@@ -33,6 +33,20 @@ public interface IRenderer
     /// <remarks>The whole texture is mapped onto the quad. Without a texture the call draws the same rectangle as <see cref="DrawRectangle"/>.</remarks>
     void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color);
 
+    /// <summary>Uploads pixel data as a texture that the renderer owns.</summary>
+    /// <param name="pixels">The pixels, four RGBA bytes each, in row-major order from the top-left corner.</param>
+    /// <param name="width">The width of the image, in pixels.</param>
+    /// <param name="height">The height of the image, in pixels.</param>
+    /// <returns>A handle to the texture, for <see cref="DrawSprite"/> and <see cref="ReleaseTexture"/>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Width or height is zero or negative.</exception>
+    /// <exception cref="ArgumentException">The buffer does not hold four bytes for every pixel.</exception>
+    /// <exception cref="InvalidOperationException">The renderer has not been attached to a window.</exception>
+    TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height);
+
+    /// <summary>Deletes a texture that <see cref="CreateTexture"/> created. A handle without a texture is ignored.</summary>
+    /// <param name="texture">The texture to delete.</param>
+    void ReleaseTexture(TextureHandle texture);
+
     /// <summary>Draws a filled rectangle.</summary>
     void DrawRectangle(Rect rect, Color color);
 
