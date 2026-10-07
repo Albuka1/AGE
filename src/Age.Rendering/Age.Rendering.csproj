@@ -7,9 +7,18 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Silk.NET.Core" />
     <PackageReference Include="Silk.NET.Windowing" />
     <PackageReference Include="Silk.NET.OpenGL" />
     <PackageReference Include="Silk.NET.Input" />
+    <PackageReference Include="StbImageSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\icon-20.png" />
+    <EmbeddedResource Include="Resources\icon-40.png" />
+    <EmbeddedResource Include="Resources\icon-60.png" />
+    <EmbeddedResource Include="Resources\logo-320.png" />
   </ItemGroup>
 
   <ItemGroup>
