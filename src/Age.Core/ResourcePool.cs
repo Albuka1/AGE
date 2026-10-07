@@ -107,6 +107,35 @@ public sealed class ResourcePool<T>
         return _byPath.TryGetValue(path, out handle);
     }
 
+    /// <summary>Returns the handles of the resources that are live at this moment.</summary>
+    /// <returns>A snapshot of the handles, in slot order. The pool does not change while the caller walks the snapshot, so a resource can be released between two calls.</returns>
+    /// <remarks>
+    /// Use it to release resources one by one, which is what lets a caller keep a resource whose cleanup failed: unlike
+    /// <see cref="Clear"/>, which forgets a slot before its callback runs, a loop over this snapshot decides per
+    /// resource whether the slot may be forgotten.
+    /// </remarks>
+    public ResourceHandle[] GetHandles()
+    {
+        if (_count == 0)
+        {
+            return [];
+        }
+
+        var handles = new ResourceHandle[_count];
+        int next = 0;
+
+        for (int index = 0; index < _slots.Length && next < handles.Length; index++)
+        {
+            ref Slot slot = ref _slots[index];
+            if (slot.InUse)
+            {
+                handles[next++] = new ResourceHandle(_owner, index + 1, slot.Generation);
+            }
+        }
+
+        return handles;
+    }
+
     /// <summary>Releases the resource behind the handle and forgets its path, so the slot becomes available for reuse with a new generation.</summary>
     /// <param name="handle">The handle to release.</param>
     /// <returns><see langword="true"/> when a live resource was released, <see langword="false"/> when the handle was stale or already released.</returns>

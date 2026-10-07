@@ -62,6 +62,18 @@ ImageData logo = images.Load("logo.png");
 `ImageData` holds tightly packed RGBA bytes with the origin at the top-left, so
 the pixels can be handed to the renderer as they are.
 
+## Draw a texture
+
+```csharp
+ITextureService textures = provider.GetRequiredService<ITextureService>();
+TextureHandle playerTexture = textures.Load("art/player.png");
+
+world.Set(sprite, new SpriteComponent { Texture = playerTexture, Size = new Vector2(64, 64), Color = Color.White });
+```
+
+`ITextureService` decodes the file once, uploads it and caches it by path, so loading the same
+image twice returns the same texture. Release it with `Unload` when the level that used it ends.
+
 ## Run the loop
 
 ```csharp

@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="content\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Age.Core\Age.Core.csproj" />
     <ProjectReference Include="..\..\src\Age.Assets\Age.Assets.csproj" />
     <ProjectReference Include="..\..\src\Age.Input\Age.Input.csproj" />
