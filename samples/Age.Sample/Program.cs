@@ -66,6 +66,15 @@ IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
 
+ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
+
+if (File.Exists(scenePath))
+{
+    scenes.Load(world, File.ReadAllText(scenePath));
+    Console.WriteLine($"Loaded the scene from {scenePath}.");
+}
+
 const float MoveSpeed = 240f;
 
 gameLoop.Run(time =>
@@ -80,6 +89,18 @@ gameLoop.Run(time =>
     if (input.IsKeyPressed(Key.Space))
     {
         sounds.Play(click);
+    }
+
+    if (input.IsKeyPressed(Key.F))
+    {
+        File.WriteAllText(scenePath, scenes.Save(world));
+        Console.WriteLine($"Saved the scene to {scenePath}.");
+    }
+
+    if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
+    {
+        scenes.Load(world, File.ReadAllText(scenePath));
+        Console.WriteLine("Loaded the scene again.");
     }
 
     if (input.IsKeyPressed(Key.Escape))

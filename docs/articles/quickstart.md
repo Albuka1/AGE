@@ -48,6 +48,29 @@ world.Set(sprite, new TransformComponent { Position = new Vector2(400, 300), Sca
 world.Set(sprite, new SpriteComponent { Size = new Vector2(64, 64), Color = Color.Red, ZOrder = 0 });
 ```
 
+## Save and load a scene
+
+```csharp
+ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+
+string json = scenes.Save(world);
+scenes.Load(world, json);
+```
+
+A scene holds every entity whose components are registered, keyed by the name they were registered
+under, and it is written through the source generated contracts of the assemblies, so it works in an
+AOT build. `AddAgeCore` builds the registry from every `IComponentRegistrations` in the container,
+which is how each assembly contributes its own components. Register one of your own to make a
+component of a game part of a scene:
+
+```csharp
+internal sealed class GameComponentRegistrations : IComponentRegistrations
+{
+    public void Register(ComponentRegistry registry) =>
+        registry.Register("Health", GameJsonContext.Default.HealthComponent);
+}
+```
+
 ## Load an asset
 
 ```csharp
