@@ -120,6 +120,17 @@ public sealed class WavSoundLoaderTests : IDisposable
     }
 
     [Fact]
+    public void SoundLoader_LoadFloatFormatWithAnotherDepth_ThrowsInvalidDataException()
+    {
+        // IEEE float samples are four bytes wide, so a file that declares sixteen bits would be read misaligned.
+        Write("float16.wav", CreateWav(44100, channels: 1, bitsPerSample: 16, Samples16(1, 2), format: 3));
+
+        Action act = () => _loader.Load("float16.wav");
+
+        act.Should().Throw<InvalidDataException>();
+    }
+
+    [Fact]
     public void SoundData_SampleBufferWithoutWholeFrames_ThrowsArgumentException()
     {
         Action act = () => new SoundData(44100, channels: 2, [1, 2, 3]);

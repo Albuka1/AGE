@@ -29,6 +29,9 @@ public sealed class WavSoundLoader : ISoundLoader
     /// <summary>The length of a format chunk that carries a WAVE_FORMAT_EXTENSIBLE header, in bytes.</summary>
     private const int ExtensibleFormatSize = 40;
 
+    /// <summary>The bit depth of the IEEE float samples that a WAVE file can hold.</summary>
+    private const int FloatSampleSize = 32;
+
     /// <summary>The offset of the sub format GUID inside a WAVE_FORMAT_EXTENSIBLE header.</summary>
     private const int SubFormatOffset = 24;
 
@@ -166,6 +169,12 @@ public sealed class WavSoundLoader : ISoundLoader
     {
         if (format == FloatFormat)
         {
+            // IEEE float samples are four bytes wide, so a file that declares another depth would be read misaligned.
+            if (bitsPerSample != FloatSampleSize)
+            {
+                throw new InvalidDataException($"IEEE float samples of {bitsPerSample} bits are not supported; they are {FloatSampleSize} bits wide.");
+            }
+
             return ConvertFloat(data);
         }
 
