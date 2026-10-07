@@ -80,11 +80,13 @@ public sealed class SplashScreenTests
         var splash = new SplashScreen();
         var input = new FakeInput { PressedKeys = [key] };
 
-        bool drawn = splash.Draw(renderer, new GameTime(0.016, 0), input);
+        bool skipped = splash.Draw(renderer, new GameTime(0.016, 0), input);
+        bool again = splash.Draw(renderer, new GameTime(0.032, 0.016), input);
 
-        drawn.Should().BeFalse();
-        renderer.Created.Should().BeEmpty();
-        renderer.Drawn.Should().BeEmpty();
+        skipped.Should().BeTrue("the frame with the skip request still belongs to the splash");
+        again.Should().BeFalse();
+        renderer.Created.Should().HaveCount(1);
+        renderer.Drawn.Should().HaveCount(1);
     }
 
     [Fact]
@@ -94,7 +96,8 @@ public sealed class SplashScreenTests
         var splash = new SplashScreen();
         var input = new FakeInput { PressedButtons = [MouseButton.Left] };
 
-        splash.Draw(renderer, new GameTime(0.016, 0), input).Should().BeFalse();
+        splash.Draw(renderer, new GameTime(0.016, 0), input).Should().BeTrue("the frame with the skip request still belongs to the splash");
+        splash.Draw(renderer, new GameTime(0.032, 0.016), input).Should().BeFalse();
     }
 
     [Fact]

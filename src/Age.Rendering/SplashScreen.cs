@@ -60,7 +60,10 @@ public sealed class SplashScreen : IDisposable
     /// <param name="time">The time of the current frame, measured from the start of the game loop.</param>
     /// <param name="input">The input that the skip request is read from. A null value skips the request.</param>
     /// <returns><see langword="true"/> when the splash drew on this frame, so the game should skip its own drawing.</returns>
-    /// <remarks>The screen is always cleared, so the frame shows the logo on black while the game renders nothing.</remarks>
+    /// <remarks>
+    /// The screen is always cleared, so the frame shows the logo on black while the game renders nothing. The frame that
+    /// carries the skip request still belongs to the splash, so the game never sees the key or the click that ended it.
+    /// </remarks>
     public bool Draw(IRenderer renderer, GameTime time, IInputService? input = null)
     {
         ArgumentNullException.ThrowIfNull(renderer);
@@ -70,11 +73,13 @@ public sealed class SplashScreen : IDisposable
             return false;
         }
 
-        if (time.Total >= Duration.TotalSeconds || (SkipOnInput && input is not null && Skips(input)))
+        if (time.Total >= Duration.TotalSeconds)
         {
             _ended = true;
             return false;
         }
+
+        bool skipped = SkipOnInput && input is not null && Skips(input);
 
         _renderer = renderer;
         TextureHandle logo = Logo ?? (_builtInLogo ??= UploadBuiltInLogo(renderer));
@@ -90,6 +95,12 @@ public sealed class SplashScreen : IDisposable
         renderer.BeginFrame(true);
         renderer.DrawSprite(logo, (renderer.ViewportSize - LogoSize) * 0.5f, LogoSize, Color.White);
         renderer.EndFrame();
+
+        if (skipped)
+        {
+            _ended = true;
+        }
+
         return true;
     }
 
