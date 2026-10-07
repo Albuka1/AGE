@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Age.Assets;
 using Age.Core;
 
@@ -9,7 +10,9 @@ namespace Age.Rendering;
 /// </summary>
 /// <remarks>
 /// A handle carries the slot it was issued from, so a handle from before an unload stops resolving instead of pointing
-/// at the texture that replaced it. The service owns the device textures: disposing it releases them all.
+/// at the texture that replaced it. The service owns the device textures: disposing it releases them all. It is not
+/// thread-safe, so call it from the thread that owns the renderer's context. A texture whose release the renderer
+/// refused stays loaded, so a later call can retry it.
 /// </remarks>
 public sealed class TextureService : ITextureService, IDisposable
 {
@@ -44,7 +47,18 @@ public sealed class TextureService : ITextureService, IDisposable
 
         ImageData image = _images.Load(relativePath);
         TextureHandle uploaded = _renderer.CreateTexture(image.Pixels, image.Width, image.Height);
-        slot = _textures.Add((uint)uploaded.Id, relativePath);
+
+        try
+        {
+            slot = _textures.Add((uint)uploaded.Id, relativePath);
+        }
+        catch (Exception)
+        {
+            // The upload is registered nowhere, so delete it here instead of leaking the device texture.
+            _renderer.ReleaseTexture(uploaded);
+            throw;
+        }
+
         return new TextureHandle(slot, uploaded.Id);
     }
 
@@ -65,7 +79,34 @@ public sealed class TextureService : ITextureService, IDisposable
     }
 
     /// <inheritdoc />
-    public void UnloadAll() => _textures.Clear(id => _renderer.ReleaseTexture(new TextureHandle((int)id)));
+    public void UnloadAll()
+    {
+        ExceptionDispatchInfo? failure = null;
+
+        // Release one texture at a time and forget a slot only once its release succeeded, so a renderer that refuses
+        // one texture leaves it loaded for a later attempt and every other texture still unloads in this call.
+        foreach (ResourceHandle slot in _textures.GetHandles())
+        {
+            if (!_textures.TryGet(slot, out uint id))
+            {
+                continue;
+            }
+
+            try
+            {
+                _renderer.ReleaseTexture(new TextureHandle((int)id));
+            }
+            catch (Exception exception)
+            {
+                failure ??= ExceptionDispatchInfo.Capture(exception);
+                continue;
+            }
+
+            _textures.Release(slot);
+        }
+
+        failure?.Throw();
+    }
 
     /// <summary>Releases every texture. The service cannot be used afterwards.</summary>
     public void Dispose() => UnloadAll();

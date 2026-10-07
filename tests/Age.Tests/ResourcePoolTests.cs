@@ -146,6 +146,25 @@ public sealed class ResourcePoolTests
     }
 
     [Fact]
+    public void ResourcePool_GetHandles_ReturnsEveryLiveHandleInSlotOrder()
+    {
+        var pool = new ResourcePool<string>();
+        ResourceHandle first = pool.Add("first", "first.txt");
+        ResourceHandle released = pool.Add("second");
+        pool.Add("third", "third.txt");
+        pool.Release(released);
+
+        ResourceHandle[] handles = pool.GetHandles();
+
+        handles.Should().HaveCount(2);
+        handles[0].Should().Be(first);
+        handles[1].Should().NotBe(released);
+        pool.TryGet(handles[1], out string? value).Should().BeTrue();
+        value.Should().Be("third");
+        new ResourcePool<string>().GetHandles().Should().BeEmpty();
+    }
+
+    [Fact]
     public void ResourcePool_Clear_KeepsStaleHandleInvalid()
     {
         var pool = new ResourcePool<string>();

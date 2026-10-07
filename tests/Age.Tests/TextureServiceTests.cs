@@ -106,6 +106,56 @@ public sealed class TextureServiceTests
         textures.Count.Should().Be(0);
     }
 
+    [Fact]
+    public void TextureService_UnloadAll_WhenAReleaseFails_KeepsThatTextureAndUnloadsTheRest()
+    {
+        var renderer = new FakeRenderer { FailRelease = id => id == 1 };
+        var textures = new TextureService(new FakeImageLoader(), renderer);
+        TextureHandle first = textures.Load("art/a.bmp");
+        TextureHandle second = textures.Load("art/b.bmp");
+
+        Action unloadAll = textures.UnloadAll;
+
+        unloadAll.Should().Throw<InvalidOperationException>();
+        renderer.Released.Should().Equal(1, 2);
+        textures.Count.Should().Be(1);
+        textures.IsAlive(first).Should().BeTrue();
+        textures.IsAlive(second).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TextureService_UnloadAll_AfterAFailedRelease_RetriesTheTexture()
+    {
+        var renderer = new FakeRenderer { FailRelease = id => id == 1 };
+        var textures = new TextureService(new FakeImageLoader(), renderer);
+        TextureHandle handle = textures.Load("art/a.bmp");
+        Action firstAttempt = textures.UnloadAll;
+        firstAttempt.Should().Throw<InvalidOperationException>();
+
+        renderer.FailRelease = null;
+        textures.UnloadAll();
+
+        renderer.Released.Should().Equal(1, 1);
+        textures.Count.Should().Be(0);
+        textures.IsAlive(handle).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TextureService_Load_WhenThePathIsTakenWhileDecoding_ReleasesTheUploadItMade()
+    {
+        var renderer = new FakeRenderer();
+        var images = new ReentrantImageLoader();
+        var textures = new TextureService(images, renderer);
+        images.Service = textures;
+
+        Action load = () => textures.Load("art/tile.bmp");
+
+        load.Should().Throw<InvalidOperationException>();
+        renderer.Created.Should().Equal(1, 2);
+        renderer.Released.Should().Equal(2);
+        textures.Count.Should().Be(1);
+    }
+
     private sealed class FakeImageLoader : IImageLoader
     {
         public int Calls { get; private set; }
@@ -113,6 +163,25 @@ public sealed class TextureServiceTests
         public ImageData Load(string relativePath)
         {
             Calls++;
+            return new ImageData(2, 2, new byte[16]);
+        }
+    }
+
+    /// <summary>An image loader that loads the same path through the service once, which registers that path while the outer call is still decoding.</summary>
+    private sealed class ReentrantImageLoader : IImageLoader
+    {
+        private bool _reentered;
+
+        public TextureService? Service { get; set; }
+
+        public ImageData Load(string relativePath)
+        {
+            if (!_reentered && Service is not null)
+            {
+                _reentered = true;
+                Service.Load(relativePath);
+            }
+
             return new ImageData(2, 2, new byte[16]);
         }
     }
@@ -166,6 +235,16 @@ public sealed class TextureServiceTests
             return new TextureHandle(id);
         }
 
-        public void ReleaseTexture(TextureHandle texture) => Released.Add(texture.Id);
+        public Func<int, bool>? FailRelease { get; set; }
+
+        public void ReleaseTexture(TextureHandle texture)
+        {
+            Released.Add(texture.Id);
+
+            if (FailRelease?.Invoke(texture.Id) == true)
+            {
+                throw new InvalidOperationException($"The renderer refused to release texture {texture.Id}.");
+            }
+        }
     }
 }
