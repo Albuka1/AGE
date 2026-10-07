@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Age.Assets;
 using Age.Core;
 using FluentAssertions;
@@ -183,6 +184,17 @@ public sealed class AssetLoaderTests : IDisposable
         }
     }
 
+    [Fact]
+    public void AssetLoader_LoadWithAGeneratedContract_ReadsJsonWithoutReflection()
+    {
+        Write("settings.json", """{ "Name": "age", "Count": 7 }""");
+
+        AssetSettings settings = _loader.Load("settings.json", AssetJsonContext.Default.AssetSettings);
+
+        settings.Name.Should().Be("age");
+        settings.Count.Should().Be(7);
+    }
+
     private void Write(string relativePath, string content) => Write(relativePath, Encoding.UTF8.GetBytes(content));
 
     private void Write(string relativePath, byte[] content)
@@ -191,4 +203,17 @@ public sealed class AssetLoaderTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, content);
     }
+}
+
+/// <summary>The contract of the settings that the loader test reads, generated at compile time instead of through reflection.</summary>
+[JsonSourceGenerationOptions(IncludeFields = true)]
+[JsonSerializable(typeof(AssetSettings))]
+internal sealed partial class AssetJsonContext : JsonSerializerContext;
+
+/// <summary>A payload of the loader test. A struct with fields, like the components of the engine.</summary>
+internal struct AssetSettings
+{
+    public string? Name;
+
+    public int Count;
 }

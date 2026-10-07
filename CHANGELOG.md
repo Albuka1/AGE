@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IAssetLoader.Load{T}` gained an overload that takes a `JsonTypeInfo{T}` of a source generated context, so a game can
+  read its own assets in an AOT build, where the reflective overload is trimmed away.
 - `IRenderer` is disposable: `SilkRenderer` deletes its shader program, its buffers and the font atlas, so closing a
   window, or attaching a renderer a second time, no longer leaks video memory. Dispose the renderer before the window is
   closed, while the OpenGL context is alive.
