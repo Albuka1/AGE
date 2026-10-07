@@ -12,6 +12,7 @@ services.AddAgeCore();
 services.AddAgeAssets();
 services.AddAgeInput();
 services.AddAgeAudio();
+services.AddAgeOpenALAudio();
 services.AddAgePhysics();
 services.AddAgeUI();
 services.AddAgeRendering();
@@ -35,6 +36,9 @@ assets.Initialize(Path.Combine(AppContext.BaseDirectory, "content"));
 
 ITextureService textures = provider.GetRequiredService<ITextureService>();
 TextureHandle tiles = textures.Load("tiles.bmp");
+
+ISoundService sounds = provider.GetRequiredService<ISoundService>();
+SoundHandle click = sounds.Load("click.wav");
 
 var camera = new Camera2D
 {
@@ -72,6 +76,11 @@ gameLoop.Run(time =>
     }
 
     MoveFirstSprite(world, first, input, time);
+
+    if (input.IsKeyPressed(Key.Space))
+    {
+        sounds.Play(click);
+    }
 
     if (input.IsKeyPressed(Key.Escape))
     {

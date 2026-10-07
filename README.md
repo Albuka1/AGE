@@ -22,7 +22,7 @@ AGE is organized as a set of focused assemblies:
 | `Age.Core` | Entities, components, systems, math primitives, game loop |
 | `Age.Assets` | Sandboxed path-based asset access and loading |
 | `Age.Input` | Keyboard and mouse abstraction |
-| `Age.Audio` | Sound playback abstraction |
+| `Age.Audio` | Sound resources, WAVE, MP3 and Ogg Vorbis decoding, and playback through OpenAL |
 | `Age.Physics` | Axis-aligned collision detection with a spatial hash |
 | `Age.UI` | Retained UI components and pointer interaction |
 | `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, window icon and splash screen |
@@ -33,6 +33,7 @@ AGE is organized as a set of focused assemblies:
 
 - .NET SDK 10.0.100 or later
 - A GPU with OpenGL 3.3 core profile support to run `Age.Sample`
+- An audio device with OpenAL for the sound of `Age.Sample`; without one, drop `AddAgeOpenALAudio` and it stays silent
 
 ## Getting started
 

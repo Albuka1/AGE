@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="NLayer" />
+    <PackageReference Include="NVorbis" />
     <PackageReference Include="StbImageSharp" />
   </ItemGroup>
 

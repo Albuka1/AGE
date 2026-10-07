@@ -87,6 +87,29 @@ world.Set(sprite, new SpriteComponent { Texture = playerTexture, Size = new Vect
 `ITextureService` decodes the file once, uploads it and caches it by path, so loading the same
 image twice returns the same texture. Release it with `Unload` when the level that used it ends.
 
+## Load and play a sound
+
+```csharp
+ISoundService sounds = provider.GetRequiredService<ISoundService>();
+SoundHandle click = sounds.Load("sfx/click.wav");
+
+sounds.Play(click, volume: 0.8f);
+```
+
+`ISoundService` decodes the file through `ISoundLoader`, uploads it to the audio device and caches
+it by path, so loading the same sound twice returns the same one. The loader reads the header of the
+file, so WAVE, MP3 and Ogg Vorbis all work and the file name does not have to say which one it is.
+Playing a handle the game does not own, or one it unloaded, plays nothing, and looping playback
+stops with `StopAll`.
+
+The default device discards every sound, which is what a headless run wants. Register the OpenAL
+device after `AddAgeAudio` to hear them:
+
+```csharp
+services.AddAgeAudio();          // the sound resources and the null device
+services.AddAgeOpenALAudio();    // the device that plays, where the machine has one
+```
+
 ## Show a splash screen
 
 ```csharp
