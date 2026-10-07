@@ -12,6 +12,11 @@
     <PackageReference Include="Silk.NET.OpenGL" />
     <PackageReference Include="Silk.NET.Input" />
     <PackageReference Include="StbImageSharp" />
+    <PackageReference Include="StbTrueTypeSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Age.Tests" />
   </ItemGroup>
 
   <ItemGroup>

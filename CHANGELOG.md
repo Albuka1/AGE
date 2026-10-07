@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `TrueTypeFontBake` and `GlyphPacking`, which rasterize the glyphs of a TrueType or OpenType font into one atlas with
+  `StbTrueTypeSharp`, so text stops being limited to the built-in 8x8 bitmap font; the glyph atlas is a texture like any
+  other, so it is tinted and drawn through `IRenderer.DrawTextureRegion`.
 - `IRenderer.DrawTextureRegion`, which maps a part of a texture onto a quad, so an atlas, a sprite sheet or a glyph
   bitmap reaches the screen; `DrawSprite` is the same call with the region that covers the whole texture.
 - `IAssetLoader.Load{T}` gained an overload that takes a `JsonTypeInfo{T}` of a source generated context, so a game can
