@@ -62,13 +62,22 @@ internal static class Win32Icon
 
             if (color == 0 || mask == 0 || bits == 0)
             {
+                DeleteBitmaps(color, mask);
                 return default;
             }
 
             CopyRgba(rgba, bits, width * height);
 
             var iconInfo = new IconInfo { IsIcon = true, Color = color, Mask = mask };
-            return new IconBitmaps(CreateIconIndirect(ref iconInfo), color, mask);
+            nint icon = CreateIconIndirect(ref iconInfo);
+
+            if (icon == 0)
+            {
+                DeleteBitmaps(color, mask);
+                return default;
+            }
+
+            return new IconBitmaps(icon, color, mask);
         }
         finally
         {
@@ -92,14 +101,20 @@ internal static class Win32Icon
             _ = DestroyIcon(bitmaps.Icon);
         }
 
-        if (bitmaps.Mask != 0)
+        DeleteBitmaps(bitmaps.Color, bitmaps.Mask);
+    }
+
+    /// <summary>Deletes the bitmaps an icon was built from, so an icon that cannot be built leaks nothing.</summary>
+    private static void DeleteBitmaps(nint color, nint mask)
+    {
+        if (mask != 0)
         {
-            _ = DeleteObject(bitmaps.Mask);
+            _ = DeleteObject(mask);
         }
 
-        if (bitmaps.Color != 0)
+        if (color != 0)
         {
-            _ = DeleteObject(bitmaps.Color);
+            _ = DeleteObject(color);
         }
     }
 
