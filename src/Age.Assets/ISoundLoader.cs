@@ -18,9 +18,10 @@ public interface ISoundLoader
     /// <exception cref="InvalidDataException">The file is not a sound in one of the supported formats.</exception>
     /// <exception cref="FileNotFoundException">No file exists at the given path.</exception>
     /// <remarks>
-    /// <see cref="SoundLoader"/> is the default: it reads the header of the file and hands it to the loader of that
-    /// format, which covers RIFF WAVE, MPEG audio and Ogg Vorbis. Every loader converts the samples to 16-bit values,
-    /// and a file whose format is not supported is reported as <see cref="InvalidDataException"/>.
+    /// <see cref="SoundLoader"/> is the default and the only public one: it reads the header of the file and hands it to
+    /// the decoder of that format, which covers RIFF WAVE, MPEG audio and Ogg Vorbis. Those decoders are implementation
+    /// details, and each of them converts the samples to 16-bit values. A file whose format is not supported is reported
+    /// as <see cref="InvalidDataException"/>.
     /// </remarks>
     SoundData Load(string relativePath);
 }

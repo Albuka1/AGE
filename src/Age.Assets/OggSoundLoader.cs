@@ -10,7 +10,11 @@ namespace Age.Assets;
 /// <remarks>
 /// Decoding runs as long as the stream reports samples, so the whole sound is held in memory as 16-bit samples.
 /// </remarks>
-public sealed class OggSoundLoader : ISoundLoader
+/// <summary>
+/// The decoder of Ogg Vorbis sounds, which <see cref="SoundLoader"/> picks when a file starts with an Ogg page. Decoding
+/// is done by NVorbis, a managed decoder that needs no native dependency.
+/// </summary>
+internal sealed class OggSoundLoader : ISoundLoader
 {
     /// <summary>The number of frames that one read asks the decoder for.</summary>
     private const int FramesPerRead = 4096;

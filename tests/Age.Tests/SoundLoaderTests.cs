@@ -16,7 +16,7 @@ public sealed class SoundLoaderTests : IDisposable
 
         var assets = new NullAssetLoader();
         assets.Initialize(_root);
-        _loader = new SoundLoader(assets, new WavSoundLoader(assets), new Mp3SoundLoader(assets), new OggSoundLoader(assets));
+        _loader = new SoundLoader(assets);
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);

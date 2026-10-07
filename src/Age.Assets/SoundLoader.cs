@@ -25,22 +25,16 @@ public sealed class SoundLoader : ISoundLoader
     private readonly Mp3SoundLoader _mp3;
     private readonly OggSoundLoader _ogg;
 
-    /// <summary>Initializes the loader with the asset loader and the loader of every supported format.</summary>
+    /// <summary>Initializes the loader with the asset loader that reads the files, and the decoder of every format it covers.</summary>
     /// <param name="assets">The asset loader that opens the files to read their header.</param>
-    /// <param name="wav">The loader of RIFF WAVE sounds.</param>
-    /// <param name="mp3">The loader of MPEG audio sounds.</param>
-    /// <param name="ogg">The loader of Ogg Vorbis sounds.</param>
-    /// <exception cref="ArgumentNullException">One of the arguments is null.</exception>
-    public SoundLoader(IAssetLoader assets, WavSoundLoader wav, Mp3SoundLoader mp3, OggSoundLoader ogg)
+    /// <exception cref="ArgumentNullException">The asset loader is null.</exception>
+    public SoundLoader(IAssetLoader assets)
     {
         ArgumentNullException.ThrowIfNull(assets);
-        ArgumentNullException.ThrowIfNull(wav);
-        ArgumentNullException.ThrowIfNull(mp3);
-        ArgumentNullException.ThrowIfNull(ogg);
         _assets = assets;
-        _wav = wav;
-        _mp3 = mp3;
-        _ogg = ogg;
+        _wav = new WavSoundLoader(assets);
+        _mp3 = new Mp3SoundLoader(assets);
+        _ogg = new OggSoundLoader(assets);
     }
 
     /// <inheritdoc />

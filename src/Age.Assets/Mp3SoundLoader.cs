@@ -11,7 +11,11 @@ namespace Age.Assets;
 /// Decoding runs as long as the stream reports samples, so the whole sound is held in memory as 16-bit samples: this is
 /// what a game wants for a short effect or a music track that plays often.
 /// </remarks>
-public sealed class Mp3SoundLoader : ISoundLoader
+/// <summary>
+/// The decoder of MPEG audio sounds, which <see cref="SoundLoader"/> picks when a file carries an ID3 tag or starts with
+/// a frame sync. Decoding is done by NLayer, a managed decoder that needs no native dependency.
+/// </summary>
+internal sealed class Mp3SoundLoader : ISoundLoader
 {
     /// <summary>The number of frames that one read asks the decoder for.</summary>
     private const int FramesPerRead = 4096;
