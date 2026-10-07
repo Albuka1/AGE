@@ -71,6 +71,13 @@ internal sealed class GameComponentRegistrations : IComponentRegistrations
 }
 ```
 
+The implementations are collected when the container is built, so register yours with the rest of the
+services:
+
+```csharp
+services.AddSingleton<IComponentRegistrations, GameComponentRegistrations>();
+```
+
 ## Load an asset
 
 ```csharp

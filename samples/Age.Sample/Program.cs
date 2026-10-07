@@ -71,7 +71,8 @@ string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
 
 if (File.Exists(scenePath))
 {
-    scenes.Load(world, File.ReadAllText(scenePath));
+    world = LoadScene(scenes, scenePath);
+    first = MoveTarget(world);
     Console.WriteLine($"Loaded the scene from {scenePath}.");
 }
 
@@ -99,7 +100,8 @@ gameLoop.Run(time =>
 
     if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
     {
-        scenes.Load(world, File.ReadAllText(scenePath));
+        world = LoadScene(scenes, scenePath);
+        first = MoveTarget(world);
         Console.WriteLine("Loaded the scene again.");
     }
 
@@ -117,6 +119,11 @@ windowService.Close();
 
 static void MoveFirstSprite(World world, Entity entity, IInputService input, GameTime time)
 {
+    if (!world.IsAlive(entity) || !world.Has<TransformComponent>(entity))
+    {
+        return;
+    }
+
     float step = (float)(time.Delta * MoveSpeed);
     Vector2 offset = Vector2.Zero;
 
@@ -146,3 +153,16 @@ static void MoveFirstSprite(World world, Entity entity, IInputService input, Gam
         transform.Position += offset;
     }
 }
+
+// Loading replaces the scene: a fresh world keeps the file and the screen in step, instead of piling the entities of
+// the file on top of the ones that are already there.
+static World LoadScene(ISceneSerializer scenes, string path)
+{
+    var loaded = new World();
+    scenes.Load(loaded, File.ReadAllText(path));
+    return loaded;
+}
+
+// The entity that the keyboard moves: the first sprite of the world, which is the one the demo creates first and the
+// one a loaded scene brings back.
+static Entity MoveTarget(World world) => world.Enumerate<SpriteComponent>().FirstOrDefault();
