@@ -14,6 +14,13 @@ What remains are the content features the engine does not have yet, and then the
 
 ## Features
 
+- Sprite sheets and animation: slicing an atlas into frames and named regions, and a system that advances them.
+- UI widgets beyond a button and a label — slider, drop-down, check box, text field, scrollable panel — with anchors,
+  text fitting and clipping underneath them.
+- Positional audio: voices whose position can change, a listener that follows the camera, and the falloff between them.
+- Text in a scene, and UI labels that can pick a font instead of the built-in bitmap one.
+- Hierarchy and entity references that survive a save.
+- Timers and tweens.
 - User-defined shaders and materials.
 - OBB collision and multiple contacts.
 
