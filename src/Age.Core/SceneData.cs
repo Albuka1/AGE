@@ -18,7 +18,8 @@ namespace Age.Core;
 public sealed class SceneData
 {
     /// <summary>Gets or sets the entities of the scene, in the order they were saved.</summary>
-    public List<SceneEntity> Entities { get; set; } = [];
+    /// <remarks>A null value means that the text carried no entities list at all, which the serializer refuses to load.</remarks>
+    public List<SceneEntity>? Entities { get; set; }
 }
 
 /// <summary>
@@ -29,7 +30,8 @@ public sealed class SceneEntity
     /// <summary>Gets or sets the components of the entity, keyed by their registered name.</summary>
     /// <remarks>
     /// The value of a component stays raw JSON while the scene is read, so the serializer can hand it to the contract of
-    /// the registered type and a component the registry does not know about keeps its text.
+    /// the registered type and a component the registry does not know about keeps its text. A null value means that the
+    /// entry carried no component map, which the serializer refuses to load.
     /// </remarks>
-    public Dictionary<string, JsonElement> Components { get; set; } = [];
+    public Dictionary<string, JsonElement>? Components { get; set; }
 }

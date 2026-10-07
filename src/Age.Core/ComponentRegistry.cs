@@ -64,9 +64,9 @@ public sealed class ComponentRegistry
         var registration = new ComponentRegistration(
             name,
             typeof(T),
-            world => world.Enumerate<T>(),
-            (world, entity) => JsonSerializer.SerializeToElement(world.Get<T>(entity), typeInfo),
-            (world, entity, json) => world.Set(entity, json.Deserialize(typeInfo)));
+            (world, entity) => world.Has<T>(entity) ? JsonSerializer.SerializeToElement(world.Get<T>(entity), typeInfo) : null,
+            json => JsonSerializer.Deserialize(json, typeInfo)!,
+            (world, entity, component) => world.Set(entity, (T)component));
 
         _byName[name] = registration;
         _byType[typeof(T)] = registration;
@@ -96,17 +96,17 @@ public sealed class ComponentRegistry
 }
 
 /// <summary>
-/// Everything the scene serializer needs to reach one component type: the entities that carry it, and the way to write
-/// it and read it back through the contract that was registered with it.
+/// Everything the scene serializer needs to reach one component type: the way to write it as JSON, to read a value back
+/// from JSON, and to apply a value that was read to an entity.
 /// </summary>
 /// <param name="Name">The name that the component is stored under.</param>
 /// <param name="Type">The component type.</param>
-/// <param name="Entities">Returns the entities of a world that carry the component.</param>
-/// <param name="Serialize">Writes the component of an entity as JSON.</param>
-/// <param name="Deserialize">Reads the component of an entity from JSON.</param>
+/// <param name="TrySerialize">Writes the component of an entity as JSON, or returns null when the entity does not carry it.</param>
+/// <param name="Deserialize">Reads a value from JSON, which is what staging a scene does before a world is touched.</param>
+/// <param name="Apply">Applies a value that <paramref name="Deserialize"/> read to an entity.</param>
 internal sealed record ComponentRegistration(
     string Name,
     Type Type,
-    Func<World, IEnumerable<Entity>> Entities,
-    Func<World, Entity, JsonElement> Serialize,
-    Action<World, Entity, JsonElement> Deserialize);
+    Func<World, Entity, JsonElement?> TrySerialize,
+    Func<JsonElement, object> Deserialize,
+    Action<World, Entity, object> Apply);

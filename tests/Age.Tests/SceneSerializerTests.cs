@@ -127,6 +127,72 @@ public sealed class SceneSerializerTests
         registry.TryGetType("Mystery", out _).Should().BeFalse();
     }
 
+    [Fact]
+    public void SceneSerializer_LoadASceneThatFailsHalfway_LeavesTheWorldUnchanged()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        const string Json = """
+            {
+              "Entities": [
+                { "Components": { "Transform": { "Position": { "X": 1, "Y": 1 }, "Scale": { "X": 1, "Y": 1 } } } },
+                { "Components": { "Mystery": { "Value": 1 } } }
+              ]
+            }
+            """;
+        var world = new World();
+
+        Action act = () => serializer.Load(world, Json);
+
+        act.Should().Throw<InvalidDataException>();
+        world.Enumerate().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadAComponentThatCannotBeRead_LeavesTheWorldUnchanged()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        const string Json = """{ "Entities": [ { "Components": { "Transform": { "Position": 5 } } } ] }""";
+        var world = new World();
+
+        Action act = () => serializer.Load(world, Json);
+
+        act.Should().Throw<InvalidDataException>();
+        world.Enumerate().Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{ "Entities": null }""")]
+    [InlineData("""{ "Entities": [ null ] }""")]
+    [InlineData("""{ "Entities": [ { "Components": null } ] }""")]
+    public void SceneSerializer_LoadATextWithoutUsableEntities_ThrowsInvalidDataException(string json)
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+
+        Action act = () => serializer.Load(world, json);
+
+        act.Should().Throw<InvalidDataException>();
+        world.Enumerate().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SceneSerializer_Save_KeepsAnEntityThatHasNoRegisteredComponents()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+        world.CreateEntity();
+        world.CreateEntity();
+
+        string json = serializer.Save(world);
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement entities = document.RootElement.GetProperty("Entities");
+        entities.GetArrayLength().Should().Be(2);
+        entities[0].GetProperty("Components").EnumerateObject().Should().BeEmpty();
+        entities[1].GetProperty("Components").EnumerateObject().Should().BeEmpty();
+    }
+
     private static SceneSerializer CreateSerializer()
     {
         using ServiceProvider provider = CreateProvider();
