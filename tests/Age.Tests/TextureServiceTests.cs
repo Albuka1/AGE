@@ -208,7 +208,7 @@ public sealed class TextureServiceTests
         {
         }
 
-        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color)
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
         {
         }
 
@@ -236,6 +236,10 @@ public sealed class TextureServiceTests
         }
 
         public Func<int, bool>? FailRelease { get; set; }
+
+        public void Dispose()
+        {
+        }
 
         public void ReleaseTexture(TextureHandle texture)
         {

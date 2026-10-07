@@ -158,6 +158,7 @@ public sealed class SplashScreenTests
         public Vector2 LastPosition { get; private set; }
         public Vector2 LastSize { get; private set; }
         public Color LastColor { get; private set; }
+        public float LastRotation { get; private set; }
         public bool Cleared { get; private set; }
         public bool FrameEnded { get; private set; }
 
@@ -173,12 +174,13 @@ public sealed class SplashScreenTests
 
         public void BeginFrame(bool clear) => Cleared |= clear;
 
-        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color)
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
         {
             Drawn.Add(texture.Id);
             LastPosition = position;
             LastSize = size;
             LastColor = color;
+            LastRotation = rotation;
         }
 
         public void DrawRectangle(Rect rect, Color color)
@@ -203,6 +205,10 @@ public sealed class SplashScreenTests
         }
 
         public void ReleaseTexture(TextureHandle texture) => Released.Add(texture.Id);
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class FakeInput : IInputService

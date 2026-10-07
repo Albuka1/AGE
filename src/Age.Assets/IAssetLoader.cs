@@ -4,6 +4,12 @@ namespace Age.Assets;
 /// Reads game content by path relative to the game root. Every path is sandboxed inside that root, so a path that
 /// escapes it throws.
 /// </summary>
+/// <remarks>
+/// The generic <see cref="Load{T}(string)"/> deserializes JSON with reflection, which an AOT build trims away. Call
+/// <see cref="Load{T}(string, System.Text.Json.Serialization.Metadata.JsonTypeInfo{T})"/> with a contract from a source
+/// generated <see cref="System.Text.Json.Serialization.JsonSerializerContext"/> in a build like that; the engine does
+/// the same for scenes.
+/// </remarks>
 /// <example>
 /// <code>
 /// assets.Initialize("content");
@@ -46,4 +52,18 @@ public interface IAssetLoader
     /// as well as properties so that the engine components, whose data lives in public fields, work directly.
     /// </remarks>
     T Load<T>(string relativePath);
+
+    /// <summary>Reads the JSON file at the given path relative to the game root through a source generated contract.</summary>
+    /// <typeparam name="T">The type to produce.</typeparam>
+    /// <param name="relativePath">The path of the file, relative to the game root.</param>
+    /// <param name="typeInfo">The contract of <typeparamref name="T"/>, taken from a source generated <see cref="System.Text.Json.Serialization.JsonSerializerContext"/>.</param>
+    /// <returns>The content of the file as a <typeparamref name="T"/>.</returns>
+    /// <exception cref="InvalidOperationException">The loader has not been initialized, or the file holds a JSON null.</exception>
+    /// <exception cref="FileNotFoundException">No file exists at that path.</exception>
+    /// <exception cref="T:System.Text.Json.JsonException">The file does not hold valid JSON for the contract.</exception>
+    /// <remarks>
+    /// This overload never uses reflection, so it keeps working in a build that trims or compiles ahead of time. It
+    /// always reads JSON; a <c>string</c> or a <c>byte[]</c> is read with the overload above.
+    /// </remarks>
+    T Load<T>(string relativePath, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo);
 }

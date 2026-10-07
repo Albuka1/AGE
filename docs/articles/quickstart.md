@@ -214,13 +214,31 @@ var camera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = n
 
 provider.GetRequiredService<IGameLoop>().Run(
     update: step => world.Update(step, pipeline),
-    render: time => renderPipeline.Render(world, camera));
+    render: time =>
+    {
+        camera.ViewportSize = renderer.ViewportSize;
+        renderPipeline.Render(world, camera);
+    });
 ```
 
 `World` is never registered in the container; the caller owns its lifetime.
 
 The render pipeline runs its passes in the order they were added, so the UI lands on top of the world. Add a pass of
 your own after those two, for post-processing or an overlay, and it draws last.
+
+The camera takes the size of the window before the passes run, so the culling of the world pass and the projection of
+the renderer always agree, including after the window was resized.
+
+Dispose the renderer before the window is closed, and unload the textures and the splash logo before that: their device
+objects live in the OpenGL context of the window. The container disposes the services when it goes out of scope, which
+is after the window is gone, so a game that wants a clean shutdown releases them itself:
+
+```csharp
+splash.Dispose();
+textures.UnloadAll();
+renderer.Dispose();
+windowService.Close();
+```
 
 The loop accumulates the time each frame took in its `FixedTimestep` and calls the update callback a whole number of
 times with one sixtieth of a second, so the simulation advances by the same amount at any frame rate, and the render

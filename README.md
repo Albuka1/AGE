@@ -93,15 +93,12 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 
 ## Roadmap
 
-The following work is planned but not part of the current foundation: the limits of the current
-design first, then the platform work.
+The following work is planned but not part of the current foundation: the features the engine does
+not have yet, then the platform work.
 
-- Camera culling.
 - StbTrueTypeSharp.
 - User-defined shaders and materials.
 - OBB collision and multiple contacts.
-- Sprite rotation, so `TransformComponent.Rotation` is not ignored.
-- Asset cache and AOT friendly JSON.
 - AOT.
 - AssemblyLoadContext isolation for plugins.
 

@@ -18,6 +18,12 @@ namespace Age.Core;
 /// resolving instead of pointing at the resource that replaced it. Every handle also carries the token of the pool that
 /// issued it, so a handle passed to the wrong pool is rejected.
 /// </para>
+/// <para>
+/// Every method of the pool is safe to call from more than one thread: the slots, the path index and the counter are
+/// guarded by a lock, and the token of the owner is taken atomically, so a background loader cannot corrupt the pool
+/// while it resolves handles. The payloads are not synchronized, and neither are the device objects a caller creates
+/// around them: creating and deleting those belongs to the thread that owns the device.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -35,12 +41,22 @@ namespace Age.Core;
 public sealed class ResourcePool<T>
 {
     private readonly int _owner = ResourceHandle.NextOwner();
+    private readonly object _gate = new();
     private Slot[] _slots = new Slot[4];
     private readonly Dictionary<string, ResourceHandle> _byPath = new(StringComparer.Ordinal);
     private int _count;
 
     /// <summary>Gets the number of live resources.</summary>
-    public int Count => _count;
+    public int Count
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _count;
+            }
+        }
+    }
 
     /// <summary>Stores a resource and returns the handle that identifies it.</summary>
     /// <param name="value">The resource payload, owned by the pool from now on.</param>
@@ -52,28 +68,31 @@ public sealed class ResourcePool<T>
         if (path is not null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        }
 
-            if (_byPath.ContainsKey(path))
+        lock (_gate)
+        {
+            if (path is not null && _byPath.ContainsKey(path))
             {
                 throw new InvalidOperationException($"A resource is already registered under '{path}'.");
             }
+
+            int id = FindFreeSlot();
+            ref Slot slot = ref _slots[id - 1];
+            slot.Value = value;
+            slot.Path = path;
+            slot.Generation++;
+            slot.InUse = true;
+            _count++;
+
+            var handle = new ResourceHandle(_owner, id, slot.Generation);
+            if (path is not null)
+            {
+                _byPath[path] = handle;
+            }
+
+            return handle;
         }
-
-        int id = FindFreeSlot();
-        ref Slot slot = ref _slots[id - 1];
-        slot.Value = value;
-        slot.Path = path;
-        slot.Generation++;
-        slot.InUse = true;
-        _count++;
-
-        var handle = new ResourceHandle(_owner, id, slot.Generation);
-        if (path is not null)
-        {
-            _byPath[path] = handle;
-        }
-
-        return handle;
     }
 
     /// <summary>Returns the live resource behind the handle.</summary>
@@ -86,14 +105,17 @@ public sealed class ResourcePool<T>
     /// </remarks>
     public bool TryGet(ResourceHandle handle, [MaybeNullWhen(false)] out T value)
     {
-        if (TryGetSlot(handle, out Slot slot))
+        lock (_gate)
         {
-            value = slot.Value;
-            return true;
-        }
+            if (TryGetSlot(handle, out Slot slot))
+            {
+                value = slot.Value;
+                return true;
+            }
 
-        value = default;
-        return false;
+            value = default;
+            return false;
+        }
     }
 
     /// <summary>Returns the handle that was registered under the given path, which is how a cache avoids loading the same file twice.</summary>
@@ -104,7 +126,11 @@ public sealed class ResourcePool<T>
     public bool TryGetHandle(string path, out ResourceHandle handle)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return _byPath.TryGetValue(path, out handle);
+
+        lock (_gate)
+        {
+            return _byPath.TryGetValue(path, out handle);
+        }
     }
 
     /// <summary>Returns the handles of the resources that are live at this moment.</summary>
@@ -116,24 +142,27 @@ public sealed class ResourcePool<T>
     /// </remarks>
     public ResourceHandle[] GetHandles()
     {
-        if (_count == 0)
+        lock (_gate)
         {
-            return [];
-        }
-
-        var handles = new ResourceHandle[_count];
-        int next = 0;
-
-        for (int index = 0; index < _slots.Length && next < handles.Length; index++)
-        {
-            ref Slot slot = ref _slots[index];
-            if (slot.InUse)
+            if (_count == 0)
             {
-                handles[next++] = new ResourceHandle(_owner, index + 1, slot.Generation);
+                return [];
             }
-        }
 
-        return handles;
+            var handles = new ResourceHandle[_count];
+            int next = 0;
+
+            for (int index = 0; index < _slots.Length && next < handles.Length; index++)
+            {
+                ref Slot slot = ref _slots[index];
+                if (slot.InUse)
+                {
+                    handles[next++] = new ResourceHandle(_owner, index + 1, slot.Generation);
+                }
+            }
+
+            return handles;
+        }
     }
 
     /// <summary>Releases the resource behind the handle and forgets its path, so the slot becomes available for reuse with a new generation.</summary>
@@ -142,33 +171,66 @@ public sealed class ResourcePool<T>
     /// <remarks>The pool does not free anything itself: delete the underlying device object next to the call.</remarks>
     public bool Release(ResourceHandle handle)
     {
-        if (!TryGetSlot(handle, out Slot slot))
+        lock (_gate)
         {
-            return false;
-        }
+            if (!TryGetSlot(handle, out Slot slot))
+            {
+                return false;
+            }
 
-        if (slot.Path is not null)
-        {
-            _byPath.Remove(slot.Path);
+            Forget(handle.Id, slot.Path);
+            return true;
         }
-
-        ref Slot target = ref _slots[handle.Id - 1];
-        target.Value = default!;
-        target.Path = null;
-        target.InUse = false;
-        _count--;
-        return true;
     }
 
     /// <summary>Releases every live resource, invoking an optional callback so its owner can free the device object.</summary>
     /// <param name="release">Called once for every live resource with the stored payload. Pass null when the payloads need no cleanup.</param>
     /// <remarks>
+    /// <para>
     /// Each slot is released before its callback runs, so a callback that throws still leaves the pool consistent. Only
     /// the handles of the slots that were already cleared stop resolving; the slots that the call did not reach stay
     /// live and their handles keep working. The generations of the cleared slots survive, so an older handle never
     /// points at a resource that is added later.
+    /// </para>
+    /// <para>
+    /// The bookkeeping of a slot happens under the lock and its callback runs after the lock was released, so a callback
+    /// may be slow, and may call back into the pool, without holding the pool against other threads. The call walks a
+    /// snapshot of the live handles, so a resource that another thread adds while it runs stays live.
+    /// </para>
     /// </remarks>
     public void Clear(Action<T>? release = null)
+    {
+        if (release is null)
+        {
+            lock (_gate)
+            {
+                ClearLocked(null);
+            }
+
+            return;
+        }
+
+        foreach (ResourceHandle handle in GetHandles())
+        {
+            T value;
+
+            lock (_gate)
+            {
+                if (!TryGetSlot(handle, out Slot slot))
+                {
+                    continue;
+                }
+
+                value = slot.Value;
+                Forget(handle.Id, slot.Path);
+            }
+
+            release(value);
+        }
+    }
+
+    /// <summary>Releases every live slot, running the callback that is given for each of them. The caller holds the lock.</summary>
+    private void ClearLocked(Action<T>? release)
     {
         for (int index = 0; index < _slots.Length; index++)
         {
@@ -179,21 +241,24 @@ public sealed class ResourcePool<T>
             }
 
             T value = slot.Value;
-            if (slot.Path is not null)
-            {
-                _byPath.Remove(slot.Path);
-            }
-
-            slot.Value = default!;
-            slot.Path = null;
-            slot.InUse = false;
-            _count--;
-
-            if (release is not null)
-            {
-                release(value);
-            }
+            Forget(index + 1, slot.Path);
+            release?.Invoke(value);
         }
+    }
+
+    /// <summary>Marks the slot as free and forgets its path. The caller holds the lock.</summary>
+    private void Forget(int id, string? path)
+    {
+        if (path is not null)
+        {
+            _byPath.Remove(path);
+        }
+
+        ref Slot slot = ref _slots[id - 1];
+        slot.Value = default!;
+        slot.Path = null;
+        slot.InUse = false;
+        _count--;
     }
 
     private bool TryGetSlot(ResourceHandle handle, out Slot slot)

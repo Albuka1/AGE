@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Age.Assets;
 
@@ -56,6 +57,21 @@ public sealed class NullAssetLoader : IAssetLoader
         }
 
         T? value = JsonSerializer.Deserialize<T>(stream, JsonOptions);
+        if (value is null)
+        {
+            throw new InvalidOperationException($"The asset '{relativePath}' does not contain a {typeof(T).Name}.");
+        }
+
+        return value;
+    }
+
+    /// <inheritdoc />
+    public T Load<T>(string relativePath, JsonTypeInfo<T> typeInfo)
+    {
+        ArgumentNullException.ThrowIfNull(typeInfo);
+
+        using Stream stream = OpenRead(relativePath);
+        T? value = JsonSerializer.Deserialize(stream, typeInfo);
         if (value is null)
         {
             throw new InvalidOperationException($"The asset '{relativePath}' does not contain a {typeof(T).Name}.");

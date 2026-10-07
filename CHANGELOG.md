@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IAssetLoader.Load{T}` gained an overload that takes a `JsonTypeInfo{T}` of a source generated context, so a game can
+  read its own assets in an AOT build, where the reflective overload is trimmed away.
+- `IRenderer` is disposable: `SilkRenderer` deletes its shader program, its buffers and the font atlas, so closing a
+  window, or attaching a renderer a second time, no longer leaks video memory. Dispose the renderer before the window is
+  closed, while the OpenGL context is alive.
+- Camera culling: `Camera2D.ViewportSize` is the rectangle that the camera covers (`Camera2D.VisibleWorld`), and
+  `RenderSystem` skips a sprite whose box, rotated by its transform, does not overlap it. A camera without a viewport
+  size culls nothing, so a game that never set it keeps drawing everything.
+- Sprite rotation: `IRenderer.DrawSprite` takes the angle of the quad around its centre and `RenderSystem` passes the
+  rotation of the transform, so `TransformComponent.Rotation` is drawn instead of ignored; `SpriteQuad` is the geometry
+  behind it and is tested without a device.
 - `World.Borrow{T}` and `ComponentRef{T}`, a checked borrow of a component that validates the slot generation on every
   read and write, so an identifier that outlived its entity cannot reach the component of the entity that took the slot.
 - `IRenderPass` and `RenderPipeline`, so the passes of a frame, the world and the UI, are an ordered list that a game
@@ -32,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ResourcePool.Clear` runs the release callback of a slot after the lock was released, so a slow callback, or one that
+  calls back into the pool, no longer holds the pool against other threads. The bookkeeping itself stays under the lock,
+  and the call walks a snapshot, so a resource that another thread adds while it runs stays live.
+- `ResourcePool` guards its slots, its path index and its counter with a lock, so a background loader cannot corrupt the
+  pool while the thread that owns the device creates and deletes the resources. The payloads and the device objects
+  themselves stay unsynchronized, and the documentation says who owns them.
 - `World` states its threading model: its storage is not synchronized and the world belongs to the thread that runs the
   loop, so a game that touches one from more than one thread serializes the calls itself, and the generation checks of an
   identifier or a borrow are correctness in sequential use rather than a concurrency guarantee. `SystemPipeline` says

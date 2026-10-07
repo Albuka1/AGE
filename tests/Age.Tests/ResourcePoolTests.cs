@@ -176,4 +176,64 @@ public sealed class ResourcePoolTests
         current.Id.Should().Be(stale.Id);
         pool.TryGet(stale, out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void ResourcePool_ClearWithACallbackThatAdds_KeepsTheNewResource()
+    {
+        var pool = new ResourcePool<string>();
+        pool.Add("first", "first.txt");
+        ResourceHandle? added = null;
+
+        pool.Clear(value =>
+        {
+            if (value == "first")
+            {
+                added = pool.Add("second", "second.txt");
+            }
+        });
+
+        pool.Count.Should().Be(1);
+        added.Should().NotBeNull();
+        pool.TryGet(added!.Value, out string? resource).Should().BeTrue();
+        resource.Should().Be("second");
+    }
+
+    [Fact]
+    public void ResourcePool_ParallelCalls_KeepThePoolConsistent()
+    {
+        var pool = new ResourcePool<int>();
+        int failures = 0;
+
+        Parallel.For(0, 16, index =>
+        {
+            for (int round = 0; round < 200; round++)
+            {
+                string path = $"art/{index}-{round}.png";
+                ResourceHandle handle = pool.Add(round, path);
+
+                if (!pool.TryGet(handle, out int value) || value != round)
+                {
+                    Interlocked.Increment(ref failures);
+                }
+
+                if (!pool.TryGetHandle(path, out ResourceHandle found) || found != handle)
+                {
+                    Interlocked.Increment(ref failures);
+                }
+
+                if (pool.GetHandles().Length == 0)
+                {
+                    Interlocked.Increment(ref failures);
+                }
+
+                if (!pool.Release(handle))
+                {
+                    Interlocked.Increment(ref failures);
+                }
+            }
+        });
+
+        failures.Should().Be(0);
+        pool.Count.Should().Be(0);
+    }
 }

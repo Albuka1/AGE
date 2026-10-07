@@ -5,7 +5,13 @@ namespace Age.Rendering;
 /// <summary>
 /// Draws two-dimensional content through the graphics device.
 /// </summary>
-public interface IRenderer
+/// <remarks>
+/// The renderer owns the device objects it creates, so dispose it before the window it was attached to is closed: the
+/// shader program, the vertex buffers and the built-in font texture are deleted then, while the context is still alive.
+/// Disposing twice, and disposing a renderer that was never attached, both do nothing, and a disposed renderer can be
+/// attached to another window, which creates its objects again.
+/// </remarks>
+public interface IRenderer : IDisposable
 {
     /// <summary>Gets the current viewport size, in pixels.</summary>
     Vector2 ViewportSize { get; }
@@ -30,8 +36,12 @@ public interface IRenderer
     /// <param name="position">The top-left corner of the sprite, in world coordinates.</param>
     /// <param name="size">The size of the quad in world coordinates, after the transform scale has been applied. The camera transform, including its zoom, is applied on top of it.</param>
     /// <param name="color">The tint. It is multiplied with the sampled texel, or used as it is for a solid color quad.</param>
-    /// <remarks>The whole texture is mapped onto the quad. Without a texture the call draws the same rectangle as <see cref="DrawRectangle"/>.</remarks>
-    void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color);
+    /// <param name="rotation">The rotation of the quad around its centre, in radians. A renderer that ignores it draws the quad upright.</param>
+    /// <remarks>
+    /// The whole texture is mapped onto the quad, so a rotation turns the image with it. Without a texture the call draws
+    /// the same rectangle as <see cref="DrawRectangle"/>, rotated.
+    /// </remarks>
+    void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f);
 
     /// <summary>Uploads pixel data as a texture that the renderer owns.</summary>
     /// <param name="pixels">The pixels, four RGBA bytes each, in row-major order from the top-left corner.</param>
