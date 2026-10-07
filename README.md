@@ -23,7 +23,7 @@ AGE is organized as a set of focused assemblies:
 | `Age.Assets` | Sandboxed path-based asset access and loading |
 | `Age.Input` | Keyboard and mouse abstraction |
 | `Age.Audio` | Sound resources, WAVE, MP3 and Ogg Vorbis decoding, and playback through OpenAL |
-| `Age.Physics` | Axis-aligned collision detection with a spatial hash |
+| `Age.Physics` | Axis-aligned collision detection with an incremental spatial hash |
 | `Age.UI` | Retained UI components and pointer interaction |
 | `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, window icon and splash screen |
 | `Age.Sample` | Console sample that wires everything together |
@@ -61,11 +61,9 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 
 ## Roadmap
 
-The following work is planned but not part of the current foundation. The order is what a real
-game needs first: the entries at the top keep a project stable as it grows, and the rest cover the
-limits of the current design.
+The following work is planned but not part of the current foundation: the limits of the current
+design first, then the platform work.
 
-- Incremental spatial hash.
 - Camera culling.
 - StbTrueTypeSharp.
 - User-defined shaders and materials.

@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the storage no longer grows with every entity a long session ever had, and an identifier that outlived its entity is
   no longer alive even when the slot was taken by another entity afterwards.
 
+- `CollisionSystem` keeps its spatial hash between frames instead of rebuilding it: a box that did not move stays in
+  its cells, a moved one changes them, the entries of destroyed entities are dropped, and a cell that ends up empty is
+  removed. `CellCount` reports how many cells are left.
+
 ## [0.1.0] - 2026-10-06
 
 ### Added
