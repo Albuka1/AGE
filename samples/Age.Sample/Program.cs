@@ -30,6 +30,12 @@ windowService.Create(1280, 720, "AGE Sample");
 IRenderer renderer = provider.GetRequiredService<IRenderer>();
 renderer.Attach(windowService);
 
+IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
+assets.Initialize(Path.Combine(AppContext.BaseDirectory, "content"));
+
+ITextureService textures = provider.GetRequiredService<ITextureService>();
+TextureHandle tiles = textures.Load("tiles.bmp");
+
 var camera = new Camera2D
 {
     Position = Vector2.Zero,
@@ -39,7 +45,7 @@ var camera = new Camera2D
 
 Entity first = world.CreateEntity();
 world.Set(first, new TransformComponent { Position = new Vector2(400f, 300f), Scale = new Vector2(1f, 1f) });
-world.Set(first, new SpriteComponent { Size = new Vector2(64f, 64f), Color = Color.Red, ZOrder = 0 });
+world.Set(first, new SpriteComponent { Texture = tiles, Size = new Vector2(64f, 64f), Color = Color.White, ZOrder = 0 });
 
 Entity second = world.CreateEntity();
 world.Set(second, new TransformComponent { Position = new Vector2(600f, 300f), Scale = new Vector2(1f, 1f) });

@@ -60,19 +60,25 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 
 ## Roadmap
 
-The following work is planned but not part of the current foundation:
+The following work is planned but not part of the current foundation. The order is what a real
+game needs first: the entries at the top block building one, the rest make the engine hold up
+under load and cover the limits of the current design.
 
-- Scene serialization (JSON)
-- User-defined shaders and materials
-- StbTrueTypeSharp
-- `OpenALAudioService`
-- Entity id pool
-- Incremental spatial hash
-- OBB collision
-- Multiple contacts
-- Camera culling
-- AOT
-- AssemblyLoadContext isolation for plugins
+- `OpenALAudioService`, with a sound resource to play; textures already follow the resource pattern
+  it will reuse.
+- Scene serialization (JSON).
+- Fixed timestep in the game loop.
+- Entity id pool and generations for stale handles.
+- Render passes ordered by the loop instead of by hand.
+- Incremental spatial hash.
+- Camera culling.
+- StbTrueTypeSharp.
+- User-defined shaders and materials.
+- OBB collision and multiple contacts.
+- Sprite rotation, so `TransformComponent.Rotation` is not ignored.
+- Asset cache and AOT friendly JSON.
+- AOT.
+- AssemblyLoadContext isolation for plugins.
 
 ## Contributing
 

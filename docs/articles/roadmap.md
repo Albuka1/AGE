@@ -1,8 +1,8 @@
 # Roadmap
 
 The foundation covers the entity-component core, the game loops, the OpenGL 3.3 renderer,
-collision detection, retained UI, sandboxed asset loading with image decoding, the versioned
-resource pool, and a window-backed input service.
+collision detection, retained UI, sandboxed asset loading with image decoding, textures that are
+loaded and cached by path, the versioned resource pool, and a window-backed input service.
 
 The order below is what a real game needs first: the first group blocks building one, the second
 keeps a project stable as it grows, the third covers the limits of the current design, and the
@@ -10,9 +10,8 @@ last is platform work.
 
 ## Blocks building a game
 
-- A texture service on top of `IRenderer.CreateTexture`: a cache with a lifetime, so decoded images
-  reach the GPU; the same resource pattern serves the sound service next.
-- `OpenALAudioService`, with a sound resource to play.
+- `OpenALAudioService`, with a sound resource to play; textures already follow the resource pattern
+  this service will reuse.
 - Scene serialization (JSON), so a world can be saved, loaded and edited.
 
 ## Stability and scale
