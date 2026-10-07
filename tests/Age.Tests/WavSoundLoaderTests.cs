@@ -127,6 +127,81 @@ public sealed class WavSoundLoaderTests : IDisposable
         act.Should().Throw<ArgumentException>();
     }
 
+    [Fact]
+    public void SoundLoader_LoadDataChunkThatClaimsMoreThanTheFile_ReadsWhatIsThere()
+    {
+        byte[] bytes = CreateWav(8000, channels: 1, bitsPerSample: 16, Samples16(1, 2, 3));
+        WriteInt32(bytes, 40, 1000);
+
+        Write("short.wav", bytes);
+
+        SoundData sound = _loader.Load("short.wav");
+
+        sound.Samples.Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public void SoundLoader_LoadOtherChunkThatClaimsMoreThanTheFile_ThrowsInvalidDataException()
+    {
+        byte[] bytes = CreateWav(8000, channels: 1, bitsPerSample: 16, Samples16(1, 2));
+
+        // The chunk is no longer the data chunk, so the loader skips it, and it claims far more than the file holds:
+        // a length that is read as a signed value would move the offset backwards and loop forever.
+        WriteTag(bytes, 36, "LIST");
+        WriteInt32(bytes, 40, unchecked((int)0xFFFFFFF0));
+
+        Write("huge.wav", bytes);
+
+        Action act = () => _loader.Load("huge.wav");
+
+        act.Should().Throw<InvalidDataException>();
+    }
+
+    [Fact]
+    public void SoundLoader_LoadExtensibleFormat_ReadsTheSubFormatGuid()
+    {
+        Write("extensible.wav", CreateExtensibleWav(8000, channels: 1, bitsPerSample: 16, Samples16(7, 8), PcmSubFormat()));
+
+        SoundData sound = _loader.Load("extensible.wav");
+
+        sound.SampleRate.Should().Be(8000);
+        sound.Channels.Should().Be(1);
+        sound.Samples.Should().Equal(7, 8);
+    }
+
+    [Fact]
+    public void SoundLoader_LoadExtensibleFormatWithAForeignSubFormat_ThrowsInvalidDataException()
+    {
+        // The GUID starts like PCM but is not PCM, so it must not be decoded as if it were.
+        byte[] subFormat = PcmSubFormat();
+        subFormat[^1] = 0x72;
+
+        Write("foreign.wav", CreateExtensibleWav(8000, channels: 1, bitsPerSample: 16, Samples16(7, 8), subFormat));
+
+        Action act = () => _loader.Load("foreign.wav");
+
+        act.Should().Throw<InvalidDataException>();
+    }
+
+    [Fact]
+    public void SoundLoader_LoadExtensibleFormatThatIsTooShort_ThrowsInvalidDataException()
+    {
+        byte[] bytes = CreateExtensibleWav(8000, channels: 1, bitsPerSample: 16, Samples16(7, 8), PcmSubFormat());
+        WriteInt32(bytes, 16, 26);
+
+        Write("short-format.wav", bytes);
+
+        Action act = () => _loader.Load("short-format.wav");
+
+        act.Should().Throw<InvalidDataException>();
+    }
+
+    private static byte[] PcmSubFormat() =>
+    [
+        0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+        0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71,
+    ];
+
     private static byte[] CreateWav(int sampleRate, int channels, int bitsPerSample, byte[] samples, int format = 1)
     {
         int frameSize = bitsPerSample / 8 * channels;
@@ -146,6 +221,34 @@ public sealed class WavSoundLoaderTests : IDisposable
         WriteTag(bytes, 36, "data");
         WriteInt32(bytes, 40, samples.Length);
         samples.CopyTo(bytes, 44);
+        return bytes;
+    }
+
+    /// <summary>Builds a WAVE whose format chunk carries a WAVE_FORMAT_EXTENSIBLE header with the given sub format GUID.</summary>
+    private static byte[] CreateExtensibleWav(int sampleRate, int channels, int bitsPerSample, byte[] samples, byte[] subFormat)
+    {
+        const int formatLength = 40;
+        int frameSize = bitsPerSample / 8 * channels;
+        byte[] bytes = new byte[20 + formatLength + 8 + samples.Length];
+
+        WriteTag(bytes, 0, "RIFF");
+        WriteInt32(bytes, 4, bytes.Length - 8);
+        WriteTag(bytes, 8, "WAVE");
+        WriteTag(bytes, 12, "fmt ");
+        WriteInt32(bytes, 16, formatLength);
+        WriteInt16(bytes, 20, 0xFFFE);
+        WriteInt16(bytes, 22, channels);
+        WriteInt32(bytes, 24, sampleRate);
+        WriteInt32(bytes, 28, sampleRate * frameSize);
+        WriteInt16(bytes, 32, frameSize);
+        WriteInt16(bytes, 34, bitsPerSample);
+        WriteInt16(bytes, 36, 22);
+        WriteInt16(bytes, 38, bitsPerSample);
+        WriteInt32(bytes, 40, channels == 1 ? 4 : 3);
+        subFormat.CopyTo(bytes, 44);
+        WriteTag(bytes, 60, "data");
+        WriteInt32(bytes, 64, samples.Length);
+        samples.CopyTo(bytes, 68);
         return bytes;
     }
 

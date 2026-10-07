@@ -49,6 +49,10 @@ public sealed unsafe class OpenALAudioService : IAudioService, IDisposable
     {
         ArgumentNullException.ThrowIfNull(sound);
 
+        // OpenAL keeps one error per thread until it is read, so the state is cleared first: an earlier failure would
+        // otherwise be attributed to this upload.
+        _ = _al.GetError();
+
         uint buffer = _al.GenBuffer();
         _al.BufferData(buffer, sound.Channels == 1 ? BufferFormat.Mono16 : BufferFormat.Stereo16, sound.Samples, sound.SampleRate);
 
@@ -56,6 +60,7 @@ public sealed unsafe class OpenALAudioService : IAudioService, IDisposable
         if (error != AudioError.NoError)
         {
             _al.DeleteBuffer(buffer);
+            _ = _al.GetError();
             throw new InvalidOperationException($"The audio device refused the sound: {error}.");
         }
 
@@ -70,7 +75,21 @@ public sealed unsafe class OpenALAudioService : IAudioService, IDisposable
             return;
         }
 
+        // A source keeps the buffer it plays alive, so the sound is detached from every playback first: that is what
+        // lets the device release it, and a refusal that still happens is reported for the caller to retry.
+        foreach (uint source in _sources)
+        {
+            _al.SetSourceProperty(source, SourceInteger.Buffer, 0u);
+        }
+
+        _ = _al.GetError();
         _al.DeleteBuffer((uint)soundId);
+
+        AudioError error = _al.GetError();
+        if (error != AudioError.NoError)
+        {
+            throw new InvalidOperationException($"The audio device refused to delete sound {soundId}: {error}.");
+        }
     }
 
     /// <inheritdoc />

@@ -23,6 +23,12 @@ public sealed class WavSoundLoader : ISoundLoader
     /// <summary>The tag of a WAVE_FORMAT_EXTENSIBLE header, whose real format sits in its sub format field.</summary>
     private const int ExtensibleFormat = 0xFFFE;
 
+    /// <summary>The length of a format chunk that carries a WAVE_FORMAT_EXTENSIBLE header, in bytes.</summary>
+    private const int ExtensibleFormatSize = 40;
+
+    /// <summary>The offset of the sub format GUID inside a WAVE_FORMAT_EXTENSIBLE header.</summary>
+    private const int SubFormatOffset = 24;
+
     private readonly IAssetLoader _assets;
 
     /// <summary>Initializes the loader with the asset loader that reads the files.</summary>
@@ -52,42 +58,55 @@ public sealed class WavSoundLoader : ISoundLoader
         int dataLength = 0;
 
         int offset = RiffHeaderSize;
+
         while (offset + ChunkHeaderSize <= bytes.Length)
         {
             string tag = Tag(bytes, offset);
-            int length = (int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset + 4));
-            int body = offset + ChunkHeaderSize;
+            long length = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset + 4));
+            long body = offset + ChunkHeaderSize;
+            long remaining = bytes.Length - body;
 
-            if (body > bytes.Length)
+            if (remaining < 0)
             {
                 throw new InvalidDataException($"The chunk '{tag}' of '{relativePath}' starts past the end of the file.");
             }
 
             if (tag == "fmt ")
             {
-                if (length < FormatBodySize)
+                if (length < FormatBodySize || length > remaining)
                 {
-                    throw new InvalidDataException($"The format chunk of '{relativePath}' holds {length} bytes, but a WAVE header needs at least {FormatBodySize}.");
+                    throw new InvalidDataException($"The format chunk of '{relativePath}' claims {length} bytes, but the file holds {remaining}.");
                 }
 
-                format = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(body));
-                channels = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(body + 2));
-                sampleRate = (int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(body + 4));
-                bitsPerSample = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(body + 14));
+                format = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(offset + ChunkHeaderSize));
+                channels = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(offset + ChunkHeaderSize + 2));
+                sampleRate = (int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset + ChunkHeaderSize + 4));
+                bitsPerSample = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(offset + ChunkHeaderSize + 14));
 
-                if (format == ExtensibleFormat && length >= 26)
+                if (format == ExtensibleFormat)
                 {
-                    // WAVE_FORMAT_EXTENSIBLE keeps the real format in the first bytes of its sub format field.
-                    format = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(body + 24));
+                    if (length < ExtensibleFormatSize)
+                    {
+                        throw new InvalidDataException($"The format chunk of '{relativePath}' is extensible but holds {length} bytes instead of the {ExtensibleFormatSize} that its sub format needs.");
+                    }
+
+                    format = ReadExtensibleFormat(bytes.AsSpan(offset + ChunkHeaderSize + SubFormatOffset));
                 }
             }
             else if (tag == "data")
             {
-                dataOffset = body;
-                dataLength = length;
+                dataOffset = offset + ChunkHeaderSize;
+
+                // A truncated file is read up to its end instead of being refused: the samples that are there are the
+                // samples the game can play.
+                dataLength = (int)Math.Min(length, remaining);
+            }
+            else if (length > remaining)
+            {
+                throw new InvalidDataException($"The chunk '{tag}' of '{relativePath}' claims {length} bytes, but the file holds {remaining}.");
             }
 
-            offset = body + length + (length % 2);
+            offset = (int)Math.Min(body + length + (length % 2), int.MaxValue);
         }
 
         if (dataOffset < 0)
@@ -115,6 +134,23 @@ public sealed class WavSoundLoader : ISoundLoader
         int wholeFrames = frameSize > 0 ? available - (available % frameSize) : 0;
 
         return new SoundData(sampleRate, channels, Convert(bytes.AsSpan(dataOffset, wholeFrames), bitsPerSample, format));
+    }
+
+    /// <summary>Reads the format of a WAVE_FORMAT_EXTENSIBLE sub format, or the extensible tag when its GUID is not one of the standard ones.</summary>
+    /// <param name="guid">The sixteen bytes of the sub format GUID.</param>
+    /// <returns>The format tag of the sub format, or <see cref="ExtensibleFormat"/> when the GUID is not a standard one.</returns>
+    /// <remarks>
+    /// The standard sub formats are <c>XXXXXXXX-0000-0010-8000-00AA00389B71</c>, so only their first four bytes differ and
+    /// they hold the tag of the format: PCM is one and IEEE float is three. Comparing the rest of the GUID is what keeps
+    /// a sub format that only looks like one of them from being decoded as if it were.
+    /// </remarks>
+    private static int ReadExtensibleFormat(ReadOnlySpan<byte> guid)
+    {
+        ReadOnlySpan<byte> tail = [0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71];
+
+        return guid.Slice(4, tail.Length).SequenceEqual(tail)
+            ? (int)BinaryPrimitives.ReadUInt32LittleEndian(guid)
+            : ExtensibleFormat;
     }
 
     /// <summary>Converts the samples of the data chunk to signed 16-bit values.</summary>
