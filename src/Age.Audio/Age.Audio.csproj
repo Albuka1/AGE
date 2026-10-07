@@ -9,6 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Age.Assets\Age.Assets.csproj" />
     <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
   </ItemGroup>
 
