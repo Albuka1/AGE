@@ -8,6 +8,8 @@ A small 2D game engine for .NET 10, built around an entity-component-system
 core, a Silk.NET rendering backend and a dependency-injection friendly service
 model.
 
+Documentation: [albuka1.github.io/AGE](https://albuka1.github.io/AGE/) — API reference, quickstart and roadmap.
+
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -42,7 +44,8 @@ dotnet test tests/Age.Tests/Age.Tests.csproj -c Release
 dotnet run --project samples/Age.Sample/Age.Sample.csproj
 ```
 
-See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour.
+See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour, or the
+[published documentation](https://albuka1.github.io/AGE/) for the API reference.
 
 ## Architecture
 

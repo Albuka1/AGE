@@ -135,6 +135,58 @@ public sealed class SilkRenderer : IRenderer
     }
 
     /// <inheritdoc />
+    public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        long required = (long)width * height * 4;
+        if (required > int.MaxValue || pixels.Length != required)
+        {
+            throw new ArgumentException($"The buffer holds {pixels.Length} bytes, but {width} x {height} RGBA pixels need {required} bytes, which is not a supported texture size.", nameof(pixels));
+        }
+
+        GL gl = RequireContext();
+        uint texture = gl.GenTexture();
+        gl.BindTexture(TextureTarget.Texture2D, texture);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+
+        unsafe
+        {
+            fixed (byte* pointer = pixels)
+            {
+                gl.TexImage2D(
+                    TextureTarget.Texture2D,
+                    0,
+                    InternalFormat.Rgba,
+                    (uint)width,
+                    (uint)height,
+                    0,
+                    PixelFormat.Rgba,
+                    PixelType.UnsignedByte,
+                    pointer);
+            }
+        }
+
+        gl.BindTexture(TextureTarget.Texture2D, 0);
+        return new TextureHandle((int)texture);
+    }
+
+    /// <inheritdoc />
+    public void ReleaseTexture(TextureHandle texture)
+    {
+        if (texture.Id == 0)
+        {
+            return;
+        }
+
+        RequireContext().DeleteTexture((uint)texture.Id);
+    }
+
+    /// <inheritdoc />
     public void DrawRectangle(Rect rect, Color color) => DrawQuad(rect.Position, rect.Size, color, default, 0u);
 
     /// <inheritdoc />
