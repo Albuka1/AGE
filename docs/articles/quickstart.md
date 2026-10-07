@@ -25,6 +25,19 @@ IRenderer renderer = provider.GetRequiredService<IRenderer>();
 renderer.Attach(windowService);
 ```
 
+## Replace the window icon
+
+```csharp
+IImageLoader images = provider.GetRequiredService<IImageLoader>();
+ImageData icon = images.Load("icon.png");
+
+windowService.SetIcon(icon.Pixels, icon.Width, icon.Height);
+```
+
+A window opens with the icon of the engine, so a game can leave it as it is. `SetIcon` swaps it
+for an image of the game's own: it takes decoded pixels rather than a path, so the call stays free
+of any file format.
+
 ## Build a world
 
 ```csharp
@@ -73,6 +86,37 @@ world.Set(sprite, new SpriteComponent { Texture = playerTexture, Size = new Vect
 
 `ITextureService` decodes the file once, uploads it and caches it by path, so loading the same
 image twice returns the same texture. Release it with `Unload` when the level that used it ends.
+
+## Show a splash screen
+
+```csharp
+SplashScreen splash = provider.GetRequiredService<SplashScreen>();
+
+gameLoop.Run(time =>
+{
+    if (splash.Draw(renderer, time))
+    {
+        return;
+    }
+
+    world.Update(time, pipeline);
+    renderSystem.Render(world, camera);
+});
+```
+
+`Draw` keeps the frame for 2.5 seconds and returns `false` once it is over, so the game draws
+nothing until then. A logo without a background suits it, because the screen behind it is cleared
+to black. Pass the input service as the third argument to let Space, Enter, Escape or a click end
+the splash early, and call `splash.End` from the game to start it as soon as its assets are loaded.
+
+```csharp
+ITextureService textures = provider.GetRequiredService<ITextureService>();
+var own = new SplashScreen { Logo = textures.Load("art/logo.png"), LogoSize = new Vector2(512, 512) };
+var none = new SplashScreen { Enabled = false };
+```
+
+A `SplashScreen` without either setting shows the built-in logo of the engine, and one with
+`Enabled` set to `false` starts the game straight away.
 
 ## Run the loop
 

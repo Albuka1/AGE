@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Window icon and `SplashScreen`, so a game opens with the branding of the engine: the icon can be replaced through
+  `IWindowService.SetIcon`, and the splash takes a logo of its own, scales it or switches off.
 - `IRenderer.CreateTexture`/`ReleaseTexture` and `ITextureService`, so decoded images reach the GPU and are cached by path; the sample draws a texture from `content/`.
 - `SilkInputService` and `AddAgeSilkInput`, so a game reads keyboard and mouse from the window; `IInputService` gained `BeginFrame`.
 - `IAssetLoader.Load<T>` for UTF-8 text, raw bytes and JSON assets.

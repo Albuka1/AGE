@@ -60,11 +60,17 @@ RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
 UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
 IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
+SplashScreen splash = provider.GetRequiredService<SplashScreen>();
 
 const float MoveSpeed = 240f;
 
 gameLoop.Run(time =>
 {
+    if (splash.Draw(renderer, time, input))
+    {
+        return;
+    }
+
     MoveFirstSprite(world, first, input, time);
 
     if (input.IsKeyPressed(Key.Escape))
