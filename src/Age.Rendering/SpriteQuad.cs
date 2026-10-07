@@ -47,4 +47,35 @@ public static class SpriteQuad
         Vector2 Rotate(float offsetX, float offsetY) =>
             new(centre.X + (offsetX * cosine) - (offsetY * sine), centre.Y + (offsetX * sine) + (offsetY * cosine));
     }
+
+    /// <summary>Returns the axis-aligned box that covers the quad, whatever its angle.</summary>
+    /// <param name="position">The top-left corner of the unrotated quad, in world coordinates.</param>
+    /// <param name="size">The size of the quad, in world coordinates.</param>
+    /// <param name="rotation">The rotation around the centre of the quad, in radians.</param>
+    /// <returns>A box that covers the quad, which a render system culls with.</returns>
+    public static Aabb Bounds(Vector2 position, Vector2 size, float rotation)
+    {
+        if (rotation == 0f)
+        {
+            return Aabb.FromRect(new Rect(position, size));
+        }
+
+        Span<Vector2> corners = stackalloc Vector2[4];
+        Corners(position, size, rotation, corners);
+
+        float left = corners[0].X;
+        float top = corners[0].Y;
+        float right = corners[0].X;
+        float bottom = corners[0].Y;
+
+        for (int index = 1; index < corners.Length; index++)
+        {
+            left = MathF.Min(left, corners[index].X);
+            top = MathF.Min(top, corners[index].Y);
+            right = MathF.Max(right, corners[index].X);
+            bottom = MathF.Max(bottom, corners[index].Y);
+        }
+
+        return Aabb.FromRect(new Rect(new Vector2(left, top), new Vector2(right - left, bottom - top)));
+    }
 }

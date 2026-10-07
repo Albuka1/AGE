@@ -65,6 +65,29 @@ public sealed class SpriteQuadTests
     }
 
     [Fact]
+    public void SpriteQuad_Bounds_WithoutRotation_IsTheRectangle()
+    {
+        Aabb bounds = SpriteQuad.Bounds(new Vector2(10f, 20f), new Vector2(30f, 40f), 0f);
+
+        bounds.Left.Should().Be(10f);
+        bounds.Top.Should().Be(20f);
+        bounds.Right.Should().Be(40f);
+        bounds.Bottom.Should().Be(60f);
+    }
+
+    [Fact]
+    public void SpriteQuad_Bounds_OfAQuarterTurn_CoversTheTurnedQuad()
+    {
+        Aabb bounds = SpriteQuad.Bounds(new Vector2(0f, 0f), new Vector2(4f, 2f), MathF.PI / 2f);
+
+        // The centre is (2, 1), so the turned quad spans two pixels to either side of it.
+        bounds.Left.Should().BeApproximately(1f, 1e-5f);
+        bounds.Top.Should().BeApproximately(-1f, 1e-5f);
+        bounds.Right.Should().BeApproximately(3f, 1e-5f);
+        bounds.Bottom.Should().BeApproximately(3f, 1e-5f);
+    }
+
+    [Fact]
     public void SpriteQuad_TooFewCorners_Throws() =>
         FluentActions.Invoking(() => SpriteQuad.Corners(Vector2.Zero, new Vector2(1f, 1f), 0f, new Vector2[3]))
             .Should().Throw<ArgumentOutOfRangeException>();

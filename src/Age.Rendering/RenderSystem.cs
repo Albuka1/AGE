@@ -7,6 +7,11 @@ namespace Age.Rendering;
 /// skips the sprites of a zero size. This type is not an <see cref="ISystem"/>; a <see cref="RenderPipeline"/> runs it
 /// as the pass of the world.
 /// </summary>
+/// <remarks>
+/// A camera that has a viewport size culls: a sprite whose box, rotated by the transform, does not overlap
+/// <see cref="Camera2D.VisibleWorld"/> is not drawn at all. A camera that leaves the viewport size at zero culls nothing,
+/// so the renderer keeps drawing everything for a game that never set it.
+/// </remarks>
 public sealed class RenderSystem : IRenderPass
 {
     private readonly IRenderer _renderer;
@@ -30,7 +35,7 @@ public sealed class RenderSystem : IRenderPass
         _renderer.SetCamera(camera);
         _renderer.BeginFrame(true);
 
-        CollectSprites(world);
+        CollectSprites(world, camera);
         _sorter.Sort(_sprites, entity => world.Get<SpriteComponent>(entity).ZOrder);
 
         foreach (Entity entity in _sprites)
@@ -49,16 +54,34 @@ public sealed class RenderSystem : IRenderPass
         _renderer.EndFrame();
     }
 
-    private void CollectSprites(World world)
+    /// <summary>
+    /// Collects the sprites of the world that the camera can see, in ascending entity order. A camera without a viewport
+    /// size culls nothing, because the rectangle it covers is unknown.
+    /// </summary>
+    private void CollectSprites(World world, in Camera2D camera)
     {
         _sprites.Clear();
 
+        Rect visible = camera.VisibleWorld;
+        bool cull = visible.Width > 0f && visible.Height > 0f;
+        Aabb view = Aabb.FromRect(visible);
+
         foreach (Entity entity in world.Enumerate<SpriteComponent>())
         {
-            if (world.Has<TransformComponent>(entity))
+            if (!world.Has<TransformComponent>(entity))
             {
-                _sprites.Add(entity);
+                continue;
             }
+
+            TransformComponent transform = world.Get<TransformComponent>(entity);
+            Vector2 size = world.Get<SpriteComponent>(entity).Size * transform.Scale;
+
+            if (cull && !SpriteQuad.Bounds(transform.Position, size, transform.Rotation).Intersects(view))
+            {
+                continue;
+            }
+
+            _sprites.Add(entity);
         }
     }
 }
