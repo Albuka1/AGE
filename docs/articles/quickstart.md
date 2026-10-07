@@ -52,6 +52,20 @@ The identifier of a destroyed entity is handed out again by the next `CreateEnti
 `IsAlive` tells an identifier that outlived its entity from a live one. `Entity` compares by slot and generation, which
 makes it safe to keep in a component.
 
+The storage of a slot is handed out again with the slot, so a `ref` from `GetRef` that was held across the destruction
+of its entity points at the component of the next entity that takes the slot. Take the reference immediately before the
+write, or use `Borrow`, a `ref struct` that validates the entity on every access:
+
+```csharp
+ComponentRef<TransformComponent> transform = world.Borrow<TransformComponent>(sprite);
+
+TransformComponent value = transform.Value;
+value.Position += new Vector2(10, 0);
+transform.Value = value;
+```
+
+A borrow cannot be stored in a field or a collection, which is what keeps it from outliving the frame that took it.
+
 ## Save and load a scene
 
 ```csharp
