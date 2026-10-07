@@ -62,6 +62,9 @@ world.Set(panel, new TextLabelComponent { Text = "Hello AGE", Color = Color.Whit
 
 RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
 UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
+RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
+renderPipeline.Add(renderSystem);
+renderPipeline.Add(uiRenderSystem);
 IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
@@ -116,8 +119,7 @@ gameLoop.Run(
             gameLoop.Stop();
         }
 
-        renderSystem.Render(world, camera);
-        uiRenderSystem.Render(world);
+        renderPipeline.Render(world, camera);
     });
 
 windowService.Close();

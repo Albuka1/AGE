@@ -4,16 +4,18 @@ using Age.UI;
 namespace Age.Rendering;
 
 /// <summary>
-/// Draws the visible UI elements of a world in one sorted pass, on top of the world.
+/// Draws the visible UI elements of a world in one sorted pass, on top of the world. This type is not an
+/// <see cref="ISystem"/>; a <see cref="RenderPipeline"/> runs it as a pass, after the pass of the world.
 /// </summary>
 /// <remarks>
 /// Elements come from every entity that has a <see cref="RectTransformComponent"/> together with a
 /// <see cref="ButtonComponent"/> or a <see cref="TextLabelComponent"/>. They are sorted by <see cref="RectTransformComponent.ZOrder"/>
 /// with a stable sort, so elements that share a ZOrder keep their entity order. When an element carries both components,
-/// its rectangle is drawn first and its label on top of it. Call this after the world was rendered: the system installs a
-/// screen-space camera, so the UI does not move with the world camera.
+/// its rectangle is drawn first and its label on top of it. Add this pass after the pass of the world, because the
+/// system installs a screen-space camera of its own and ignores the camera it is handed: the UI does not move with the
+/// world camera.
 /// </remarks>
-public sealed class UIRenderSystem
+public sealed class UIRenderSystem : IRenderPass
 {
     private readonly IRenderer _renderer;
     private readonly SpriteSorter _sorter;
@@ -28,8 +30,8 @@ public sealed class UIRenderSystem
         _sorter = sorter;
     }
 
-    /// <summary>Renders every visible UI element in ascending ZOrder.</summary>
-    public void Render(World world)
+    /// <inheritdoc />
+    public void Render(World world, in Camera2D camera)
     {
         ArgumentNullException.ThrowIfNull(world);
 

@@ -3,9 +3,11 @@ using Age.Core;
 namespace Age.Rendering;
 
 /// <summary>
-/// Draws every entity that has both a transform and a sprite. This type is not an <see cref="ISystem"/>.
+/// Draws every entity that has both a transform and a sprite, in ascending <see cref="SpriteComponent.ZOrder"/>, and
+/// skips the sprites of a zero size. This type is not an <see cref="ISystem"/>; a <see cref="RenderPipeline"/> runs it
+/// as the pass of the world.
 /// </summary>
-public sealed class RenderSystem
+public sealed class RenderSystem : IRenderPass
 {
     private readonly IRenderer _renderer;
     private readonly SpriteSorter _sorter;
@@ -20,8 +22,8 @@ public sealed class RenderSystem
         _sorter = sorter;
     }
 
-    /// <summary>Renders every sprite with a non-zero size in ascending ZOrder.</summary>
-    public void Render(World world, Camera2D camera)
+    /// <inheritdoc />
+    public void Render(World world, in Camera2D camera)
     {
         ArgumentNullException.ThrowIfNull(world);
 

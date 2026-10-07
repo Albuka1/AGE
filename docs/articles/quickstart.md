@@ -186,15 +186,21 @@ A `SplashScreen` without either setting shows the built-in logo of the engine, a
 SystemPipeline pipeline = provider.GetRequiredService<SystemPipeline>();
 pipeline.Add(provider.GetRequiredService<CollisionSystem>());
 
-RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
+RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
+renderPipeline.Add(provider.GetRequiredService<RenderSystem>());
+renderPipeline.Add(provider.GetRequiredService<UIRenderSystem>());
+
 var camera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = new Vector2(1280, 720) };
 
 provider.GetRequiredService<IGameLoop>().Run(
     update: step => world.Update(step, pipeline),
-    render: time => renderSystem.Render(world, camera));
+    render: time => renderPipeline.Render(world, camera));
 ```
 
 `World` is never registered in the container; the caller owns its lifetime.
+
+The render pipeline runs its passes in the order they were added, so the UI lands on top of the world. Add a pass of
+your own after those two, for post-processing or an overlay, and it draws last.
 
 The loop accumulates the time each frame took in its `FixedTimestep` and calls the update callback a whole number of
 times with one sixtieth of a second, so the simulation advances by the same amount at any frame rate, and the render

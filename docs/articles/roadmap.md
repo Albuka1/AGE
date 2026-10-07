@@ -10,7 +10,6 @@ the second covers the limits of the current design, and the last is platform wor
 
 ## Stability and scale
 
-- Render passes ordered by the loop instead of by hand.
 - Incremental spatial hash in `CollisionSystem`.
 
 ## Limits of the current design
