@@ -41,14 +41,14 @@ public sealed class SilkGameLoop : IGameLoop
 
         while (!_stopRequested && !window.IsClosing)
         {
+            OpenInputFrame();
+
             window.DoEvents();
 
             if (_stopRequested || window.IsClosing)
             {
                 break;
             }
-
-            OpenInputFrame();
 
             double elapsed = clock.Elapsed.TotalSeconds;
             tick(new GameTime(elapsed - previous, elapsed));
@@ -58,7 +58,7 @@ public sealed class SilkGameLoop : IGameLoop
         }
     }
 
-    /// <summary>Opens the input frame of every registered input service, so the systems see the state of this frame.</summary>
+    /// <summary>Opens the input frame of every registered input service, so the systems see the state of this frame, including the events that the window pump delivers into it.</summary>
     private void OpenInputFrame()
     {
         foreach (IInputService input in _inputServices)
