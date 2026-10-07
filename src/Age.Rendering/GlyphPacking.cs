@@ -84,18 +84,20 @@ internal static class GlyphPacking
     }
 
     /// <summary>Returns the size of the cell of a box: its larger side rounded up, with the padding of both sides.</summary>
-    /// <remarks>A box whose larger side is zero or negative is an empty glyph: it gets a cell for the padding alone, which the rasterizer then skips.</remarks>
-    /// <exception cref="ArgumentOutOfRangeException">The larger side of the box is not a finite, non-negative size, or its cell would be larger than <see cref="MaximumDimension"/>.</exception>
+    /// <remarks>
+    /// A box with a zero side is an empty glyph, such as a space: it gets a cell for the padding alone, which the
+    /// rasterizer then skips. A negative side is not a size at all, because the box of a glyph comes out of the font
+    /// normalized, so it is rejected instead of silently becoming an empty glyph.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">A side of the box is not a finite, non-negative size, or its cell would be larger than <see cref="MaximumDimension"/>.</exception>
     private static int CellSize(Vector2 size)
     {
-        float largest = MathF.Max(size.X, size.Y);
-
-        if (!float.IsFinite(largest) || largest < 0f)
+        if (!float.IsFinite(size.X) || !float.IsFinite(size.Y) || size.X < 0f || size.Y < 0f)
         {
             throw new ArgumentOutOfRangeException(nameof(size), size, "A glyph box has to be a finite, non-negative size.");
         }
 
-        int cell = (int)MathF.Ceiling(largest) + (2 * Padding);
+        int cell = (int)MathF.Ceiling(MathF.Max(size.X, size.Y)) + (2 * Padding);
         if (cell > MaximumDimension)
         {
             throw new ArgumentOutOfRangeException(nameof(size), size, $"A glyph box may not need a cell of more than {MaximumDimension} pixels.");

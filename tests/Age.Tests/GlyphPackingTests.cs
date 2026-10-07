@@ -109,6 +109,15 @@ public sealed class GlyphPackingTests
     }
 
     [Fact]
+    public void GlyphPacking_BoxWithSidesOfDifferentSigns_Throws()
+    {
+        var placements = new (int X, int Y)[1];
+
+        FluentActions.Invoking(() => GlyphPacking.Place([new Vector2(-4f, 10f)], placements, out _, out _))
+            .Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public void GlyphPacking_TooFewPlacements_Throws() =>
         FluentActions.Invoking(() => GlyphPacking.Place([new Vector2(4f, 4f), new Vector2(4f, 4f)], new (int X, int Y)[1], out _, out _))
             .Should().Throw<ArgumentException>();
