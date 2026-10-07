@@ -5,18 +5,17 @@ collision detection, retained UI, sandboxed asset loading with image and sound d
 that are loaded and cached by path, sounds that play through OpenAL, scenes that are saved and
 loaded as JSON, the versioned resource pool, a window-backed input service, a simulation that
 advances by a fixed step, entity slots that are reused in a new generation, render passes that a
-pipeline orders, and a spatial hash that follows the boxes that moved.
+pipeline orders, a spatial hash that follows the boxes that moved, a camera that culls what it cannot
+see, a renderer that turns a sprite by the rotation of its transform and releases its device objects,
+and an asset loader that reads a generated contract where a build is trimmed.
 
-What remains is what the current design cannot do, and then the platform work.
+What remains are the content features the engine does not have yet, and then the platform work.
 
-## Limits of the current design
+## Features
 
-- Camera culling.
 - StbTrueTypeSharp, so text is not limited to the built-in 8x8 font.
 - User-defined shaders and materials.
 - OBB collision and multiple contacts.
-- Sprite rotation, so `TransformComponent.Rotation` is not ignored.
-- Asset cache and AOT friendly JSON.
 
 ## Platform
 
