@@ -19,7 +19,7 @@ AGE is organized as a set of focused assemblies:
 
 | Project | Responsibility |
 | ------- | -------------- |
-| `Age.Core` | Entities, components, systems, math primitives, game loop |
+| `Age.Core` | Entities, components, scene serialization, systems, math primitives, game loop |
 | `Age.Assets` | Sandboxed path-based asset access and loading |
 | `Age.Input` | Keyboard and mouse abstraction |
 | `Age.Audio` | Sound resources, WAVE, MP3 and Ogg Vorbis decoding, and playback through OpenAL |
@@ -62,12 +62,9 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 ## Roadmap
 
 The following work is planned but not part of the current foundation. The order is what a real
-game needs first: the entries at the top block building one, the rest make the engine hold up
-under load and cover the limits of the current design.
+game needs first: the entries at the top keep a project stable as it grows, and the rest cover the
+limits of the current design.
 
-- `OpenALAudioService`, with a sound resource to play; textures already follow the resource pattern
-  it will reuse.
-- Scene serialization (JSON).
 - Fixed timestep in the game loop.
 - Entity id pool and generations for stale handles.
 - Render passes ordered by the loop instead of by hand.

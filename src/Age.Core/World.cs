@@ -85,6 +85,20 @@ public sealed class World
         }
     }
 
+    /// <summary>Returns every entity that is alive, ordered by ascending <see cref="Entity.Id"/>.</summary>
+    /// <returns>An <see cref="IEnumerable{Entity}"/> over the entities. The sequence is produced lazily, so do not change the world while enumerating it.</returns>
+    /// <remarks>Identifiers are handed out in ascending order and never reused, so the sequence is the order in which the entities were created.</remarks>
+    public IEnumerable<Entity> Enumerate()
+    {
+        for (int id = 0; id < _nextId; id++)
+        {
+            if (_alive[id])
+            {
+                yield return new Entity(id);
+            }
+        }
+    }
+
     /// <summary>Returns the entities that currently have a component of type <typeparamref name="T"/>.</summary>
     /// <typeparam name="T">The component type to filter on.</typeparam>
     /// <returns>An <see cref="IEnumerable{Entity}"/> over the matching entities, ordered by ascending <see cref="Entity.Id"/>. The sequence is produced lazily, so do not change the world while enumerating it.</returns>

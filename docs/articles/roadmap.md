@@ -2,16 +2,11 @@
 
 The foundation covers the entity-component core, the game loops, the OpenGL 3.3 renderer,
 collision detection, retained UI, sandboxed asset loading with image and sound decoding, textures
-that are loaded and cached by path, sounds that play through OpenAL, the versioned resource pool,
-and a window-backed input service.
+that are loaded and cached by path, sounds that play through OpenAL, scenes that are saved and
+loaded as JSON, the versioned resource pool, and a window-backed input service.
 
-The order below is what a real game needs first: the first group blocks building one, the second
-keeps a project stable as it grows, the third covers the limits of the current design, and the
-last is platform work.
-
-## Blocks building a game
-
-- Scene serialization (JSON), so a world can be saved, loaded and edited.
+The order below is what a real game needs first: the first group keeps a project stable as it grows,
+the second covers the limits of the current design, and the last is platform work.
 
 ## Stability and scale
 

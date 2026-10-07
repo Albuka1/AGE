@@ -66,6 +66,16 @@ IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
 
+ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
+
+if (File.Exists(scenePath))
+{
+    world = LoadScene(scenes, scenePath);
+    first = MoveTarget(world, tiles);
+    Console.WriteLine($"Loaded the scene from {scenePath}.");
+}
+
 const float MoveSpeed = 240f;
 
 gameLoop.Run(time =>
@@ -82,6 +92,19 @@ gameLoop.Run(time =>
         sounds.Play(click);
     }
 
+    if (input.IsKeyPressed(Key.F))
+    {
+        File.WriteAllText(scenePath, scenes.Save(world));
+        Console.WriteLine($"Saved the scene to {scenePath}.");
+    }
+
+    if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
+    {
+        world = LoadScene(scenes, scenePath);
+        first = MoveTarget(world, tiles);
+        Console.WriteLine("Loaded the scene again.");
+    }
+
     if (input.IsKeyPressed(Key.Escape))
     {
         gameLoop.Stop();
@@ -96,6 +119,11 @@ windowService.Close();
 
 static void MoveFirstSprite(World world, Entity entity, IInputService input, GameTime time)
 {
+    if (!world.IsAlive(entity) || !world.Has<TransformComponent>(entity))
+    {
+        return;
+    }
+
     float step = (float)(time.Delta * MoveSpeed);
     Vector2 offset = Vector2.Zero;
 
@@ -124,4 +152,30 @@ static void MoveFirstSprite(World world, Entity entity, IInputService input, Gam
         ref TransformComponent transform = ref world.GetRef<TransformComponent>(entity);
         transform.Position += offset;
     }
+}
+
+// Loading replaces the scene: a fresh world keeps the file and the screen in step, instead of piling the entities of
+// the file on top of the ones that are already there.
+static World LoadScene(ISceneSerializer scenes, string path)
+{
+    var loaded = new World();
+    scenes.Load(loaded, File.ReadAllText(path));
+    return loaded;
+}
+
+// The entity that the keyboard moves: the first sprite of the world, which is the one the demo creates first and the
+// one a loaded scene brings back. A texture handle does not survive a save, so the sprite is pointed at the texture
+// that this run loaded; a scene without a sprite leaves nothing to point.
+static Entity MoveTarget(World world, TextureHandle texture)
+{
+    Entity entity = world.Enumerate<SpriteComponent>().FirstOrDefault();
+
+    if (!world.IsAlive(entity) || !world.Has<SpriteComponent>(entity))
+    {
+        return entity;
+    }
+
+    ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
+    sprite.Texture = texture;
+    return entity;
 }
