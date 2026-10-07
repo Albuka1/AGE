@@ -234,15 +234,14 @@ public sealed class WavSoundLoader : ISoundLoader
     /// <summary>Converts float samples, which run from minus one to one, to signed 16-bit ones.</summary>
     private static short[] ConvertFloat(ReadOnlySpan<byte> data)
     {
-        var samples = new short[data.Length / 4];
+        var floats = new float[data.Length / 4];
 
-        for (int index = 0; index < samples.Length; index++)
+        for (int index = 0; index < floats.Length; index++)
         {
-            float value = BinaryPrimitives.ReadSingleLittleEndian(data[(index * 4)..]);
-            samples[index] = (short)Math.Clamp(value * short.MaxValue, short.MinValue, short.MaxValue);
+            floats[index] = BinaryPrimitives.ReadSingleLittleEndian(data[(index * 4)..]);
         }
 
-        return samples;
+        return SoundSamples.FromFloat(floats);
     }
 
     /// <summary>Reads the whole file, because a sound is small and the chunks refer to each other by offset.</summary>

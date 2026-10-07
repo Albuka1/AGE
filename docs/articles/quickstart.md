@@ -97,8 +97,10 @@ sounds.Play(click, volume: 0.8f);
 ```
 
 `ISoundService` decodes the file through `ISoundLoader`, uploads it to the audio device and caches
-it by path, so loading the same sound twice returns the same one. Playing a handle the game does
-not own, or one it unloaded, plays nothing, and looping playback stops with `StopAll`.
+it by path, so loading the same sound twice returns the same one. The loader reads the header of the
+file, so WAVE, MP3 and Ogg Vorbis all work and the file name does not have to say which one it is.
+Playing a handle the game does not own, or one it unloaded, plays nothing, and looping playback
+stops with `StopAll`.
 
 The default device discards every sound, which is what a headless run wants. Register the OpenAL
 device after `AddAgeAudio` to hear them:
