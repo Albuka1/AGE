@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `SilkInputService` and `AddAgeSilkInput`, so a game reads keyboard and mouse from the window; `IInputService` gained `BeginFrame`.
 - `IAssetLoader.Load<T>` for UTF-8 text, raw bytes and JSON assets.
 - `ResourceHandle` and `ResourcePool<T>`, the shared versioned store behind engine resources.
 - `IImageLoader` for decoding PNG, JPEG, BMP, TGA and GIF images into RGBA pixels.

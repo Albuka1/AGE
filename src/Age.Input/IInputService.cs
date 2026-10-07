@@ -9,14 +9,17 @@ namespace Age.Input;
 /// The service describes one frame. The "down" queries report what is held right now, while the "pressed" queries report
 /// a transition that happened since the previous frame, so a key that stays held is pressed once. The pointer position is
 /// in screen pixels with the origin at the top-left corner of the window.
-/// <para>
-/// One implementation deliberately deviates: <see cref="NullInputService"/> simulates a single held flag, so its left
-/// button reports <see cref="IsMouseButtonPressed"/> on every frame that flag is set instead of only on the transition.
-/// Implementations that drive a real game are expected to follow the transition rule above.
-/// </para>
 /// </remarks>
 public interface IInputService
 {
+    /// <summary>Starts a new input frame. Call it once per frame, before the systems run.</summary>
+    /// <remarks>
+    /// The pressed queries answer for the frame this call opens, so the implementation forgets the transitions that were
+    /// recorded while the previous frame was open. A key that goes down and up inside one frame is therefore still
+    /// reported as pressed for that frame.
+    /// </remarks>
+    void BeginFrame();
+
     /// <summary>Determines whether the key is currently held down.</summary>
     /// <param name="key">The key to inspect.</param>
     /// <returns><see langword="true"/> while the key is held, including the frame it was pressed on.</returns>

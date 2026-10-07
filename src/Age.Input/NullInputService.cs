@@ -9,15 +9,25 @@ namespace Age.Input;
 /// <remarks>
 /// Keyboard queries always return <see langword="false"/>. <see cref="MousePosition"/> comes from <see cref="State"/>, and
 /// the left mouse button reports <see cref="UIInputState.MouseDown"/> for both
-/// <see cref="IInputService.IsMouseButtonDown"/> and <see cref="IInputService.IsMouseButtonPressed"/>; the service reads
-/// the held state and never detects press transitions separately, so a press is reported on every frame the flag is set.
-/// The right and middle buttons always report <see langword="false"/>. Set <see cref="State"/> before an update that
-/// should see a press and clear the flag before an update that should not.
+/// <see cref="IInputService.IsMouseButtonDown"/> and <see cref="IInputService.IsMouseButtonPressed"/>, with the press
+/// reported only on the frame that follows one where the flag was still clear. The right and middle buttons always report
+/// <see langword="false"/>, because <see cref="UIInputState"/> describes a single button. Set <see cref="State"/> before
+/// the update that should see a press.
 /// </remarks>
 public sealed class NullInputService : IInputService
 {
+    private bool _mouseDownLastFrame;
+    private bool _mouseDownThisFrame;
+
     /// <summary>Gets or sets the simulated pointer state. The default reports the pointer at the origin with no button held.</summary>
     public UIInputState State { get; set; }
+
+    /// <inheritdoc />
+    public void BeginFrame()
+    {
+        _mouseDownLastFrame = _mouseDownThisFrame;
+        _mouseDownThisFrame = State.MouseDown;
+    }
 
     /// <inheritdoc />
     public Vector2 MousePosition => State.MousePosition;
@@ -32,5 +42,6 @@ public sealed class NullInputService : IInputService
     public bool IsMouseButtonDown(MouseButton button) => button == MouseButton.Left && State.MouseDown;
 
     /// <inheritdoc />
-    public bool IsMouseButtonPressed(MouseButton button) => button == MouseButton.Left && State.MouseDown;
+    /// <remarks>The press is reported on the first frame in which <see cref="State"/> holds the button, so the double follows the same transition rule as a service that reads a device.</remarks>
+    public bool IsMouseButtonPressed(MouseButton button) => button == MouseButton.Left && _mouseDownThisFrame && !_mouseDownLastFrame;
 }

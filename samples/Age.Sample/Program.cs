@@ -15,6 +15,7 @@ services.AddAgeAudio();
 services.AddAgePhysics();
 services.AddAgeUI();
 services.AddAgeRendering();
+services.AddAgeSilkInput();
 
 using ServiceProvider provider = services.BuildServiceProvider();
 
@@ -51,13 +52,55 @@ world.Set(panel, new TextLabelComponent { Text = "Hello AGE", Color = Color.Whit
 
 RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
 UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
+IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
+
+const float MoveSpeed = 240f;
 
 gameLoop.Run(time =>
 {
+    MoveFirstSprite(world, first, input, time);
+
+    if (input.IsKeyPressed(Key.Escape))
+    {
+        gameLoop.Stop();
+    }
+
     world.Update(time, pipeline);
     renderSystem.Render(world, camera);
     uiRenderSystem.Render(world);
 });
 
 windowService.Close();
+
+static void MoveFirstSprite(World world, Entity entity, IInputService input, GameTime time)
+{
+    float step = (float)(time.Delta * MoveSpeed);
+    Vector2 offset = Vector2.Zero;
+
+    if (input.IsKeyDown(Key.W))
+    {
+        offset.Y -= step;
+    }
+
+    if (input.IsKeyDown(Key.S))
+    {
+        offset.Y += step;
+    }
+
+    if (input.IsKeyDown(Key.A))
+    {
+        offset.X -= step;
+    }
+
+    if (input.IsKeyDown(Key.D))
+    {
+        offset.X += step;
+    }
+
+    if (offset != Vector2.Zero)
+    {
+        ref TransformComponent transform = ref world.GetRef<TransformComponent>(entity);
+        transform.Position += offset;
+    }
+}
