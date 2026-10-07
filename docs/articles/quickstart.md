@@ -78,6 +78,10 @@ services:
 services.AddSingleton<IComponentRegistrations, GameComponentRegistrations>();
 ```
 
+A component that refers to a device resource, such as the texture of a `SpriteComponent`, is written
+as the identifier it carried, and that identifier does not survive a reload: load the texture again
+and set it on the component after the scene was loaded.
+
 ## Load an asset
 
 ```csharp

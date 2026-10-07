@@ -72,7 +72,7 @@ string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
 if (File.Exists(scenePath))
 {
     world = LoadScene(scenes, scenePath);
-    first = MoveTarget(world);
+    first = MoveTarget(world, tiles);
     Console.WriteLine($"Loaded the scene from {scenePath}.");
 }
 
@@ -101,7 +101,7 @@ gameLoop.Run(time =>
     if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
     {
         world = LoadScene(scenes, scenePath);
-        first = MoveTarget(world);
+        first = MoveTarget(world, tiles);
         Console.WriteLine("Loaded the scene again.");
     }
 
@@ -164,5 +164,18 @@ static World LoadScene(ISceneSerializer scenes, string path)
 }
 
 // The entity that the keyboard moves: the first sprite of the world, which is the one the demo creates first and the
-// one a loaded scene brings back.
-static Entity MoveTarget(World world) => world.Enumerate<SpriteComponent>().FirstOrDefault();
+// one a loaded scene brings back. A texture handle does not survive a save, so the sprite is pointed at the texture
+// that this run loaded; a scene without a sprite leaves nothing to point.
+static Entity MoveTarget(World world, TextureHandle texture)
+{
+    Entity entity = world.Enumerate<SpriteComponent>().FirstOrDefault();
+
+    if (!world.IsAlive(entity) || !world.Has<SpriteComponent>(entity))
+    {
+        return entity;
+    }
+
+    ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
+    sprite.Texture = texture;
+    return entity;
+}
