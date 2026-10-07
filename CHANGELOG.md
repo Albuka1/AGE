@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IRenderPass` and `RenderPipeline`, so the passes of a frame, the world and the UI, are an ordered list that a game
+  fills once, instead of two calls that had to be kept in order by hand; `RenderSystem` and `UIRenderSystem` are passes.
+- `FixedTimestep` and `IGameLoop.Run(update, render)`, so a simulation advances by a fixed step whatever the frame rate
+  is while the frame is drawn once, with a limit on the time that a single frame may contribute and `Alpha` left over
+  for interpolation.
 - Scene serialization: `ISceneSerializer` and the `ComponentRegistry` that every assembly fills with its own
   components, so a world is saved, loaded and edited as JSON.
 - `ISoundService` and `SoundHandle`, so a game loads a sound once and plays it from anywhere; `IAudioService` gained
@@ -22,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `IAssetLoader.Load<T>` for UTF-8 text, raw bytes and JSON assets.
 - `ResourceHandle` and `ResourcePool<T>`, the shared versioned store behind engine resources.
 - `IImageLoader` for decoding PNG, JPEG, BMP, TGA and GIF images into RGBA pixels.
+
+### Changed
+
+- `World` hands the slot of a destroyed entity out again in a new generation and `Entity` carries that generation, so
+  the storage no longer grows with every entity a long session ever had, and an identifier that outlived its entity is
+  no longer alive even when the slot was taken by another entity afterwards.
+
+- `CollisionSystem` keeps its spatial hash between frames instead of rebuilding it: a box that did not move stays in
+  its cells, a moved one changes them, the entries of destroyed entities are dropped, and a cell that ends up empty is
+  removed. `CellCount` reports how many cells are left.
 
 ## [0.1.0] - 2026-10-06
 

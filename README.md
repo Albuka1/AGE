@@ -29,7 +29,7 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 ## Highlights
 
 - **ECS core.** `World` owns entity ids and struct components. `SystemPipeline`
-  runs an ordered list of `ISystem` instances once per frame.
+  runs an ordered list of `ISystem` instances once per update step.
 - **Renderer that stays out of the way.** Silk.NET window + OpenGL 3.3 core,
   a minimal sprite batch, and a retained UI pass — all behind `IRenderer`.
 - **Sandboxed assets.** `IAssetLoader` resolves every path inside the game root
@@ -52,8 +52,8 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 | `Age.Core` | Entities, components, scene serialization, systems, math, game loop |
 | `Age.Assets` | Sandboxed path-based asset access and loading |
 | `Age.Input` | Keyboard and mouse abstraction |
-| `Age.Audio` | Sound resources, WAVE / MP3 / Ogg Vorbis decoding, OpenAL playback |
-| `Age.Physics` | Axis-aligned collision detection with a spatial hash |
+| `Age.Audio` | Sound resources, WAVE, MP3 and Ogg Vorbis decoding, and playback through OpenAL |
+| `Age.Physics` | Axis-aligned collision detection with an incremental spatial hash |
 | `Age.UI` | Retained UI components and pointer interaction |
 | `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, icon, splash |
 | `Age.Sample` | Console sample that wires everything together |
@@ -73,3 +73,43 @@ cd Age
 dotnet build Age.slnx -c Release
 dotnet test tests/Age.Tests/Age.Tests.csproj -c Release
 dotnet run --project samples/Age.Sample/Age.Sample.csproj
+```
+
+See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour, or the
+[published documentation](https://albuka1.github.io/AGE/) for the API reference.
+
+## Architecture
+
+- A `World` owns entity identifiers and component storage. Components are
+  structs that implement `IComponent`; storage is a
+  `Dictionary<Type, Array>` keyed by component type.
+- `SystemPipeline` runs an ordered list of `ISystem` instances once per update
+  step, in insertion order. A step is one `GameTime.Delta`, so a pipeline that the
+  loop drives with a fixed step runs that many times per frame.
+- Services are resolved from dependency injection. `World` is deliberately not
+  registered there because its lifetime belongs to the caller.
+- The renderer is the only component that touches OpenGL. It is never
+  instantiated by the test suite.
+
+## Roadmap
+
+The following work is planned but not part of the current foundation: the limits of the current
+design first, then the platform work.
+
+- Camera culling.
+- StbTrueTypeSharp.
+- User-defined shaders and materials.
+- OBB collision and multiple contacts.
+- Sprite rotation, so `TransformComponent.Rotation` is not ignored.
+- Asset cache and AOT friendly JSON.
+- AOT.
+- AssemblyLoadContext isolation for plugins.
+
+## Contributing
+
+Changes are made through pull requests against `main`. See
+[CONTRIBUTING](CODE_OF_CONDUCT.md) and the pull request template for details.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

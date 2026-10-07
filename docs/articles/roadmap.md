@@ -3,17 +3,11 @@
 The foundation covers the entity-component core, the game loops, the OpenGL 3.3 renderer,
 collision detection, retained UI, sandboxed asset loading with image and sound decoding, textures
 that are loaded and cached by path, sounds that play through OpenAL, scenes that are saved and
-loaded as JSON, the versioned resource pool, and a window-backed input service.
+loaded as JSON, the versioned resource pool, a window-backed input service, a simulation that
+advances by a fixed step, entity slots that are reused in a new generation, render passes that a
+pipeline orders, and a spatial hash that follows the boxes that moved.
 
-The order below is what a real game needs first: the first group keeps a project stable as it grows,
-the second covers the limits of the current design, and the last is platform work.
-
-## Stability and scale
-
-- Fixed timestep in `IGameLoop`, so simulation stops depending on the frame rate.
-- Entity id pool with a generation, so long sessions do not grow and stale handles stay detectable.
-- Render passes ordered by the loop instead of by hand.
-- Incremental spatial hash in `CollisionSystem`.
+What remains is what the current design cannot do, and then the platform work.
 
 ## Limits of the current design
 

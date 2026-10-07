@@ -62,6 +62,9 @@ world.Set(panel, new TextLabelComponent { Text = "Hello AGE", Color = Color.Whit
 
 RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
 UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
+RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
+renderPipeline.Add(renderSystem);
+renderPipeline.Add(uiRenderSystem);
 IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
@@ -78,42 +81,56 @@ if (File.Exists(scenePath))
 
 const float MoveSpeed = 240f;
 
-gameLoop.Run(time =>
-{
-    if (splash.Draw(renderer, time, input))
+// The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
+// frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
+// stays paused until the splash is over, so nothing moves behind the logo.
+bool started = false;
+
+gameLoop.Run(
+    update: step =>
     {
-        return;
-    }
+        if (!started)
+        {
+            return;
+        }
 
-    MoveFirstSprite(world, first, input, time);
-
-    if (input.IsKeyPressed(Key.Space))
+        MoveFirstSprite(world, first, input, step);
+        world.Update(step, pipeline);
+    },
+    render: time =>
     {
-        sounds.Play(click);
-    }
+        if (splash.Draw(renderer, time, input))
+        {
+            return;
+        }
 
-    if (input.IsKeyPressed(Key.F))
-    {
-        File.WriteAllText(scenePath, scenes.Save(world));
-        Console.WriteLine($"Saved the scene to {scenePath}.");
-    }
+        started = true;
 
-    if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
-    {
-        world = LoadScene(scenes, scenePath);
-        first = MoveTarget(world, tiles);
-        Console.WriteLine("Loaded the scene again.");
-    }
+        if (input.IsKeyPressed(Key.Space))
+        {
+            sounds.Play(click);
+        }
 
-    if (input.IsKeyPressed(Key.Escape))
-    {
-        gameLoop.Stop();
-    }
+        if (input.IsKeyPressed(Key.F))
+        {
+            File.WriteAllText(scenePath, scenes.Save(world));
+            Console.WriteLine($"Saved the scene to {scenePath}.");
+        }
 
-    world.Update(time, pipeline);
-    renderSystem.Render(world, camera);
-    uiRenderSystem.Render(world);
-});
+        if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
+        {
+            world = LoadScene(scenes, scenePath);
+            first = MoveTarget(world, tiles);
+            Console.WriteLine("Loaded the scene again.");
+        }
+
+        if (input.IsKeyPressed(Key.Escape))
+        {
+            gameLoop.Stop();
+        }
+
+        renderPipeline.Render(world, camera);
+    });
 
 windowService.Close();
 

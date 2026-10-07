@@ -48,6 +48,10 @@ world.Set(sprite, new TransformComponent { Position = new Vector2(400, 300), Sca
 world.Set(sprite, new SpriteComponent { Size = new Vector2(64, 64), Color = Color.Red, ZOrder = 0 });
 ```
 
+The identifier of a destroyed entity is handed out again by the next `CreateEntity`, in a new generation, so
+`IsAlive` tells an identifier that outlived its entity from a live one. `Entity` compares by slot and generation, which
+makes it safe to keep in a component.
+
 ## Save and load a scene
 
 ```csharp
@@ -149,16 +153,17 @@ services.AddAgeOpenALAudio();    // the device that plays, where the machine has
 ```csharp
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
 
-gameLoop.Run(time =>
-{
-    if (splash.Draw(renderer, time))
+gameLoop.Run(
+    update: step => world.Update(step, pipeline),
+    render: time =>
     {
-        return;
-    }
+        if (splash.Draw(renderer, time))
+        {
+            return;
+        }
 
-    world.Update(time, pipeline);
-    renderSystem.Render(world, camera);
-});
+        renderSystem.Render(world, camera);
+    });
 ```
 
 `Draw` keeps the frame for 2.5 seconds and returns `false` once it is over, so the game draws
@@ -181,14 +186,25 @@ A `SplashScreen` without either setting shows the built-in logo of the engine, a
 SystemPipeline pipeline = provider.GetRequiredService<SystemPipeline>();
 pipeline.Add(provider.GetRequiredService<CollisionSystem>());
 
-RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
+RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
+renderPipeline.Add(provider.GetRequiredService<RenderSystem>());
+renderPipeline.Add(provider.GetRequiredService<UIRenderSystem>());
+
 var camera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = new Vector2(1280, 720) };
 
-provider.GetRequiredService<IGameLoop>().Run(time =>
-{
-    world.Update(time, pipeline);
-    renderSystem.Render(world, camera);
-});
+provider.GetRequiredService<IGameLoop>().Run(
+    update: step => world.Update(step, pipeline),
+    render: time => renderPipeline.Render(world, camera));
 ```
 
 `World` is never registered in the container; the caller owns its lifetime.
+
+The render pipeline runs its passes in the order they were added, so the UI lands on top of the world. Add a pass of
+your own after those two, for post-processing or an overlay, and it draws last.
+
+The loop accumulates the time each frame took in its `FixedTimestep` and calls the update callback a whole number of
+times with one sixtieth of a second, so the simulation advances by the same amount at any frame rate, and the render
+callback runs once per frame after those steps. A frame that took longer than a quarter of a second counts as if it
+took that long, so a breakpoint or a window drag does not produce a burst of steps. Register a `FixedTimestep` of your
+own before the loop is resolved to change the step, and read `FixedTimestep.Alpha` to draw a position between two steps.
+Call `Run(tick)` instead to receive the time of every frame directly.

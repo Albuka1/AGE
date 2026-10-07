@@ -5,20 +5,37 @@ namespace Age.Core;
 /// </summary>
 public sealed class World
 {
-    private readonly Dictionary<int, bool> _alive = new();
+    private readonly List<bool> _alive = new();
+    private readonly List<int> _generations = new();
+    private readonly List<int> _free = new();
     private readonly Dictionary<Type, IComponentStore> _stores = new();
-    private int _nextId;
 
-    /// <summary>Creates a new entity and returns its identifier. Identifiers are never reused.</summary>
+    /// <summary>Creates an entity and returns its identifier. The slot of a destroyed entity is handed out again in a new generation.</summary>
     public Entity CreateEntity()
     {
-        int id = _nextId;
-        _nextId++;
+        int id;
+        if (_free.Count > 0)
+        {
+            int last = _free.Count - 1;
+            id = _free[last];
+            _free.RemoveAt(last);
+        }
+        else
+        {
+            id = _generations.Count;
+            _generations.Add(1);
+            _alive.Add(false);
+        }
+
         _alive[id] = true;
-        return new Entity(id);
+        return new Entity(id, _generations[id]);
     }
 
-    /// <summary>Destroys an entity and removes every component attached to it.</summary>
+    /// <summary>Destroys an entity, removes every component attached to it and returns its slot to the pool.</summary>
+    /// <remarks>
+    /// The generation of the slot grows, so every identifier that named the entity before this call stops being alive,
+    /// and destroying an entity twice does nothing.
+    /// </remarks>
     public void DestroyEntity(Entity entity)
     {
         if (!IsAlive(entity))
@@ -27,6 +44,8 @@ public sealed class World
         }
 
         _alive[entity.Id] = false;
+        _generations[entity.Id]++;
+        _free.Add(entity.Id);
 
         foreach (IComponentStore store in _stores.Values)
         {
@@ -34,8 +53,10 @@ public sealed class World
         }
     }
 
-    /// <summary>Determines whether an entity has been created and not yet destroyed.</summary>
-    public bool IsAlive(Entity entity) => _alive.TryGetValue(entity.Id, out bool alive) && alive;
+    /// <summary>Determines whether an entity has been created and not yet destroyed, in the generation of its identifier.</summary>
+    /// <remarks>A default identifier is never alive, and neither is one of a destroyed entity, even when the slot was handed out again afterwards.</remarks>
+    public bool IsAlive(Entity entity) =>
+        entity.Id >= 0 && entity.Id < _alive.Count && _alive[entity.Id] && _generations[entity.Id] == entity.Generation;
 
     /// <summary>Returns the component of type <typeparamref name="T"/> attached to the entity.</summary>
     /// <typeparam name="T">The component type to read. Components are structs that implement <see cref="IComponent"/>.</typeparam>
@@ -77,9 +98,14 @@ public sealed class World
         IsAlive(entity) && _stores.TryGetValue(typeof(T), out IComponentStore? store) && store.Has(entity.Id);
 
     /// <summary>Removes the component of type <typeparamref name="T"/> from the entity if it is present.</summary>
+    /// <remarks>
+    /// Removing a component that the entity does not have does nothing. So does an identifier of a destroyed entity,
+    /// even when the slot it names was handed out again: its components went with the entity, and the ones now stored in
+    /// the slot belong to another entity.
+    /// </remarks>
     public void Remove<T>(Entity entity) where T : struct, IComponent
     {
-        if (_stores.TryGetValue(typeof(T), out IComponentStore? store))
+        if (IsAlive(entity) && _stores.TryGetValue(typeof(T), out IComponentStore? store))
         {
             store.Remove(entity.Id);
         }
@@ -87,14 +113,17 @@ public sealed class World
 
     /// <summary>Returns every entity that is alive, ordered by ascending <see cref="Entity.Id"/>.</summary>
     /// <returns>An <see cref="IEnumerable{Entity}"/> over the entities. The sequence is produced lazily, so do not change the world while enumerating it.</returns>
-    /// <remarks>Identifiers are handed out in ascending order and never reused, so the sequence is the order in which the entities were created.</remarks>
+    /// <remarks>
+    /// Identifiers are handed out in ascending order and reused, so the slots are visited in the order in which they
+    /// first appeared, not in the order in which the entities that hold them now were created.
+    /// </remarks>
     public IEnumerable<Entity> Enumerate()
     {
-        for (int id = 0; id < _nextId; id++)
+        for (int id = 0; id < _alive.Count; id++)
         {
             if (_alive[id])
             {
-                yield return new Entity(id);
+                yield return new Entity(id, _generations[id]);
             }
         }
     }
@@ -114,7 +143,7 @@ public sealed class World
         {
             if (store.IsPresent(id))
             {
-                yield return new Entity(id);
+                yield return new Entity(id, _generations[id]);
             }
         }
     }
@@ -130,7 +159,7 @@ public sealed class World
     {
         if (!IsAlive(entity))
         {
-            throw new InvalidOperationException($"Entity {entity.Id} is not alive.");
+            throw new InvalidOperationException($"{entity} is not alive.");
         }
     }
 
@@ -140,7 +169,7 @@ public sealed class World
 
         if (!store.Has(entity.Id))
         {
-            throw new InvalidOperationException($"Entity {entity.Id} does not have a component of type {typeof(T).Name}.");
+            throw new InvalidOperationException($"{entity} does not have a component of type {typeof(T).Name}.");
         }
     }
 
