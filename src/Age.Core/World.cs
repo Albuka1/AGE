@@ -3,6 +3,22 @@ namespace Age.Core;
 /// <summary>
 /// Owns entities and their components. A world is not registered in the dependency injection container.
 /// </summary>
+/// <remarks>
+/// <para>
+/// A world is not thread-safe. Its storage is not synchronized and nothing serializes two calls that arrive at the same
+/// time, so a world belongs to one thread: the one that runs the <see cref="IGameLoop"/> and calls the
+/// <see cref="SystemPipeline"/>, which runs its systems in order on that thread. Calls that change the world come from
+/// the update callback of the loop, and <see cref="Enumerate{T}"/> states the same rule for the sequence it hands out.
+/// </para>
+/// <para>
+/// A game that touches a world from more than one thread serializes the calls itself, with a lock or a queue. The
+/// generation checks of <see cref="IsAlive"/>, <see cref="GetRef{T}"/>, <see cref="Borrow{T}"/> and
+/// <see cref="ComponentRef{T}"/> are correctness in that sequential use: they keep an identifier or a borrow that
+/// outlived its entity from reaching the component of the entity that took the slot. They are not a concurrency
+/// guarantee, because validation and access are two steps, so a destruction on another thread that lands between them
+/// is a race that no check inside a single call can close.
+/// </para>
+/// </remarks>
 public sealed class World
 {
     private readonly List<bool> _alive = new();
@@ -11,6 +27,11 @@ public sealed class World
     private readonly Dictionary<Type, IComponentStore> _stores = new();
 
     /// <summary>Creates an entity and returns its identifier. The slot of a destroyed entity is handed out again in a new generation.</summary>
+    /// <remarks>
+    /// The components of the entity that used the slot before were removed with it, and the storage of the slot is
+    /// handed out here again: a reference that was obtained with <see cref="GetRef{T}"/> for the older entity and was
+    /// held across its destruction points at the storage of this entity now.
+    /// </remarks>
     public Entity CreateEntity()
     {
         int id;
@@ -34,7 +55,8 @@ public sealed class World
     /// <summary>Destroys an entity, removes every component attached to it and returns its slot to the pool.</summary>
     /// <remarks>
     /// The generation of the slot grows, so every identifier that named the entity before this call stops being alive,
-    /// and destroying an entity twice does nothing.
+    /// and destroying an entity twice does nothing. A reference that was obtained with <see cref="GetRef{T}"/> for one
+    /// of its components is invalidated, even though it keeps pointing into the storage of the slot.
     /// </remarks>
     public void DestroyEntity(Entity entity)
     {
@@ -76,8 +98,17 @@ public sealed class World
     /// <returns>A reference to the stored component.</returns>
     /// <exception cref="InvalidOperationException">The entity is not alive, or it has no component of type <typeparamref name="T"/>.</exception>
     /// <remarks>
-    /// The reference stays valid until a later <c>Set&lt;T&gt;</c> resizes the store of <typeparamref name="T"/>, which
-    /// invalidates every reference that was handed out before it. Obtain the reference again after such a call.
+    /// <para>
+    /// A reference points into the storage of the component type, so every structural change to the entity invalidates
+    /// it: a <c>Set&lt;T&gt;</c> that grows the storage, a <see cref="Remove{T}"/>, and <see cref="DestroyEntity"/>. Take the
+    /// reference immediately before the write and do not hold it across such a call.
+    /// </para>
+    /// <para>
+    /// Nothing validates the reference after this call, and <see cref="DestroyEntity"/> leaves the storage of the slot
+    /// behind for the next <see cref="CreateEntity"/> to use, so a reference that is held across the destruction of its
+    /// entity writes into the component of the entity that takes the slot afterwards. Take a <see cref="Borrow{T}"/>
+    /// instead where that can happen.
+    /// </para>
     /// </remarks>
     public ref T GetRef<T>(Entity entity) where T : struct, IComponent
     {
@@ -86,7 +117,25 @@ public sealed class World
         return ref store.GetRef(entity.Id);
     }
 
+    /// <summary>Returns a borrow of the component of type <typeparamref name="T"/> attached to the entity, which validates the entity on every access.</summary>
+    /// <typeparam name="T">The component type to borrow. Components are structs that implement <see cref="IComponent"/>.</typeparam>
+    /// <param name="entity">The entity that owns the component.</param>
+    /// <returns>A borrow of the stored component. The entity is checked here as well as on every read and write.</returns>
+    /// <exception cref="InvalidOperationException">The entity is not alive, or it has no component of type <typeparamref name="T"/>. Check with <see cref="Has{T}"/> first.</exception>
+    /// <remarks>
+    /// A borrow costs a generation check per access, which a raw reference from <see cref="GetRef{T}"/> does not have, so
+    /// take one where the entity can be destroyed between the borrow and the write. A borrow of an entity that was
+    /// destroyed in the meantime throws instead of reaching the component of the entity that holds the slot now. The
+    /// check is for a world that one thread touches at a time: see the threading model on <see cref="World"/>.
+    /// </remarks>
+    public ComponentRef<T> Borrow<T>(Entity entity) where T : struct, IComponent
+    {
+        EnsurePresent(entity, GetStore<T>());
+        return new ComponentRef<T>(this, entity);
+    }
+
     /// <summary>Attaches a component to the entity, replacing any existing value of the same type.</summary>
+    /// <remarks>A reference that was obtained with <see cref="GetRef{T}"/> is invalidated when the call grows the storage of the component type.</remarks>
     public void Set<T>(Entity entity, in T value) where T : struct, IComponent
     {
         EnsureAlive(entity);

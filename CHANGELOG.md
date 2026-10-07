@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `World.Borrow{T}` and `ComponentRef{T}`, a checked borrow of a component that validates the slot generation on every
+  read and write, so an identifier that outlived its entity cannot reach the component of the entity that took the slot.
 - `IRenderPass` and `RenderPipeline`, so the passes of a frame, the world and the UI, are an ordered list that a game
   fills once, instead of two calls that had to be kept in order by hand; `RenderSystem` and `UIRenderSystem` are passes.
 - `FixedTimestep` and `IGameLoop.Run(update, render)`, so a simulation advances by a fixed step whatever the frame rate
@@ -30,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `World` states its threading model: its storage is not synchronized and the world belongs to the thread that runs the
+  loop, so a game that touches one from more than one thread serializes the calls itself, and the generation checks of an
+  identifier or a borrow are correctness in sequential use rather than a concurrency guarantee. `SystemPipeline` says
+  that it runs its systems in order, on the thread that calls it.
+- `World.GetRef` documents the lifetime of the reference it hands out in one place: any structural change to the entity
+  invalidates it, the storage of its slot is handed out again, and a reference held across the destruction of its entity
+  therefore reaches the component of the next entity that takes the slot. `World.Borrow` is the checked alternative.
 - `World` hands the slot of a destroyed entity out again in a new generation and `Entity` carries that generation, so
   the storage no longer grows with every entity a long session ever had, and an identifier that outlived its entity is
   no longer alive even when the slot was taken by another entity afterwards.
