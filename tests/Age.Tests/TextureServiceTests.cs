@@ -208,7 +208,7 @@ public sealed class TextureServiceTests
         {
         }
 
-        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color)
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
         {
         }
 

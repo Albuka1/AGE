@@ -43,7 +43,7 @@ public sealed class RenderSystem : IRenderPass
                 continue;
             }
 
-            _renderer.DrawSprite(sprite.Texture, transform.Position, size, sprite.Color);
+            _renderer.DrawSprite(sprite.Texture, transform.Position, size, sprite.Color, transform.Rotation);
         }
 
         _renderer.EndFrame();

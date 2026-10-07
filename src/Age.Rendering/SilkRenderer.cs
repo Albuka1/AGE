@@ -58,6 +58,7 @@ public sealed class SilkRenderer : IRenderer
 
     private readonly float[] _vertexScratch = new float[FloatsPerVertex * VerticesPerQuad];
     private readonly float[] _matrixScratch = new float[16];
+    private readonly Vector2[] _cornerScratch = new Vector2[VerticesPerQuad];
 
     private IWindowService? _windowService;
     private GL? _gl;
@@ -123,15 +124,15 @@ public sealed class SilkRenderer : IRenderer
     }
 
     /// <inheritdoc />
-    public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color)
+    public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
     {
         if (texture.Id == 0)
         {
-            DrawQuad(position, size, color, default, 0u);
+            DrawQuad(position, size, color, default, 0u, rotation);
             return;
         }
 
-        DrawQuad(position, size, color, new Rect(Vector2.Zero, new Vector2(1f, 1f)), (uint)texture.Id);
+        DrawQuad(position, size, color, new Rect(Vector2.Zero, new Vector2(1f, 1f)), (uint)texture.Id, rotation);
     }
 
     /// <inheritdoc />
@@ -187,7 +188,7 @@ public sealed class SilkRenderer : IRenderer
     }
 
     /// <inheritdoc />
-    public void DrawRectangle(Rect rect, Color color) => DrawQuad(rect.Position, rect.Size, color, default, 0u);
+    public void DrawRectangle(Rect rect, Color color) => DrawQuad(rect.Position, rect.Size, color, default, 0u, 0f);
 
     /// <inheritdoc />
     public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color)
@@ -208,7 +209,8 @@ public sealed class SilkRenderer : IRenderer
                     new Vector2(BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight),
                     color,
                     uv,
-                    _fontTexture);
+                    _fontTexture,
+                    0f);
             }
 
             cursor += BitmapFontMetrics.GlyphWidth;
@@ -302,23 +304,21 @@ public sealed class SilkRenderer : IRenderer
         return shader;
     }
 
-    private void DrawQuad(Vector2 position, Vector2 size, Color color, Rect uv, uint texture)
+    private void DrawQuad(Vector2 position, Vector2 size, Color color, Rect uv, uint texture, float rotation)
     {
         GL gl = RequireContext();
 
-        float x0 = position.X;
-        float y0 = position.Y;
-        float x1 = position.X + size.X;
-        float y1 = position.Y + size.Y;
+        SpriteQuad.Corners(position, size, rotation, _cornerScratch);
+
         float r = color.R / 255f;
         float g = color.G / 255f;
         float b = color.B / 255f;
         float a = color.A / 255f;
 
-        WriteVertex(0, x0, y0, uv.X, uv.Y, r, g, b, a);
-        WriteVertex(1, x1, y0, uv.X + uv.Width, uv.Y, r, g, b, a);
-        WriteVertex(2, x0, y1, uv.X, uv.Y + uv.Height, r, g, b, a);
-        WriteVertex(3, x1, y1, uv.X + uv.Width, uv.Y + uv.Height, r, g, b, a);
+        WriteVertex(0, _cornerScratch[0].X, _cornerScratch[0].Y, uv.X, uv.Y, r, g, b, a);
+        WriteVertex(1, _cornerScratch[1].X, _cornerScratch[1].Y, uv.X + uv.Width, uv.Y, r, g, b, a);
+        WriteVertex(2, _cornerScratch[2].X, _cornerScratch[2].Y, uv.X, uv.Y + uv.Height, r, g, b, a);
+        WriteVertex(3, _cornerScratch[3].X, _cornerScratch[3].Y, uv.X + uv.Width, uv.Y + uv.Height, r, g, b, a);
 
         unsafe
         {

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sprite rotation: `IRenderer.DrawSprite` takes the angle of the quad around its centre and `RenderSystem` passes the
+  rotation of the transform, so `TransformComponent.Rotation` is drawn instead of ignored; `SpriteQuad` is the geometry
+  behind it and is tested without a device.
 - `World.Borrow{T}` and `ComponentRef{T}`, a checked borrow of a component that validates the slot generation on every
   read and write, so an identifier that outlived its entity cannot reach the component of the entity that took the slot.
 - `IRenderPass` and `RenderPipeline`, so the passes of a frame, the world and the UI, are an ordered list that a game
