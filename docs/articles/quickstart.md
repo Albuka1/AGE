@@ -48,6 +48,10 @@ world.Set(sprite, new TransformComponent { Position = new Vector2(400, 300), Sca
 world.Set(sprite, new SpriteComponent { Size = new Vector2(64, 64), Color = Color.Red, ZOrder = 0 });
 ```
 
+The identifier of a destroyed entity is handed out again by the next `CreateEntity`, in a new generation, so
+`IsAlive` tells an identifier that outlived its entity from a live one. `Entity` compares by slot and generation, which
+makes it safe to keep in a component.
+
 ## Save and load a scene
 
 ```csharp

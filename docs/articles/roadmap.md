@@ -10,7 +10,6 @@ the second covers the limits of the current design, and the last is platform wor
 
 ## Stability and scale
 
-- Entity id pool with a generation, so long sessions do not grow and stale handles stay detectable.
 - Render passes ordered by the loop instead of by hand.
 - Incremental spatial hash in `CollisionSystem`.
 

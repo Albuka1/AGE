@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ResourceHandle` and `ResourcePool<T>`, the shared versioned store behind engine resources.
 - `IImageLoader` for decoding PNG, JPEG, BMP, TGA and GIF images into RGBA pixels.
 
+### Changed
+
+- `World` hands the slot of a destroyed entity out again in a new generation and `Entity` carries that generation, so
+  the storage no longer grows with every entity a long session ever had, and an identifier that outlived its entity is
+  no longer alive even when the slot was taken by another entity afterwards.
+
 ## [0.1.0] - 2026-10-06
 
 ### Added
