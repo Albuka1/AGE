@@ -10,8 +10,8 @@ namespace Age.Rendering;
 public static class RenderingServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the window service, the renderer, the texture service, the render systems and the Silk.NET game loop
-    /// as singletons.
+    /// Registers the window service, the renderer, the texture service, the splash screen, the render systems and the
+    /// Silk.NET game loop as singletons.
     /// </summary>
     /// <remarks>
     /// <see cref="ITextureService"/> decodes through <see cref="T:Age.Assets.IImageLoader"/>, so register the asset
@@ -23,6 +23,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<IWindowService, SilkWindowService>();
         services.AddSingleton<IRenderer, SilkRenderer>();
         services.AddSingleton<ITextureService, TextureService>();
+        services.AddSingleton<SplashScreen>();
         services.AddSingleton<RenderSystem>();
         services.AddSingleton<UIRenderSystem>();
         services.AddSingleton<IGameLoop, SilkGameLoop>();

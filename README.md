@@ -25,7 +25,7 @@ AGE is organized as a set of focused assemblies:
 | `Age.Audio` | Sound playback abstraction |
 | `Age.Physics` | Axis-aligned collision detection with a spatial hash |
 | `Age.UI` | Retained UI components and pointer interaction |
-| `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems and window input |
+| `Age.Rendering` | Silk.NET window, OpenGL renderer, render systems, window input, window icon and splash screen |
 | `Age.Sample` | Console sample that wires everything together |
 | `Age.Tests` | Behavioural unit tests |
 
