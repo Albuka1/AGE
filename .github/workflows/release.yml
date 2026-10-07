@@ -15,10 +15,17 @@ jobs:
       - run: dotnet build Age.slnx -c Release
       - run: dotnet test --project tests/Age.Tests/Age.Tests.csproj --no-build -c Release
       - run: dotnet publish samples/Age.Sample/Age.Sample.csproj -c Release -o publish
+      - name: Pack the published sample
+        run: |
+          cd publish
+          zip -r "../Age.Sample-${{ github.ref_name }}.zip" .
       - uses: actions/upload-artifact@v4
         with:
           name: Age.Sample-${{ github.ref_name }}
           path: publish/
       - uses: softprops/action-gh-release@v3
         with:
-          files: publish/**
+          fail_on_unmatched_files: true
+          files: |
+            Age.Sample-${{ github.ref_name }}.zip
+            publish/content/**
