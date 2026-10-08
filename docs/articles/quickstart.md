@@ -72,6 +72,25 @@ The generation checks of `IsAlive`, `Borrow` and `GetRef` are correctness for th
 identifier or a borrow that outlived its entity from reaching the component of the entity that took the slot — and they
 are not a concurrency guarantee, because validation and access are two separate steps.
 
+A world cannot be changed while one of its sequences is being enumerated: a component that appears or disappears, and
+an entity that is created or destroyed, all throw once the sequence notices. Collect the entities into a list first, or
+request the change, which is applied at the end of the step:
+
+```csharp
+foreach (Entity entity in world.Enumerate<TransformComponent>())
+{
+    world.RequestDestroy(entity);   // gone at the end of the step, while this loop runs to its end
+}
+
+world.ApplyPending();   // the loop does this itself, before and after the systems of the step
+```
+
+An entity whose destruction was requested is not alive for the rest of the step, so `IsAlive` and `Has<T>` already report
+it as gone, while its components stay in place until the queue is applied. Neither `Enumerate` nor `Enumerate<T>` visits
+it. `RequestCreate` works the same way for spawning: the identifier is reserved right away and the entity joins the world
+when the queue is applied. Writing over a component that is already there is allowed, and so is changing a component type
+that the sequence you are walking does not look at.
+
 ## Save and load a scene
 
 ```csharp

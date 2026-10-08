@@ -302,7 +302,7 @@ static void AgeSpawned(World world, List<(Entity Entity, float Age)> spawned, do
         age += (float)delta;
         if (age >= lifetime)
         {
-            world.DestroyEntity(entity);
+            world.RequestDestroy(entity);
             spawned.RemoveAt(index);
             continue;
         }

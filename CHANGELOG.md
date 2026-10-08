@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Deferred operations on a world, for the code that runs while the world is being enumerated:
+  `World.RequestCreate`, `RequestDestroy`, `RequestSet{T}` and `RequestRemove{T}` queue an operation, and
+  `ApplyPending` applies the queue in the order it was received. `World.Update` and `World.UpdateFrame` apply it before
+  and after the systems of the step, so a request made by a system or a frame system takes effect before the next one.
+  An entity whose destruction was requested is not alive any more for the rest of the step, so `IsAlive` and `Has{T}`
+  already report it as gone while its components stay in place until the queue is applied, and neither `Enumerate` nor
+  `Enumerate{T}` visits it. Creation is queued as well: `RequestCreate` reserves the identifier right away, so the
+  requests that follow it can already use it, and the entity becomes part of the world when the queue is applied. A
+  write that was requested for an entity that is destroyed earlier in the same batch is dropped. Destroying a reserved
+  entity outright cancels the creation: the slot goes back to the pool, its generation advances so the identifier stays
+  stale, and the queued creation for it becomes a no-op.
 - The game clock: `FixedTimestep` gained `Tick`, `Paused` and `TimeScale`, so a game stops the simulation without
   stopping the frames and slows it down or speeds it up without changing the step. A paused clock discards the time of
   the frames that pass instead of accumulating it, so a game that was paused for a minute does not resume by running a
