@@ -95,7 +95,10 @@ public static class YamlJson
                 return;
             }
 
-            if (double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double number))
+            // A word that parses as a number is written as one, which is what a component holds, but only while the number
+            // is a number: NaN, an infinity and a value too large for a double are words that a writer of JSON refuses,
+            // so they go on as the words they are rather than as a value that cannot be written.
+            if (double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double number) && double.IsFinite(number))
             {
                 writer.WriteNumberValue(number);
                 return;

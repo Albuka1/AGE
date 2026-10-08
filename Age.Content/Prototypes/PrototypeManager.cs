@@ -179,6 +179,13 @@ public sealed class PrototypeManager : IPrototypeManager
                 throw new PrototypeException($"{file}: a component of a prototype says which component it is with a 'type'", file, component.Line);
             }
 
+            int declared = components.FindIndex(candidate => string.Equals(candidate.Name, componentName, StringComparison.Ordinal));
+
+            if (declared >= 0)
+            {
+                throw new PrototypeException($"{file}: the component '{componentName}' of this prototype is declared twice, and the first declaration is on line {components[declared].Line}", file, component.Line);
+            }
+
             components.Add(new PrototypeComponent(componentName, YamlJson.Write(new YamlMapping(values, component.Line)), file, component.Line));
         }
     }

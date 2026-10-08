@@ -215,6 +215,46 @@ public sealed class PrototypeManagerTests
         default(ProtoId<Prototype>).Should().Be(ProtoId<Prototype>.None);
     }
 
+    [Fact]
+    public void PrototypeManager_Add_TheSameComponentTwice_IsRefusedWithBothLines()
+    {
+        PrototypeManager prototypes = Create();
+
+        Action add = () => prototypes.Add("sword.yml", """
+            - id: Sword
+              type: thing
+              components:
+                - type: Transform
+                  Rotation: 1
+                - type: Transform
+                  Position:
+                    X: 1
+                    Y: 1
+            """);
+
+        PrototypeException error = add.Should().Throw<PrototypeException>().Subject.Single();
+        error.File.Should().Be("sword.yml");
+        error.Line.Should().Be(6);
+        error.Message.Should().Contain("'Transform'").And.Contain("line 4", "the message says where the first declaration is");
+    }
+
+    [Fact]
+    public void PrototypeManager_Build_RefusesAValueThatIsNotANumber()
+    {
+        PrototypeManager prototypes = Create();
+        prototypes.Add("sword.yml", """
+            - id: Sword
+              type: thing
+              components:
+                - type: Transform
+                  Rotation: NaN
+            """);
+
+        Action build = () => prototypes.Build();
+
+        build.Should().Throw<PrototypeException>().WithMessage("*Transform*").And.Message.Should().Contain("cannot be read");
+    }
+
     /// <summary>Builds a manager over the components of the engine, with one kind of prototype that holds the data itself.</summary>
     private static PrototypeManager Create()
     {

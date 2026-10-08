@@ -176,6 +176,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A prototype that declared the same component twice was read with whichever declaration came first, because nothing
+  refused the duplicate: the manager refuses it now and names the component together with the line of both declarations.
+- A word of a document that parses as a number only to end up as `NaN`, an infinity or a value too large for a double was
+  handed to the writer of JSON, which refuses such a value and stopped the reading of a whole content with an error about
+  the writer rather than about the document. Such a word goes on as the word it is, so `Rotation: NaN` is refused at load
+  with the file and the line of the document that holds it.
 - `World.AssignSceneId` refused to name an entity only after the entity had already given up the identifier it held, which
   left the world unable to resolve that identifier in the one case that reaches the refusal, a world that ran out of them:
   the refusal comes first now, and a creation whose identifier cannot be claimed gives its slot back and reports the
