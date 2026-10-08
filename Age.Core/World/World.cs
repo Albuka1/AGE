@@ -559,10 +559,23 @@ public sealed class World
             return;
         }
 
+        try
+        {
+            // The identifier of the scene is claimed before the entity becomes part of the world: a world that ran out of
+            // identifiers refuses the creation instead of publishing an entity that has none.
+            AssignSceneId(entity);
+        }
+        catch (InvalidOperationException)
+        {
+            // The slot goes back rather than staying reserved for an entity that never became one, and the caller learns
+            // why the creation failed.
+            DestroyEntity(entity);
+            throw;
+        }
+
         _reserved.Remove(entity.Id);
         _alive[entity.Id] = true;
         _structureVersion++;
-        AssignSceneId(entity);
         Events.Raise(new EntityCreatedEvent(entity));
     }
 
@@ -576,18 +589,19 @@ public sealed class World
     /// </remarks>
     internal void AssignSceneId(Entity entity)
     {
+        // The counter never wraps and never names two entities with one number: a world that ran out of identifiers
+        // refuses rather than handing out one that is taken or one that is negative. The refusal comes before the entity
+        // gives up the identifier it holds, so a world that refuses still knows the entity by the number it had.
+        if (_nextSceneId == int.MaxValue && _bySceneId.ContainsKey(int.MaxValue))
+        {
+            throw new InvalidOperationException("The world ran out of identifiers of the scene, so the entity cannot be given one.");
+        }
+
         int previous = _sceneIds[entity.Id];
 
         if (previous != 0)
         {
             _bySceneId.Remove(previous);
-        }
-
-        // The counter never wraps and never names two entities with one number: a world that ran out of identifiers
-        // refuses rather than handing out one that is taken or one that is negative.
-        if (_nextSceneId == int.MaxValue && _bySceneId.ContainsKey(int.MaxValue))
-        {
-            throw new InvalidOperationException("The world ran out of identifiers of the scene, so the entity cannot be given one.");
         }
 
         int sceneId = _nextSceneId;

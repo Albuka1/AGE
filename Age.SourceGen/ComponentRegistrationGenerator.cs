@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
@@ -44,16 +45,23 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
             provider.GlobalOptions.TryGetValue(RegistrationsProperty, out string? registrations);
             provider.GlobalOptions.TryGetValue(ContextProperty, out string? jsonContext);
 
+            // A property that is declared but left empty counts as missing, which is what a project that says nothing
+            // about the names of the generated code gets.
             return new GeneratorOptions(
-                rootNamespace ?? "Age",
-                registrations ?? "GeneratedComponentRegistrations",
-                jsonContext ?? "GeneratedComponentsJsonContext");
+                Or(rootNamespace, "Age"),
+                Or(registrations, "GeneratedComponentRegistrations"),
+                Or(jsonContext, "GeneratedComponentsJsonContext"));
         });
 
         context.RegisterSourceOutput(
             components.Collect().Combine(options),
             static (production, source) => Emit(production, source.Left, source.Right));
     }
+
+    /// <summary>Returns the value that a project supplied, or the fallback when the project supplied none.</summary>
+    /// <remarks>The `!` is what netstandard2.0 needs: its reference assemblies do not say that the check leaves a value behind.</remarks>
+    private static string Or(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value!;
 
     /// <summary>Reads what is known about one component at compile time.</summary>
     private static ComponentModel Describe(GeneratorAttributeSyntaxContext context, CancellationToken cancellationToken)
@@ -134,7 +142,7 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
         foreach (ComponentModel component in declared.Where(component => component.Scene))
         {
             registrations
-                .Append("            registry.Register(\"").Append(component.Name).Append("\", ")
+                .Append("            registry.Register(").Append(SymbolDisplay.FormatLiteral(component.Name, quote: true)).Append(", ")
                 .Append(options.Namespace).Append('.').Append(options.JsonContextName).Append(".Default.")
                 .Append(component.Symbol).AppendLine(");");
         }

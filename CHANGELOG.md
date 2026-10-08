@@ -158,6 +158,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `World.AssignSceneId` refused to name an entity only after the entity had already given up the identifier it held, which
+  left the world unable to resolve that identifier in the one case that reaches the refusal, a world that ran out of them:
+  the refusal comes first now, and a creation whose identifier cannot be claimed gives its slot back and reports the
+  failure instead of publishing an entity that has none.
+- The generator of the component registrations takes a project property (`RootNamespace`, `AgeComponentRegistrations`,
+  `AgeComponentsJsonContext`) as missing when the project declares it empty, and writes its own defaults, and it escapes a
+  component name when it emits it as a literal, so a name that holds a quote cannot break the generated code.
 - A command of the console that throws no longer reaches the caller: the console reports what happened in a line of its
   own and answers `false`, so a command that fails is a line a person reads rather than a game that stops.
 - A scene whose identifiers are negative, or one that reaches the end of the type, is refused before the world is touched.
