@@ -121,6 +121,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Every assembly keeps its files in folders of their kind rather than in one flat folder: `Components`, `Systems`,
+  `Events`, `Scenes`, `World`, `Time`, `Math`, `Graphics`, `Resources`, `Diagnostics`, `Shutdown`, `Passes`, `Overlays`,
+  `Silk`, `Loaders`, `Formats`, `Devices` and `Collisions`, with the service collection extension of an assembly left at
+  its root as its entry point. Nothing about the namespaces changed, so no code has to follow the move: a folder says what
+  a file is, and the namespace says what an assembly offers. The tests are grouped the same way, by the part of the engine
+  they cover.
 - `Canvas` and `Collider` are components of a scene from now on: the canvas had no name and the physics assembly had no
   serialization context at all, so a scene could hold neither. `AddAgePhysics` registers them, next to the system it already
   registered. `Collision` is named but stays out of a scene, because a system computes its contact every step:
