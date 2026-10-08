@@ -23,6 +23,8 @@ public enum Key
     Enter,
     Escape,
     Tab,
+    Backspace,
+    F1,
     Digit0,
     Digit1,
     Digit2,

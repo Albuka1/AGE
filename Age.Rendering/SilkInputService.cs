@@ -1,3 +1,4 @@
+using System.Text;
 using Age.Core;
 using Age.Input;
 using Silk.NET.Input;
@@ -10,15 +11,18 @@ using SilkMouseButton = Silk.NET.Input.MouseButton;
 namespace Age.Rendering;
 
 /// <summary>
-/// Reads keyboard and mouse state from a Silk.NET window and answers <see cref="IInputService"/> from it.
+/// Reads keyboard and mouse state from a Silk.NET window and answers <see cref="IInputService"/> and
+/// <see cref="ITextInputService"/> from it.
 /// </summary>
 /// <remarks>
 /// Silk.NET exposes input through polling, so the device is sampled once per <see cref="BeginFrame"/>, and that is why the
 /// frame boundary is part of the input contract. The device events are used as well: a press is recorded the moment the
 /// platform reports it, so a key that goes down and up between two samples is still reported as pressed for the frame it
-/// happened in. The device is opened on the first frame, so the window has to exist by then.
+/// happened in. The device is opened on the first frame, so the window has to exist by then. The characters that were
+/// typed are collected from the same device, and the frame boundary is what separates the characters of one frame from
+/// the next.
 /// </remarks>
-public sealed class SilkInputService : IInputService, IDisposable
+public sealed class SilkInputService : IInputService, ITextInputService, IDisposable
 {
     private static readonly (SilkKey Silk, Key Engine)[] KeyMap =
     [
@@ -44,6 +48,8 @@ public sealed class SilkInputService : IInputService, IDisposable
         (SilkKey.Enter, Key.Enter),
         (SilkKey.Escape, Key.Escape),
         (SilkKey.Tab, Key.Tab),
+        (SilkKey.Backspace, Key.Backspace),
+        (SilkKey.F1, Key.F1),
         (SilkKey.Number0, Key.Digit0),
         (SilkKey.Number1, Key.Digit1),
         (SilkKey.Number2, Key.Digit2),
@@ -70,6 +76,7 @@ public sealed class SilkInputService : IInputService, IDisposable
 
     private readonly IWindowService _windowService;
     private readonly InputStateTracker _tracker = new();
+    private readonly StringBuilder _typed = new();
 
     private IInputContext? _context;
     private IKeyboard? _keyboard;
@@ -91,9 +98,16 @@ public sealed class SilkInputService : IInputService, IDisposable
     public Vector2 MousePosition => _tracker.MousePosition;
 
     /// <inheritdoc />
+    public string TypedCharacters => _typed.ToString();
+
+    /// <inheritdoc />
     public void BeginFrame()
     {
         Attach();
+
+        // The characters of this frame are the ones the keyboard produced since the last one, and they are read from the
+        // device as well, so a console sees a character on the frame it arrived in.
+        _typed.Clear();
         _tracker.BeginFrame();
 
         foreach (Key engine in EngineKeys)
@@ -166,6 +180,7 @@ public sealed class SilkInputService : IInputService, IDisposable
 
         _keyboard.KeyDown += OnKeyDown;
         _keyboard.KeyUp += OnKeyUp;
+        _keyboard.KeyChar += OnKeyChar;
         _mouse.MouseDown += OnMouseDown;
         _mouse.MouseUp += OnMouseUp;
     }
@@ -173,6 +188,9 @@ public sealed class SilkInputService : IInputService, IDisposable
     private void OnKeyDown(IKeyboard keyboard, SilkKey key, int scancode) => RecordKey(key, isDown: true);
 
     private void OnKeyUp(IKeyboard keyboard, SilkKey key, int scancode) => RecordKey(key, isDown: false);
+
+    /// <summary>Records a character that the keyboard produced, which is what a console or a text field reads.</summary>
+    private void OnKeyChar(IKeyboard keyboard, char character) => _typed.Append(character);
 
     private void OnMouseDown(IMouse mouse, SilkMouseButton button) => RecordButton(button, isDown: true);
 

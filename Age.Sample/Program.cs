@@ -6,8 +6,19 @@ using Age.Physics;
 using Age.Rendering;
 using Age.UI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 var services = new ServiceCollection();
+
+// What the engine and this game report goes into the console of the developer overlay, which is what makes a file that
+// failed to load or a device that refused something visible while the game runs. Logging is registered before
+// `AddAgeCore`, because that call adds a logger that reports nothing only while nothing else is registered.
+services.AddLogging(builder =>
+{
+    builder.SetMinimumLevel(LogLevel.Information);
+    builder.Services.AddSingleton<ILoggerProvider>(provider => new ConsoleLoggerProvider(provider.GetRequiredService<IConsoleService>()));
+});
+
 services.AddAgeCore();
 services.AddAgeAssets();
 services.AddAgeInput();
@@ -79,6 +90,13 @@ UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
 RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
 renderPipeline.Add(renderSystem);
 renderPipeline.Add(uiRenderSystem);
+
+// The developer overlay draws over everything else: the numbers of the frame and the console of the engine. Its keys are
+// Tab for the console, which pauses the simulation while it is open, and F1 for the numbers.
+DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
+
+overlay.ConsoleKey = Key.Tab;
+renderPipeline.Add(overlay);
 IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
@@ -123,7 +141,13 @@ void SubscribeEvents(World subscribed)
 SubscribeEvents(world);
 
 const float MoveSpeed = 240f;
-const float SpawnLifetime = 2f;
+
+// The consoles of the engine: a game registers the commands that belong to it and the settings it wants to turn while it
+// runs. A setting becomes a command of its own, so `spawnLifetime 0.5` changes what this line below reads from then on.
+IConsoleService console = provider.GetRequiredService<IConsoleService>();
+CVarService cvars = provider.GetRequiredService<CVarService>();
+
+cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen lives, in seconds.");
 
 // The second sprite turns with a tween of three seconds that starts over when it reaches the end. Nothing in this game
 // advances it: the tween system does, on the time of every step, and the subscription above writes the value into the
@@ -138,7 +162,11 @@ string version = typeof(World).Assembly.GetName().Version?.ToString(3) ?? "0.0.0
 
 // One sprite is already on its way when the game starts, so the HUD has something to report and the slot logic runs
 // before the first key press.
-lastSpawned = Spawn(world);
+lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
+
+console.Register("spawn", "Puts a sprite on screen, the same as pressing E.", _ => lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime")));
+console.Register("stats", "Reports what the world holds and what the clock does.", _ => console.Write(
+    $"entities {world.Enumerate().Count()}, tick {timestep.Tick}, {(timestep.Paused ? "paused" : "running")}, {collisions.LastPairs.Count} contacts"));
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
@@ -168,6 +196,9 @@ gameLoop.Run(
         // the overlays of this game keep working while the clock is paused.
         world.UpdateFrame(time, pipeline);
 
+        // The overlay reads the keys of this frame before the passes draw, which is what opens the console and runs a line.
+        overlay.Update(time);
+
         if (splash.Draw(renderer, time, input))
         {
             return;
@@ -184,8 +215,8 @@ gameLoop.Run(
         }
 
         // Held rather than pressed: the factor is a live state of the clock, so holding the key slows the world down and
-        // letting go brings it back to normal speed.
-        timestep.TimeScale = input.IsKeyDown(Key.Tab) ? 0.25d : 1d;
+        // letting go brings it back to normal speed. Tab belongs to the console of the overlay.
+        timestep.TimeScale = input.IsKeyDown(Key.Ctrl) ? 0.25d : 1d;
 
         if (input.IsKeyPressed(Key.F))
         {
@@ -203,7 +234,7 @@ gameLoop.Run(
 
         if (input.IsKeyPressed(Key.E))
         {
-            lastSpawned = Spawn(world);
+            lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
         }
 
         if (input.IsKeyPressed(Key.Escape))
@@ -228,7 +259,7 @@ gameLoop.Run(
             ? $"paused at tick {timestep.Tick}"
             : $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x";
 
-        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Tab slow motion", new Vector2(24f, 24f), Color.White);
+        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
         fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
     });
 
@@ -305,13 +336,13 @@ static Entity MoveTarget(World world, TextureHandle texture)
 // seconds of a spawned sprite and does not keep a list of them: the timer system advances every timer of the world, and
 // the subscription above destroys the entity of the one that ran out. The slot it used was handed out before, so the
 // identifier of the entity that used it comes back with a new generation.
-static Entity Spawn(World world)
+static Entity Spawn(World world, float lifetime)
 {
     Entity entity = world.CreateEntity();
 
     world.Set(entity, new TransformComponent { Position = new Vector2(200f + ((entity.Id * 37f) % 800f), 560f), Scale = new Vector2(1f, 1f) });
     world.Set(entity, new SpriteComponent { Size = new Vector2(32f, 32f), Color = Color.Blue, ZOrder = 2 });
-    world.Set(entity, TimerComponent.For(SpawnLifetime));
+    world.Set(entity, TimerComponent.For(lifetime));
 
     return entity;
 }

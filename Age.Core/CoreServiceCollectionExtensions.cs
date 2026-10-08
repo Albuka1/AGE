@@ -24,7 +24,8 @@ public static class CoreServiceCollectionExtensions
     /// the <see cref="TweenSystem"/> are services like any other, so a game adds them to its pipeline by resolving them.
     /// A logger is available without a logging builder: every service that asks for one gets
     /// <see cref="NullLogger{T}"/> until a game registers logging of its own, so logging is never required and never
-    /// throws.
+    /// throws. Register that logging <em>before</em> this call, because the fallback is added only when nothing is there
+    /// yet.
     /// </remarks>
     public static IServiceCollection AddAgeCore(this IServiceCollection services)
     {

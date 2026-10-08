@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ITextInputService`: the characters that were typed during the current frame, which is what a console or a text field
+  reads. It is a separate interface from `IInputService` because it describes text rather than keys, and a service with no
+  keyboard reports none rather than being absent. `NullInputService` answers it from its `Typed` property, so a test drives
+  what a console reads, and `SilkInputService` collects the characters of the window. `AddAgeInput` registers one instance
+  behind both interfaces, and `AddAgeSilkInput` registers the service that reads the window behind both as well.
+- `DevOverlay`, the developer overlay of a game: the numbers of the frame (frames per second, entities, the tick of the
+  clock, and what every system spent, step and frame) and the console of the engine, drawn with the built-in bitmap font
+  over everything else because it is a render pass like any other. Its console key, Tab by default, opens and closes the
+  console and stands the simulation still while it is open, putting the clock back the way it was when it closes; the
+  characters that were typed reach it, Enter runs the line, backspace removes a character, and the up and down keys walk
+  its history. Its second key, F1 by default, shows and hides the numbers. `Key.Backspace` and `Key.F1` are part of the
+  input of the engine from now on, and the sample registers a command, a setting and the overlay itself.
 - `IConsoleService` and `ConsoleService`: the commands a developer registers, the lines that were entered with their
   history, and the lines that were written, which the engine draws and a game drives from a key of its own. Typing,
   backspace, submitting and walking the history are the service, so a command is testable without a window, and it is
