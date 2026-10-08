@@ -27,4 +27,3 @@ public interface IGameLoop
     /// <summary>Requests that the loop stop after the current iteration.</summary>
     void Stop();
 }
-

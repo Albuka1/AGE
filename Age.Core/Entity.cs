@@ -53,4 +53,3 @@ public readonly struct Entity : IEquatable<Entity>
     /// <inheritdoc />
     public override string ToString() => $"Entity {Id} (generation {Generation})";
 }
-

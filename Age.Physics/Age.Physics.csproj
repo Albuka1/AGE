@@ -12,4 +12,15 @@
     <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <CompilerVisibleProperty Include="AgeComponentRegistrations" />
+    <CompilerVisibleProperty Include="AgeComponentsJsonContext" />
+    <ProjectReference Include="..\Age.SourceGen\Age.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <AgeComponentRegistrations>PhysicsComponentRegistrations</AgeComponentRegistrations>
+    <AgeComponentsJsonContext>AgePhysicsJsonContext</AgeComponentsJsonContext>
+  </PropertyGroup>
+
 </Project>

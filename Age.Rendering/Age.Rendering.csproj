@@ -33,5 +33,15 @@
     <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
     <ProjectReference Include="..\Age.UI\Age.UI.csproj" />
   </ItemGroup>
+  <PropertyGroup>
+    <AgeComponentRegistrations>RenderingComponentRegistrations</AgeComponentRegistrations>
+    <AgeComponentsJsonContext>AgeRenderingJsonContext</AgeComponentsJsonContext>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="AgeComponentRegistrations" />
+    <CompilerVisibleProperty Include="AgeComponentsJsonContext" />
+    <ProjectReference Include="..\Age.SourceGen\Age.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
 
 </Project>

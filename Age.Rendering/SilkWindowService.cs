@@ -140,4 +140,3 @@ public sealed class SilkWindowService : IWindowService
     /// <summary>Converts decoded pixels into the image the window offers to the operating system.</summary>
     private static RawImage ToIcon(ImageData image) => new(image.Width, image.Height, image.Pixels);
 }
-

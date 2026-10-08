@@ -35,4 +35,3 @@ public interface IAudioService
     /// <param name="volume">The master volume, applied on top of the volume of each playback.</param>
     void SetMasterVolume(float volume);
 }
-

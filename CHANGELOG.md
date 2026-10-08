@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Age.SourceGen`, a source generator that writes the `IComponentRegistrations` of an assembly from its `[Component]`
+  attributes, so a component is declared once and its registration follows. The hand-written registration classes of
+  `Age.Core`, `Age.UI`, `Age.Physics` and `Age.Rendering` are gone. A type that is named as a component but is not a
+  struct, or does not implement `IComponent`, is an error of the build (AGE0001, AGE0002) rather than a silent omission.
+  The serialization context cannot be written the same way, and is not: the source generator of `System.Text.Json` never
+  sees what another generator adds to a compilation, so the `[JsonSerializable]` entry stays with the context of the
+  assembly. A missing one is now a compile error of the generated registration, which is louder than a component that
+  turns out to be unsavable after a restart.
 - `[Component("Transform")]`: the one declaration that makes a component type part of a scene, and the name a scene file
   uses for it. A test of the engine walks every public component of `Age.Core`, `Age.Physics`, `Age.UI` and
   `Age.Rendering` and fails when one of them has no name, is not registered in the `ComponentRegistry`, or shares a name

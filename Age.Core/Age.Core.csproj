@@ -9,4 +9,15 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <AgeComponentRegistrations>CoreComponentRegistrations</AgeComponentRegistrations>
+    <AgeComponentsJsonContext>AgeJsonContext</AgeComponentsJsonContext>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="AgeComponentRegistrations" />
+    <CompilerVisibleProperty Include="AgeComponentsJsonContext" />
+    <ProjectReference Include="..\Age.SourceGen\Age.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>
