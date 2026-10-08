@@ -419,6 +419,25 @@ public sealed class SceneSerializerTests
         logger.Records[0].Message.Should().Contain("2");
     }
 
+    [Fact]
+    public void SceneSerializer_LoadASceneWithAnIdentifierAWorldCannotHold_ThrowsInvalidDataException()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+        Entity existing = world.CreateEntity();
+        int identifier = world.SceneIdOf(existing);
+        const string Negative = """{ "Entities": [ { "Id": -3, "Components": {} } ] }""";
+        const string Last = """{ "Entities": [ { "Id": 2147483647, "Components": {} } ] }""";
+
+        Action negative = () => serializer.Load(world, Negative);
+        Action last = () => serializer.Load(world, Last);
+
+        negative.Should().Throw<InvalidDataException>().WithMessage("*-3*");
+        last.Should().Throw<InvalidDataException>().WithMessage("*2147483647*");
+        world.SceneIdOf(existing).Should().Be(identifier, "the world is not touched until the whole scene is checked");
+        world.Enumerate().Should().ContainSingle();
+    }
+
     /// <summary>Keeps what was logged, which is how a test reads the record of a scene that was refused.</summary>
     private sealed class RecordingLogger<T> : ILogger<T>
     {

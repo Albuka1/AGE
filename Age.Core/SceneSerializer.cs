@@ -125,6 +125,18 @@ public sealed class SceneSerializer : ISceneSerializer
 
             if (saved.Id != 0)
             {
+                if (saved.Id < 0)
+                {
+                    throw new InvalidDataException(
+                        $"The scene holds the identifier {saved.Id}, and an identifier is a positive number: a world numbers its entities from one.");
+                }
+
+                if (saved.Id == int.MaxValue)
+                {
+                    throw new InvalidDataException(
+                        $"The scene holds the identifier {saved.Id}, which leaves no room for the identifiers a world hands out while it applies the scene.");
+                }
+
                 if (!identifiers.Add(saved.Id))
                 {
                     throw new InvalidDataException(
@@ -162,11 +174,6 @@ public sealed class SceneSerializer : ISceneSerializer
             staged.Add(new StagedEntity(saved.Id, components));
         }
 
-        // The scene is sound, so the world changes from here on. Every identifier the scene uses is reserved before the
-        // first entity is created, and then an entity that already holds one of them moves aside, which gives it an
-        // identifier above all of them: a fresh identifier that landed on one the scene is about to map would either
-        // throw in the middle of the load or leave two entities behind the same number. A reference that a component of
-        // this world already holds to a displaced entity does not follow the move.
         // The scene is sound, so the world changes from here on. Every identifier the scene uses is reserved before the
         // first entity is created, and then an entity that already holds one of them moves aside, which gives it an
         // identifier above all of them: a fresh identifier that landed on one the scene is about to map would either

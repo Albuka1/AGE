@@ -41,10 +41,17 @@ public sealed class ComponentNamingTests
 
         foreach (Type component in Components())
         {
-            string name = component.GetCustomAttribute<ComponentAttribute>()!.Name;
+            ComponentAttribute attribute = component.GetCustomAttribute<ComponentAttribute>()!;
+            bool registered = registry.TryGetType(attribute.Name, out Type? found);
 
-            registry.TryGetType(name, out Type? registered).Should().BeTrue($"'{name}' has to be registered, so that a scene can hold {component.Name}");
-            registered.Should().Be(component);
+            if (!attribute.Scene)
+            {
+                registered.Should().BeFalse($"{component.Name} is computed while the game runs, so a scene must not hold it");
+                continue;
+            }
+
+            registered.Should().BeTrue($"'{attribute.Name}' has to be registered, so that a scene can hold {component.Name}");
+            found.Should().Be(component);
         }
     }
 

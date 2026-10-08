@@ -13,9 +13,10 @@ namespace Age.Rendering;
 /// font before it can look at itself.
 /// </para>
 /// <para>
-/// F1 shows and hides the numbers. The grave key opens and closes the console, which stands the simulation still while it
-/// is open and puts the clock back the way it was when it closes. While the console is open the typed characters reach
-/// it, Enter runs the line, backspace removes a character, and the up and down keys walk its history.
+/// The stats key, F1 by default, shows and hides the numbers, and the console key, Tab by default, opens and closes the
+/// console, which stands the simulation still while it is open and puts the clock back the way it was when it closes.
+/// While the console is open the typed characters reach it, Enter runs the line, backspace removes a character, and the up
+/// and down keys walk its history.
 /// </para>
 /// </remarks>
 /// <example>
@@ -52,7 +53,7 @@ public sealed class DevOverlay : IRenderPass
     private bool _wasPaused;
 
     /// <summary>Initializes the overlay from the console it drives and the services it reports.</summary>
-    /// <param name="console">The console that the grave key opens and the typed characters reach.</param>
+    /// <param name="console">The console that <see cref="ConsoleKey"/> opens and the typed characters reach.</param>
     /// <param name="input">The keys that open the console, run a line and walk its history.</param>
     /// <param name="text">The characters that are typed, which reach the console while it is open.</param>
     /// <param name="pipeline">The pipeline whose step and frame times are printed.</param>
@@ -249,7 +250,7 @@ public sealed class DevOverlay : IRenderPass
         y += line;
         y = DrawTimings(_pipeline.StepTimings, "step", y);
         y = DrawTimings(_pipeline.FrameTimings, "frame", y);
-        _renderer.DrawText("F1 numbers  grave console", new Vector2(8f, y), HintColour);
+        _renderer.DrawText($"{StatsKey} numbers  {ConsoleKey} console", new Vector2(8f, y), HintColour);
     }
 
     /// <summary>Draws one line per system of a stage and returns the line below the last one.</summary>

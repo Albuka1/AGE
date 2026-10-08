@@ -11,7 +11,6 @@ namespace Age.Physics;
 /// </remarks>
 [JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true)]
 [JsonSerializable(typeof(ColliderComponent))]
-[JsonSerializable(typeof(CollisionComponent))]
 internal sealed partial class AgePhysicsJsonContext : JsonSerializerContext
 {
 }

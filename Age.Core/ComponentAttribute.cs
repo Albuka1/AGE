@@ -35,4 +35,12 @@ public sealed class ComponentAttribute : Attribute
 
     /// <summary>Gets the name of the component.</summary>
     public string Name { get; }
+
+    /// <summary>Gets a value indicating whether a scene holds the component. The default is <see langword="true"/>.</summary>
+    /// <remarks>
+    /// A component that a system only computes while the game runs, such as the contact of the current step, is declared
+    /// with <c>[Component("Collision", Scene = false)]</c>: it keeps the name that says what it is, and neither a scene nor
+    /// the registry holds it.
+    /// </remarks>
+    public bool Scene { get; init; } = true;
 }

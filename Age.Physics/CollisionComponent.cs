@@ -10,7 +10,7 @@ namespace Age.Physics;
 /// describes the current frame. Because an entity stores a single partner, use <see cref="CollisionSystem.LastPairs"/>
 /// when every overlap matters.
 /// </remarks>
-[Component("Collision")]
+[Component("Collision", Scene = false)]
 public struct CollisionComponent : IComponent
 {
     /// <summary>Gets or sets the one entity recorded here: the first partner this entity collided with during the update.</summary>

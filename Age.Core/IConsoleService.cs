@@ -108,7 +108,8 @@ public interface IConsoleService
 
     /// <summary>Runs a line as a command, without touching the history or the line that is being typed.</summary>
     /// <param name="line">The line to run, such as <c>spawn 3</c>.</param>
-    /// <returns><see langword="true"/> when the line named a command that ran.</returns>
+    /// <returns><see langword="true"/> when the line named a command that ran, <see langword="false"/> for an empty line, an unknown command or one that failed.</returns>
     /// <exception cref="ArgumentNullException">The line is null.</exception>
+    /// <remarks>A command that throws does not reach the caller: the console reports what happened in the line it wrote and answers <see langword="false"/>.</remarks>
     bool Execute(string line);
 }

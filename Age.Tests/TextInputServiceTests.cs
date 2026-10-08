@@ -1,6 +1,8 @@
 using Age.Input;
+using Age.Rendering;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Silk.NET.Windowing;
 using Xunit;
 
 namespace Age.Tests;
@@ -33,5 +35,33 @@ public sealed class TextInputServiceTests
 
         text.Should().BeSameAs(input, "a test drives one instance and reads it through both interfaces");
         text.TypedCharacters.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddAgeSilkInput_ResolvesOneServiceBehindBothInterfaces()
+    {
+        using ServiceProvider provider = new ServiceCollection()
+            .AddAgeInput()
+            .AddAgeSilkInput()
+            .AddSingleton<IWindowService, FakeWindowService>()
+            .BuildServiceProvider();
+
+        IInputService input = provider.GetRequiredService<IInputService>();
+        ITextInputService text = provider.GetRequiredService<ITextInputService>();
+
+        input.Should().BeOfType<SilkInputService>("the service that reads the window answers both interfaces");
+        text.Should().BeSameAs(input, "one service reads the window, so the input context is opened once");
+    }
+
+    /// <summary>The window the test never opens, which is what the Silk.NET input service would read.</summary>
+    private sealed class FakeWindowService : IWindowService
+    {
+        public IWindow Window => throw new NotSupportedException("the test does not open a window");
+
+        public void Create(int width, int height, string title) => throw new NotSupportedException();
+
+        public void SetIcon(ReadOnlySpan<byte> pixels, int width, int height) => throw new NotSupportedException();
+
+        public void Close() => throw new NotSupportedException();
     }
 }

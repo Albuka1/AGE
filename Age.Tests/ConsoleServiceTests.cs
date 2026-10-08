@@ -223,6 +223,19 @@ public sealed class ConsoleServiceTests
         console.Output.Should().HaveCount(200, "a loader may write while the frame thread draws the lines");
     }
 
+    [Fact]
+    public void ConsoleService_Execute_ACommandThatThrows_ReportsItAndAnswersFalse()
+    {
+        var console = new ConsoleService();
+
+        console.Register("boom", "A command that fails.", _ => throw new InvalidOperationException("the command failed"));
+
+        console.Execute("boom").Should().BeFalse();
+        console.Output.Should().ContainSingle().Which.Should().StartWith("error:").And.Contain("boom").And.Contain("the command failed");
+
+        console.Execute("help").Should().BeTrue("the console keeps working after a command failed");
+    }
+
     /// <summary>Types a line and runs it, which is what a developer at the console does.</summary>
     private static void Enter(ConsoleService console, string line)
     {

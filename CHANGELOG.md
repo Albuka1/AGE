@@ -113,9 +113,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `Canvas`, `Collider` and `Collision` are components of a scene from now on: the canvas had no name and the physics
-  assembly had no serialization context at all, so a scene could hold neither a canvas nor a collider. `AddAgePhysics`
-  registers them, next to the system it already registered.
+- `Canvas` and `Collider` are components of a scene from now on: the canvas had no name and the physics assembly had no
+  serialization context at all, so a scene could hold neither. `AddAgePhysics` registers them, next to the system it already
+  registered. `Collision` is named but stays out of a scene, because a system computes its contact every step:
+  `[Component("Collision", Scene = false)]` keeps what it is without letting a scene write the contact of one frame.
 - **Breaking:** `ResourcePool<T>` became `ResourcePool<TKey, T>`, so a resource is registered under a key of the
   caller's own type rather than under a string, and `Add(value)` and `Add(value, key)` are separate calls. A cache that is
   keyed by more than one value, such as the fonts of `FontService`, registers the pair of the path and the height instead
@@ -143,6 +144,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A command of the console that throws no longer reaches the caller: the console reports what happened in a line of its
+  own and answers `false`, so a command that fails is a line a person reads rather than a game that stops.
+- A scene whose identifiers are negative, or one that reaches the end of the type, is refused before the world is touched.
+  The counter of the identifiers of a world saturates instead of wrapping, and it never names two entities with one number:
+  a world that ran out of identifiers refuses instead of handing out one that is taken.
+- `AddAgeSilkInput` registers one `SilkInputService`: the two input interfaces used to be answered by two instances, which
+  opened the input context of the window twice.
 - A repeating `TimerComponent` reported one run per step whatever the step consumed, so a step longer than the run left
   the timer sinking a step further behind on every step and its remaining time drifting away from zero. It now reports
   every run that the step consumed and carries the deficit into the run behind it, and a run of no length reports once per
@@ -156,9 +164,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used to make a load throw in the middle and leave the world half changed.
 - `World.Enumerate<T>` built the text of its exception for every slot it walked, whether it threw or not: the message is
   built only when the storage of the component type actually changed under the enumeration.
-- The built-in font skipped the first character of its range when it drew a line, because `SilkRenderer.DrawText` compared
-  with a strict `>`; the range now matches the one that `BitmapFontMetrics.GetGlyphIndex` uses, so every character of the
-  range goes through the same path.
+- The built-in font drew a quad for the space of every line, whose cell in the atlas is blank: only the characters the font
+  draws a mark for reach the draw call now, while the cursor still moves on for every character of the line.
 - A logo the game did not size itself lived with 320 by 320 pixels, whatever the window did: the splash now computes the
   size of every frame from the shorter side of the viewport.
 - `TrueTypeFontBake` allocated a coverage buffer for every glyph it rasterized, which is one allocation per glyph of every

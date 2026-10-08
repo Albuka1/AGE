@@ -294,7 +294,18 @@ public sealed class ConsoleService : IConsoleService
             }
         }
 
-        command.Run([.. parts[1..]]);
+        try
+        {
+            command.Run([.. parts[1..]]);
+        }
+        catch (Exception exception)
+        {
+            // A command is a tool of a developer, so a failure of one is a line in the console rather than a game that
+            // stops: the caller learns that the line did not run and reads why in the same place it typed it.
+            WriteError($"the command '{parts[0]}' failed: {exception.GetType().Name}: {exception.Message}");
+            return false;
+        }
+
         return true;
     }
 

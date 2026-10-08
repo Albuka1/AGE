@@ -583,7 +583,20 @@ public sealed class World
             _bySceneId.Remove(previous);
         }
 
-        int sceneId = _nextSceneId++;
+        // The counter never wraps and never names two entities with one number: a world that ran out of identifiers
+        // refuses rather than handing out one that is taken or one that is negative.
+        if (_nextSceneId == int.MaxValue && _bySceneId.ContainsKey(int.MaxValue))
+        {
+            throw new InvalidOperationException("The world ran out of identifiers of the scene, so the entity cannot be given one.");
+        }
+
+        int sceneId = _nextSceneId;
+
+        if (_nextSceneId < int.MaxValue)
+        {
+            _nextSceneId++;
+        }
+
         _sceneIds[entity.Id] = sceneId;
         _bySceneId[sceneId] = entity;
     }
@@ -607,7 +620,9 @@ public sealed class World
             highest = Math.Max(highest, sceneId);
         }
 
-        _nextSceneId = highest + 1;
+        // The counter saturates rather than wrapping, so a scene whose identifiers reach the end of the type cannot turn
+        // the identifiers this world hands out into negative ones.
+        _nextSceneId = highest < int.MaxValue ? highest + 1 : int.MaxValue;
     }
 
     /// <summary>Throws when an enumeration that is walking the world notices that the world changed underneath it.</summary>

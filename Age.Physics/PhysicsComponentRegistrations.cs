@@ -12,6 +12,5 @@ internal sealed class PhysicsComponentRegistrations : IComponentRegistrations
     {
         ArgumentNullException.ThrowIfNull(registry);
         registry.Register("Collider", AgePhysicsJsonContext.Default.ColliderComponent);
-        registry.Register("Collision", AgePhysicsJsonContext.Default.CollisionComponent);
     }
 }

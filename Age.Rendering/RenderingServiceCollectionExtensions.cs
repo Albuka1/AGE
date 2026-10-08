@@ -48,8 +48,9 @@ public static class RenderingServiceCollectionExtensions
     public static IServiceCollection AddAgeSilkInput(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddSingleton<IInputService, SilkInputService>();
-        services.AddSingleton<ITextInputService, SilkInputService>();
+        services.AddSingleton<SilkInputService>();
+        services.AddSingleton<IInputService>(provider => provider.GetRequiredService<SilkInputService>());
+        services.AddSingleton<ITextInputService>(provider => provider.GetRequiredService<SilkInputService>());
         return services;
     }
 }
