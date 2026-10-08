@@ -144,6 +144,29 @@ A component that refers to a device resource, such as the texture of a `SpriteCo
 as the identifier it carried, and that identifier does not survive a reload: load the texture again
 and set it on the component after the scene was loaded.
 
+A scene keeps the identifier of every entity, so a component that refers to another entity survives the save: write the
+reference as `EntityRef`, which a world makes with `World.Reference` and reads back with `World.Resolve`.
+
+```csharp
+world.Set(unit, new TargetComponent { Target = world.Reference(enemy) });
+
+foreach (Entity owner in world.Enumerate<TargetComponent>())
+{
+    Entity target = world.Resolve(world.Get<TargetComponent>(owner).Target);
+
+    if (world.IsAlive(target))
+    {
+        // the reference still names an entity that exists
+    }
+}
+```
+
+`World.SceneIdOf` reports the identifier an entity carries and `World.TryEntityOf` maps one back to an entity. A load
+writes the identifiers of the scene into the world, and an entity the world already holds that uses one of them is given
+a fresh identifier, because the identifiers of the scene win. A scene that was written in a version this build does not
+read is refused, and so is one that names the same identifier twice. `Save` writes `SceneData.Version`, and text without
+it counts as the current version.
+
 ## Load an asset
 
 ```csharp

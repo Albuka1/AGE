@@ -28,13 +28,14 @@ public sealed class SceneSerializer : ISceneSerializer
     {
         ArgumentNullException.ThrowIfNull(world);
 
-        var scene = new SceneData { Entities = [] };
+        var scene = new SceneData { Version = SceneData.CurrentVersion, Entities = [] };
 
         // Every entity is written, in the order it was created, so a scene keeps the shape of the world even when an
-        // entity carries none of the registered components.
+        // entity carries none of the registered components. The identifier of the scene goes with it, because a
+        // component that refers to another entity holds that number.
         foreach (Entity entity in world.Enumerate())
         {
-            var saved = new SceneEntity { Components = [] };
+            var saved = new SceneEntity { Id = world.SceneIdOf(entity), Components = [] };
 
             foreach (ComponentRegistration registration in _components.Registrations)
             {
@@ -67,14 +68,22 @@ public sealed class SceneSerializer : ISceneSerializer
             throw new InvalidDataException("The scene text is not valid JSON.", exception);
         }
 
+        if (scene.Version > SceneData.CurrentVersion || scene.Version < 0)
+        {
+            throw new InvalidDataException(
+                $"The scene is written in version {scene.Version}, and this build reads version {SceneData.CurrentVersion}. Update the engine, or write the scene again.");
+        }
+
         if (scene.Entities is null)
         {
             throw new InvalidDataException("""The scene text has no entities. A scene without entities is '{ "Entities": [] }'.""");
         }
 
         // The whole scene is checked and read before the world is touched, so a scene that turns out to be broken leaves
-        // the world exactly as it was.
-        var staged = new List<List<(ComponentRegistration Registration, object Component)>>(scene.Entities.Count);
+        // the world exactly as it was. An identifier of the scene has to be unique and unused, because a component that
+        // refers to an entity by one would otherwise reach the wrong entity.
+        var staged = new List<StagedEntity>(scene.Entities.Count);
+        var identifiers = new HashSet<int>();
 
         foreach (SceneEntity? saved in scene.Entities)
         {
@@ -86,6 +95,22 @@ public sealed class SceneSerializer : ISceneSerializer
             if (saved.Components is null)
             {
                 throw new InvalidDataException("""A scene entity has no components. An entity without components is '{ "Components": {} }'.""");
+            }
+
+            if (saved.Id != 0)
+            {
+                if (!identifiers.Add(saved.Id))
+                {
+                    throw new InvalidDataException(
+                        $"The scene holds two entities with the identifier {saved.Id}. An identifier has to be unique, because a component refers to an entity by one.");
+                }
+
+                if (world.TryEntityOf(saved.Id, out Entity existing))
+                {
+                    // The identifiers of the scene win, so an entity that already holds one of them moves aside. A
+                    // reference that a component of this world already holds to it does not follow the move.
+                    world.AssignSceneId(existing);
+                }
             }
 
             var components = new List<(ComponentRegistration Registration, object Component)>(saved.Components.Count);
@@ -110,17 +135,27 @@ public sealed class SceneSerializer : ISceneSerializer
                 components.Add((registration, value));
             }
 
-            staged.Add(components);
+            staged.Add(new StagedEntity(saved.Id, components));
         }
 
-        foreach (List<(ComponentRegistration Registration, object Component)> components in staged)
+        foreach (StagedEntity stagedEntity in staged)
         {
             Entity entity = world.CreateEntity();
 
-            foreach ((ComponentRegistration registration, object component) in components)
+            if (stagedEntity.Id != 0)
+            {
+                world.MapSceneId(entity, stagedEntity.Id);
+            }
+
+            foreach ((ComponentRegistration registration, object component) in stagedEntity.Components)
             {
                 registration.Apply(world, entity, component);
             }
         }
     }
+
+    /// <summary>One entity of a scene that was read and checked, and is about to be applied to a world.</summary>
+    /// <param name="Id">The identifier the scene knows the entity by, or zero when it carried none.</param>
+    /// <param name="Components">The components of the entity, in the order the scene listed them.</param>
+    private sealed record StagedEntity(int Id, List<(ComponentRegistration Registration, object Component)> Components);
 }

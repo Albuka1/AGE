@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Scenes carry the identifier of every entity (`SceneEntity.Id`) and the version of the format (`SceneData.Version`), so
+  a reference between entities survives a save and a load. `World.SceneIdOf` reports the identifier an entity carries,
+  `World.TryEntityOf` and `World.Resolve` map one back to an entity, and `World.Reference` makes a reference out of an
+  entity. A load writes the identifiers of the scene into the world; an entity the world already holds that uses one of
+  them is given a fresh identifier, because the identifiers of the scene win. A scene that names the same identifier
+  twice, or one that was written in a version this build does not read, is refused before the world is touched. Text
+  without a version counts as the current one, so a scene that was written by hand still reads.
+- `EntityRef`, a reference to another entity that survives a save and a load, which is written as a plain number by
+  `EntityRefJsonConverter`. A reference to an entity that a world does not know resolves to the default entity, not to a
+  wrong one, so a scene that refers to something it does not hold cannot be mistaken for a working one.
+- `SceneEntity.Prototype`, which a scene writes and reads but which nothing turns into an entity yet: it is where an
+  entity stops repeating the components of its kind and starts referring to them.
 - The event bus: `World.Events` delivers events to the code that subscribed to them. An event is a value, raising one
   queues it, and `EventBus.Dispatch` hands the queue out. `World.Update` and `World.UpdateFrame` dispatch it at the
   boundaries of the step, next to `World.ApplyPending`, so a handler never runs in the middle of a system that is

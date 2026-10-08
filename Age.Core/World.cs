@@ -28,6 +28,9 @@ public sealed class World
     private readonly List<PendingOperation> _pending = new();
     private readonly HashSet<Entity> _pendingDestroy = new();
     private readonly HashSet<int> _reserved = new();
+    private readonly List<int> _sceneIds = new();
+    private readonly Dictionary<int, Entity> _bySceneId = new();
+    private int _nextSceneId = 1;
     private int _structureVersion;
 
     /// <summary>Gets the bus that delivers events to the subscribers of this world.</summary>
@@ -84,6 +87,8 @@ public sealed class World
         _generations[entity.Id]++;
         _free.Add(entity.Id);
         _structureVersion++;
+        _bySceneId.Remove(_sceneIds[entity.Id]);
+        _sceneIds[entity.Id] = 0;
 
         foreach (IComponentStore store in _stores.Values)
         {
@@ -184,6 +189,75 @@ public sealed class World
     /// </remarks>
     public bool IsAlive(Entity entity) =>
         IsSlotAlive(entity) && (_pendingDestroy.Count == 0 || !_pendingDestroy.Contains(entity));
+
+    /// <summary>Returns the identifier that this world knows an entity by in a scene, or zero when it holds no such entity.</summary>
+    /// <param name="entity">The entity to ask about.</param>
+    /// <remarks>
+    /// An entity keeps its identifier for as long as it lives, so a component that refers to it through
+    /// <see cref="EntityRef"/> reads back as the same entity after a save and a load, even though the slots of the
+    /// loaded world are new ones. The identifier of a destroyed entity is never handed out again.
+    /// </remarks>
+    public int SceneIdOf(Entity entity) =>
+        IsAlive(entity) && entity.Id < _sceneIds.Count ? _sceneIds[entity.Id] : 0;
+
+    /// <summary>Returns the entity that this world knows under an identifier of a scene.</summary>
+    /// <param name="sceneId">The identifier to look up.</param>
+    /// <param name="entity">Receives the entity when the world holds it.</param>
+    /// <returns><see langword="true"/> when the world holds an entity under that identifier.</returns>
+    public bool TryEntityOf(int sceneId, out Entity entity)
+    {
+        if (sceneId != 0 && _bySceneId.TryGetValue(sceneId, out entity))
+        {
+            return true;
+        }
+
+        entity = default;
+        return false;
+    }
+
+    /// <summary>Returns a reference to an entity that survives a save and a load.</summary>
+    /// <param name="entity">The entity to refer to.</param>
+    /// <returns>The reference, or <see cref="EntityRef.None"/> for an entity this world does not hold.</returns>
+    public EntityRef Reference(Entity entity) => new(SceneIdOf(entity));
+
+    /// <summary>Returns the entity that a reference names.</summary>
+    /// <param name="reference">The reference to resolve.</param>
+    /// <returns>The entity, or the default one when the world holds none under that identifier.</returns>
+    public Entity Resolve(EntityRef reference) => reference.Resolve(this);
+
+    /// <summary>Maps an identifier of a scene to an entity, which the scene serializer does when it reads one.</summary>
+    /// <param name="entity">The entity that the identifier now names.</param>
+    /// <param name="sceneId">The identifier the scene knows the entity by. Has to be greater than zero.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="sceneId"/> is zero or negative.</exception>
+    /// <exception cref="InvalidOperationException">The world already knows another entity by that identifier.</exception>
+    /// <remarks>
+    /// The scene serializer checks a whole scene before it maps anything, so a text that turns out to be broken leaves a
+    /// world exactly as it was.
+    /// </remarks>
+    internal void MapSceneId(Entity entity, int sceneId)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sceneId);
+
+        if (TryEntityOf(sceneId, out Entity existing) && existing != entity)
+        {
+            throw new InvalidOperationException($"The world already holds an entity that the scene knows as {sceneId}.");
+        }
+
+        int previous = _sceneIds[entity.Id];
+
+        if (previous != 0)
+        {
+            _bySceneId.Remove(previous);
+        }
+
+        _sceneIds[entity.Id] = sceneId;
+        _bySceneId[sceneId] = entity;
+
+        if (sceneId >= _nextSceneId)
+        {
+            _nextSceneId = sceneId + 1;
+        }
+    }
 
     /// <summary>Returns the component of type <typeparamref name="T"/> attached to the entity.</summary>
     /// <typeparam name="T">The component type to read. Components are structs that implement <see cref="IComponent"/>.</typeparam>
@@ -463,6 +537,7 @@ public sealed class World
             id = _generations.Count;
             _generations.Add(1);
             _alive.Add(false);
+            _sceneIds.Add(0);
         }
 
         // Until Activate runs, the slot is handed out but is not part of the world, which is what keeps another
@@ -484,7 +559,29 @@ public sealed class World
         _reserved.Remove(entity.Id);
         _alive[entity.Id] = true;
         _structureVersion++;
+        AssignSceneId(entity);
         Events.Raise(new EntityCreatedEvent(entity));
+    }
+
+    /// <summary>Gives an entity the next identifier of the scene.</summary>
+    /// <remarks>
+    /// A world hands one out when an entity becomes alive, and the scene serializer calls it for an entity that already
+    /// holds an identifier which a scene it is reading also uses: the identifiers of the scene win, and the entity that
+    /// was in the way moves to a fresh one. A component that referred to that entity by its old number does not follow
+    /// it, which is why a scene is best loaded into a world of its own.
+    /// </remarks>
+    internal void AssignSceneId(Entity entity)
+    {
+        int previous = _sceneIds[entity.Id];
+
+        if (previous != 0)
+        {
+            _bySceneId.Remove(previous);
+        }
+
+        int sceneId = _nextSceneId++;
+        _sceneIds[entity.Id] = sceneId;
+        _bySceneId[sceneId] = entity;
     }
 
     /// <summary>Throws when an enumeration that is walking the world notices that the world changed underneath it.</summary>

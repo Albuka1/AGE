@@ -76,11 +76,15 @@ public sealed class SceneSerializerTests
         var world = new World();
         Entity existing = world.CreateEntity();
         world.Set(existing, new TransformComponent { Position = new Vector2(9f, 9f) });
+        int identifier = world.SceneIdOf(existing);
 
         serializer.Load(world, json);
 
         world.IsAlive(existing).Should().BeTrue();
         world.Enumerate<TransformComponent>().Should().HaveCount(2);
+        world.SceneIdOf(existing).Should().NotBe(identifier, "the scene brought an entity that uses that identifier");
+        world.TryEntityOf(identifier, out Entity loaded).Should().BeTrue();
+        loaded.Should().NotBe(existing, "the identifier of the scene belongs to the entity it brought");
     }
 
     [Fact]
@@ -193,9 +197,156 @@ public sealed class SceneSerializerTests
         entities[1].GetProperty("Components").EnumerateObject().Should().BeEmpty();
     }
 
+    [Fact]
+    public void SceneSerializer_Save_WritesTheVersionAndTheIdentifiersOfTheScene()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+        Entity first = world.CreateEntity();
+        Entity second = world.CreateEntity();
+
+        using JsonDocument document = JsonDocument.Parse(serializer.Save(world));
+
+        document.RootElement.GetProperty("Version").GetInt32().Should().Be(SceneData.CurrentVersion);
+        JsonElement entities = document.RootElement.GetProperty("Entities");
+        entities[0].GetProperty("Id").GetInt32().Should().Be(world.SceneIdOf(first));
+        entities[1].GetProperty("Id").GetInt32().Should().Be(world.SceneIdOf(second));
+        world.SceneIdOf(first).Should().NotBe(world.SceneIdOf(second));
+    }
+
+    [Fact]
+    public void SceneSerializer_SaveAndLoad_KeepsTheIdentifiersOfTheScene()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var source = new World();
+        Entity first = source.CreateEntity();
+        Entity second = source.CreateEntity();
+        string json = serializer.Save(source);
+
+        var loaded = new World();
+        serializer.Load(loaded, json);
+
+        List<Entity> entities = [.. loaded.Enumerate()];
+        entities.Should().HaveCount(2);
+        loaded.SceneIdOf(entities[0]).Should().Be(source.SceneIdOf(first));
+        loaded.SceneIdOf(entities[1]).Should().Be(source.SceneIdOf(second));
+        loaded.TryEntityOf(loaded.SceneIdOf(entities[1]), out Entity resolved).Should().BeTrue();
+        resolved.Should().Be(entities[1]);
+    }
+
+    [Fact]
+    public void SceneSerializer_SaveAndLoad_KeepsAReferenceToAnotherEntity()
+    {
+        SceneSerializer serializer = CreateSerializerWithTarget();
+        var source = new World();
+        Entity owner = source.CreateEntity();
+        Entity target = source.CreateEntity();
+        source.Set(owner, new TargetComponent { Target = source.Reference(target) });
+        int targetIdentifier = source.SceneIdOf(target);
+
+        string json = serializer.Save(source);
+
+        using (JsonDocument document = JsonDocument.Parse(json))
+        {
+            JsonElement reference = document.RootElement.GetProperty("Entities")[0].GetProperty("Components").GetProperty("Target").GetProperty("Target");
+            reference.ValueKind.Should().Be(JsonValueKind.Number, "a reference is written as the number of the entity in its scene");
+            reference.GetInt32().Should().Be(targetIdentifier);
+        }
+
+        var loaded = new World();
+        serializer.Load(loaded, json);
+
+        Entity loadedOwner = loaded.Enumerate<TargetComponent>().Single();
+        Entity loadedTarget = loaded.Resolve(loaded.Get<TargetComponent>(loadedOwner).Target);
+
+        loadedTarget.Should().NotBe(default(Entity), "the reference reads back as an entity");
+        loaded.IsAlive(loadedTarget).Should().BeTrue();
+        loaded.SceneIdOf(loadedTarget).Should().Be(targetIdentifier);
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadAReferenceToAnEntityTheSceneDoesNotHold_ResolvesToNothing()
+    {
+        SceneSerializer serializer = CreateSerializerWithTarget();
+        const string Json = """
+            {
+              "Version": 1,
+              "Entities": [ { "Id": 1, "Components": { "Target": { "Target": 7 } } } ]
+            }
+            """;
+        var world = new World();
+
+        serializer.Load(world, Json);
+
+        Entity owner = world.Enumerate<TargetComponent>().Single();
+        EntityRef reference = world.Get<TargetComponent>(owner).Target;
+
+        reference.HasValue.Should().BeTrue("the text names an entity");
+        reference.IsAlive(world).Should().BeFalse("the scene holds no entity with that identifier");
+        world.Resolve(reference).Should().Be(default(Entity));
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadASceneOfANewerVersion_ThrowsInvalidDataException()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        const string Json = """{ "Version": 99, "Entities": [] }""";
+
+        Action act = () => serializer.Load(new World(), Json);
+
+        act.Should().Throw<InvalidDataException>().WithMessage("*version 99*");
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadASceneWithTwoEntitiesOfTheSameIdentifier_ThrowsInvalidDataException()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        const string Json = """
+            {
+              "Entities": [
+                { "Id": 4, "Components": {} },
+                { "Id": 4, "Components": {} }
+              ]
+            }
+            """;
+        var world = new World();
+
+        Action act = () => serializer.Load(world, Json);
+
+        act.Should().Throw<InvalidDataException>().WithMessage("*identifier 4*");
+        world.Enumerate().Should().BeEmpty("a scene that turns out to be broken leaves the world as it was");
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadASceneOfTwoEntitiesWithoutIdentifiers_AssignsThem()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        const string Json = """{ "Entities": [ { "Components": {} }, { "Components": {} } ] }""";
+        var world = new World();
+
+        serializer.Load(world, Json);
+
+        List<Entity> entities = [.. world.Enumerate()];
+        entities.Should().HaveCount(2);
+        world.SceneIdOf(entities[0]).Should().NotBe(0);
+        world.SceneIdOf(entities[1]).Should().NotBe(0);
+        world.SceneIdOf(entities[0]).Should().NotBe(world.SceneIdOf(entities[1]));
+    }
+
     private static SceneSerializer CreateSerializer()
     {
         using ServiceProvider provider = CreateProvider();
+        return new SceneSerializer(provider.GetRequiredService<ComponentRegistry>());
+    }
+
+    private static SceneSerializer CreateSerializerWithTarget()
+    {
+        var services = new ServiceCollection();
+        services.AddAgeCore();
+        services.AddAgeRendering();
+        services.AddAgeUI();
+        services.AddSingleton<IComponentRegistrations, TargetRegistrations>();
+        using ServiceProvider provider = services.BuildServiceProvider();
         return new SceneSerializer(provider.GetRequiredService<ComponentRegistry>());
     }
 
@@ -219,5 +370,25 @@ public sealed class SceneSerializerTests
 [JsonSourceGenerationOptions(IncludeFields = true)]
 [JsonSerializable(typeof(TransformComponent))]
 internal sealed partial class TestJsonContext : JsonSerializerContext
+{
+}
+
+/// <summary>A component of a game that refers to another entity, which a scene keeps by identifier.</summary>
+internal struct TargetComponent : IComponent
+{
+    public EntityRef Target;
+}
+
+/// <summary>The registration of the game component, which is what a game writes for the components it adds.</summary>
+internal sealed class TargetRegistrations : IComponentRegistrations
+{
+    /// <inheritdoc />
+    public void Register(ComponentRegistry registry) => registry.Register("Target", GameJsonContext.Default.TargetComponent);
+}
+
+/// <summary>A second source generated context of a game, for the component that holds a reference.</summary>
+[JsonSourceGenerationOptions(IncludeFields = true)]
+[JsonSerializable(typeof(TargetComponent))]
+internal sealed partial class GameJsonContext : JsonSerializerContext
 {
 }
