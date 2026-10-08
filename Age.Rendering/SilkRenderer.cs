@@ -199,7 +199,10 @@ public sealed class SilkRenderer : IRenderer
 
         foreach (char character in text)
         {
-            if (character > BitmapFontMetrics.FirstCharacter && character <= BitmapFontMetrics.LastCharacter)
+            // The range matches the one that `GetGlyphIndex` uses, so the first character of the font goes through the
+            // same path as every other one: a blank glyph is drawn like a mark instead of being skipped by a comparison
+            // that decides the placement of the rest of the line.
+            if (character >= BitmapFontMetrics.FirstCharacter && character <= BitmapFontMetrics.LastCharacter)
             {
                 int glyph = BitmapFontMetrics.GetGlyphIndex(character);
                 float u0 = glyph * BitmapFontMetrics.GlyphWidth / (float)FontAtlasWidth;

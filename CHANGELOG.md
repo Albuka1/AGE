@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `GameShutdown` and `IGameShutdownStep`: the engine releases what it holds in one call, in an order that every assembly
+  declares next to the thing it releases, instead of leaving that order to the game. The splash and what it uploaded, the
+  atlases and the textures of a frame, the samples of the sound device, the renderer, and the window that owns the context
+  last. A game registers steps of its own for what it holds. A step that throws does not stop the steps behind it,
+  because a shutdown that stopped halfway would leak everything it skipped, and the call is idempotent.
 - Scenes carry the identifier of every entity (`SceneEntity.Id`) and the version of the format (`SceneData.Version`), so
   a reference between entities survives a save and a load. `World.SceneIdOf` reports the identifier an entity carries,
   `World.TryEntityOf` and `World.Resolve` map one back to an entity, and `World.Reference` makes a reference out of an
@@ -74,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `ResourcePool<T>` became `ResourcePool<TKey, T>`, so a resource is registered under a key of the
+  caller's own type rather than under a string, and `Add(value)` and `Add(value, key)` are separate calls. A cache that is
+  keyed by more than one value, such as the fonts of `FontService`, registers the pair of the path and the height instead
+  of joining them into a string with a separator of its own. `TryGetHandle` no longer rejects an empty key: a key is the
+  caller's type now, and the services that load by path already reject a path that is not a path.
+- **Breaking:** `SplashScreen.LogoSize` is nullable and null by default, which is what makes the logo follow the window
+  instead of living with one size. Set it to draw the logo at exactly that many pixels.
 - **Breaking:** `UIUpdateSystem` is an `IFrameSystem` rather than an `ISystem`, because the pointer is a state of the
   frame and an interface has to keep working while the simulation is paused. Register it with `SystemPipeline.AddFrame`
   rather than `Add`, call `World.UpdateFrame` from the render callback of the loop, and read its `UpdateFrame` where the
@@ -91,6 +103,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `Age.Rendering` embeds its branding images under the logical names
   `Age.Rendering.Resources.Textures.Icons.*` and `Age.Rendering.Resources.Textures.Logo.*` instead of
   `Age.Rendering.Resources.*`, so a game that reads the manifest stream by name has to update the name.
+
+### Fixed
+
+- The built-in font skipped the first character of its range when it drew a line, because `SilkRenderer.DrawText` compared
+  with a strict `>`; the range now matches the one that `BitmapFontMetrics.GetGlyphIndex` uses, so every character of the
+  range goes through the same path.
+- A logo the game did not size itself lived with 320 by 320 pixels, whatever the window did: the splash now computes the
+  size of every frame from the shorter side of the viewport.
+- `TrueTypeFontBake` allocated a coverage buffer for every glyph it rasterized, which is one allocation per glyph of every
+  font: a font now allocates one buffer, as large as its largest glyph, and every rasterization writes over the beginning
+  of it. `CoverageBytes` became `CoverageByteCount`, because what it returns is the number of bytes of that buffer.
+- The order in which a game releases its device objects lived in the game and had to be repeated by every game: it is a
+  `GameShutdown` call now, which the assemblies of the engine fill in.
 
 ## [0.2.0] - 2026-10-07
 

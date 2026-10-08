@@ -55,6 +55,11 @@ internal static class TrueTypeFontBake
             GlyphPacking.Place(sizes, placements, out int width, out int height);
             byte[] pixels = new byte[AtlasBytes(width, height)];
 
+            // One buffer holds the coverage of every glyph of this font. It is as large as the largest glyph, and every
+            // rasterization writes over the beginning of it, so baking a hundred glyphs allocates once instead of a
+            // hundred times.
+            byte[] coverage = new byte[CoverageByteCount(Widest(sizes), Tallest(sizes))];
+
             for (int index = 0; index < wanted.Length; index++)
             {
                 int glyphWidth = (int)sizes[index].X;
@@ -62,7 +67,7 @@ internal static class TrueTypeFontBake
                 int targetX = placements[index].X + GlyphPacking.Padding;
                 int targetY = placements[index].Y + GlyphPacking.Padding;
 
-                Draw(info, indices[index], glyphWidth, glyphHeight, targetX, targetY, width, scale, pixels);
+                Draw(info, indices[index], glyphWidth, glyphHeight, targetX, targetY, width, scale, pixels, coverage);
 
                 glyphs[index] = new FontGlyph(
                     new Rect(
@@ -87,6 +92,32 @@ internal static class TrueTypeFontBake
         }
     }
 
+    /// <summary>Returns the width of the widest glyph of a font, in pixels.</summary>
+    private static int Widest(Vector2[] sizes)
+    {
+        int widest = 0;
+
+        foreach (Vector2 size in sizes)
+        {
+            widest = Math.Max(widest, (int)size.X);
+        }
+
+        return widest;
+    }
+
+    /// <summary>Returns the height of the tallest glyph of a font, in pixels.</summary>
+    private static int Tallest(Vector2[] sizes)
+    {
+        int tallest = 0;
+
+        foreach (Vector2 size in sizes)
+        {
+            tallest = Math.Max(tallest, (int)size.Y);
+        }
+
+        return tallest;
+    }
+
     /// <summary>Reads the size, the bearing and the advance of every character of the range.</summary>
     private static unsafe void Measure(StbTrueType.stbtt_fontinfo info, char[] wanted, float scale, Vector2[] sizes, FontGlyph[] glyphs, int[] indices)
     {
@@ -109,9 +140,12 @@ internal static class TrueTypeFontBake
         }
     }
 
-    /// <summary>Returns the number of pixels of a glyph, rejecting a size that the rasterizer cannot fill.</summary>
+    /// <summary>Returns the number of bytes of the buffer that holds the coverage of one glyph at a size, and rejects a size that the rasterizer cannot fill.</summary>
+    /// <param name="width">The width of the glyph, in pixels.</param>
+    /// <param name="height">The height of the glyph, in pixels.</param>
+    /// <returns>The number of bytes, which is one byte of coverage per pixel of the glyph.</returns>
     /// <exception cref="ArgumentOutOfRangeException">The glyph needs more pixels than <see cref="GlyphPacking.MaximumPixels"/>.</exception>
-    private static int CoverageBytes(int width, int height)
+    private static int CoverageByteCount(int width, int height)
     {
         long pixels = (long)width * height;
         if (pixels > GlyphPacking.MaximumPixels)
@@ -164,7 +198,7 @@ internal static class TrueTypeFontBake
         return range;
     }
 
-    /// <summary>Rasterizes one glyph into the atlas as white coverage.</summary>
+    /// <summary>Rasterizes one glyph into the atlas as white coverage. The coverage buffer comes from the caller, so that a font allocates it once instead of once per glyph.</summary>
     private static unsafe void Draw(
         StbTrueType.stbtt_fontinfo info,
         int glyph,
@@ -174,14 +208,13 @@ internal static class TrueTypeFontBake
         int targetY,
         int atlasWidth,
         float scale,
-        byte[] pixels)
+        byte[] pixels,
+        byte[] coverage)
     {
         if (glyphWidth <= 0 || glyphHeight <= 0)
         {
             return;
         }
-
-        byte[] coverage = new byte[CoverageBytes(glyphWidth, glyphHeight)];
 
         fixed (byte* pointer = coverage)
         {

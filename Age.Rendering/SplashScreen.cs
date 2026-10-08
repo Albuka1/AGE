@@ -31,6 +31,8 @@ namespace Age.Rendering;
 /// </remarks>
 public sealed class SplashScreen : IDisposable
 {
+    private const float DefaultLogoScale = 320f / 720f;
+
     private IRenderer? _renderer;
     private TextureHandle? _builtInLogo;
     private bool _ended;
@@ -41,8 +43,12 @@ public sealed class SplashScreen : IDisposable
     /// <summary>Gets or sets how long the logo stays on screen, measured from the start of the game loop. The default is 2.5 seconds.</summary>
     public TimeSpan Duration { get; set; } = TimeSpan.FromSeconds(2.5);
 
-    /// <summary>Gets or sets the size of the logo, in pixels. The default is 320 by 320, which is the size of the built-in logo.</summary>
-    public Vector2 LogoSize { get; set; } = new(320f, 320f);
+    /// <summary>Gets or sets the size of the logo, in pixels.</summary>
+    /// <remarks>
+    /// A null value, which is the default, gives the logo a share of the viewport and computes it on every frame, so the
+    /// splash keeps its shape after the window was resized. Set a size to draw the logo at exactly that many pixels.
+    /// </remarks>
+    public Vector2? LogoSize { get; set; }
 
     /// <summary>Gets or sets a value indicating whether Space, Enter, Escape or a left mouse click ends the splash early. The default is <see langword="true"/>.</summary>
     public bool SkipOnInput { get; set; } = true;
@@ -93,7 +99,13 @@ public sealed class SplashScreen : IDisposable
 
         renderer.SetCamera(camera);
         renderer.BeginFrame(true);
-        renderer.DrawSprite(logo, (renderer.ViewportSize - LogoSize) * 0.5f, LogoSize, Color.White);
+
+        // The size of a logo the game did not size itself is computed from the viewport of this frame: the built-in logo
+        // is a square that covers 320 pixels of a viewport 720 pixels tall, and it keeps that share of the shorter side
+        // of the window whatever the window does.
+        float side = MathF.Min(renderer.ViewportSize.X, renderer.ViewportSize.Y) * DefaultLogoScale;
+        Vector2 logoSize = LogoSize ?? new Vector2(side, side);
+        renderer.DrawSprite(logo, (renderer.ViewportSize - logoSize) * 0.5f, logoSize, Color.White);
         renderer.EndFrame();
 
         if (skipped)

@@ -1,13 +1,13 @@
 namespace Age.Core;
 
 /// <summary>
-/// Identifies a resource inside a specific <see cref="ResourcePool{T}"/>.
+/// Identifies a resource inside a specific <see cref="ResourcePool{TKey, T}"/>.
 /// </summary>
 /// <remarks>
 /// A handle is a small value, so it can be copied and stored in components freely. It is only meaningful for the pool
 /// that created it: it records that pool, its slot and the slot generation, so a default value, a handle taken from
 /// another pool and a handle left behind when its resource was released and replaced all fail to resolve. Only
-/// <see cref="ResourcePool{T}.Add"/> creates handles, because the constructor is not public.
+/// <see cref="ResourcePool{TKey, T}.Add(T, TKey)"/> creates handles, because the constructor is not public.
 /// </remarks>
 /// <example>
 /// <code>
@@ -23,7 +23,7 @@ public readonly struct ResourceHandle : IEquatable<ResourceHandle>
 {
     private static int _nextOwner;
 
-    /// <summary>Initializes a handle. Only a <see cref="ResourcePool{T}"/> creates handles, so a caller cannot forge one.</summary>
+    /// <summary>Initializes a handle. Only a <see cref="ResourcePool{TKey, T}"/> creates handles, so a caller cannot forge one.</summary>
     internal ResourceHandle(int owner, int id, int generation)
     {
         Owner = owner;

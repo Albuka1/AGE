@@ -232,14 +232,11 @@ gameLoop.Run(
         fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
     });
 
-// The device objects live in the OpenGL context of the window, so the game releases them while the window is still open:
-// the logo of the splash, the textures that were loaded, and finally the renderer. The container disposes the services
-// when it goes out of scope, and every one of those calls is a no-op by then.
-splash.Dispose();
-fonts.UnloadAll();
-textures.UnloadAll();
-renderer.Dispose();
-windowService.Close();
+// The device objects live in the OpenGL context of the window, so the game releases them while the window is still open.
+// One call runs every step of the shutdown in the order the engine registered: the splash and what it uploaded, the
+// atlases and the textures of this frame, the samples of the sound device, the renderer, and the window itself last. The
+// container disposes the services when it goes out of scope, and every one of those calls is a no-op by then.
+provider.GetRequiredService<GameShutdown>().Run();
 
 static void MoveFirstSprite(World world, Entity entity, IInputService input, GameTime time)
 {

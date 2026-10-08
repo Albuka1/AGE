@@ -6,7 +6,7 @@ namespace Age.Rendering;
 
 /// <summary>
 /// The default <see cref="ITextureService"/>. It decodes through <see cref="IImageLoader"/>, uploads through
-/// <see cref="IRenderer"/>, and keeps the slot of every texture in a <see cref="ResourcePool{T}"/> keyed by path.
+/// <see cref="IRenderer"/>, and keeps the slot of every texture in a <see cref="ResourcePool{TKey, T}"/> keyed by path.
 /// </summary>
 /// <remarks>
 /// A handle carries the slot it was issued from, so a handle from before an unload stops resolving instead of pointing
@@ -18,7 +18,7 @@ public sealed class TextureService : ITextureService, IDisposable
 {
     private readonly IImageLoader _images;
     private readonly IRenderer _renderer;
-    private readonly ResourcePool<uint> _textures = new();
+    private readonly ResourcePool<string, uint> _textures = new();
 
     /// <summary>Initializes the service with the decoder and the renderer it works through.</summary>
     /// <param name="images">The loader that decodes the image files.</param>

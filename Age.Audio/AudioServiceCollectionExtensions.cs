@@ -1,3 +1,4 @@
+using Age.Core;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Age.Audio;
@@ -36,6 +37,7 @@ public static class AudioServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton<IAudioService, NullAudioService>();
         services.AddSingleton<ISoundService, SoundService>();
+        services.AddSingleton<IGameShutdownStep, AudioShutdownStep>();
         return services;
     }
 }

@@ -9,7 +9,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_Add_ReturnsValidHandle()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
 
         ResourceHandle handle = pool.Add("texture");
 
@@ -22,7 +22,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_DefaultHandle_IsInvalidAndNotFound()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
 
         ResourceHandle handle = default;
 
@@ -33,8 +33,8 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_HandleFromAnotherPool_IsNotFound()
     {
-        var first = new ResourcePool<string>();
-        var second = new ResourcePool<string>();
+        var first = new ResourcePool<string, string>();
+        var second = new ResourcePool<string, string>();
         ResourceHandle handle = first.Add("texture");
 
         second.TryGet(handle, out _).Should().BeFalse();
@@ -46,7 +46,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_TryGetHandle_ResolvesRegisteredPath()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         ResourceHandle handle = pool.Add("texture", "art/player.png");
 
         pool.TryGetHandle("art/player.png", out ResourceHandle found).Should().BeTrue();
@@ -57,7 +57,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_AddWithRegisteredPath_ThrowsInvalidOperationException()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         pool.Add("first", "art/player.png");
 
         Action act = () => pool.Add("second", "art/player.png");
@@ -68,7 +68,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_Release_RemovesResourceAndPath()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         ResourceHandle handle = pool.Add("texture", "art/player.png");
 
         bool released = pool.Release(handle);
@@ -83,7 +83,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_ReusedSlot_KeepsStaleHandleInvalid()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         ResourceHandle stale = pool.Add("first");
         pool.Release(stale);
 
@@ -99,7 +99,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_MoreResourcesThanSlots_GrowsAndResolvesAll()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         var handles = new List<ResourceHandle>();
 
         for (int index = 0; index < 20; index++)
@@ -119,7 +119,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_Clear_ReleasesEveryResource()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         pool.Add("first");
         pool.Add("second");
         var released = new List<string>();
@@ -133,7 +133,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_ClearWhenReleaseThrows_KeepsPoolConsistent()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         pool.Add("first", "first.txt");
         pool.Add("second", "second.txt");
 
@@ -148,7 +148,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_GetHandles_ReturnsEveryLiveHandleInSlotOrder()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         ResourceHandle first = pool.Add("first", "first.txt");
         ResourceHandle released = pool.Add("second");
         pool.Add("third", "third.txt");
@@ -161,13 +161,13 @@ public sealed class ResourcePoolTests
         handles[1].Should().NotBe(released);
         pool.TryGet(handles[1], out string? value).Should().BeTrue();
         value.Should().Be("third");
-        new ResourcePool<string>().GetHandles().Should().BeEmpty();
+        new ResourcePool<string, string>().GetHandles().Should().BeEmpty();
     }
 
     [Fact]
     public void ResourcePool_Clear_KeepsStaleHandleInvalid()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         ResourceHandle stale = pool.Add("first");
         pool.Clear();
 
@@ -180,7 +180,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_ClearWithACallbackThatAdds_KeepsTheNewResource()
     {
-        var pool = new ResourcePool<string>();
+        var pool = new ResourcePool<string, string>();
         pool.Add("first", "first.txt");
         ResourceHandle? added = null;
 
@@ -201,7 +201,7 @@ public sealed class ResourcePoolTests
     [Fact]
     public void ResourcePool_ParallelCalls_KeepThePoolConsistent()
     {
-        var pool = new ResourcePool<int>();
+        var pool = new ResourcePool<string, int>();
         int failures = 0;
 
         Parallel.For(0, 16, index =>
@@ -235,5 +235,24 @@ public sealed class ResourcePoolTests
 
         failures.Should().Be(0);
         pool.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResourcePool_KeyOfATuple_KeepsTwoKeysApart()
+    {
+        var pool = new ResourcePool<(string Path, float Height), string>();
+
+        ResourceHandle small = pool.Add("small", ("Fonts/Cousine-Regular.ttf", 12f));
+        ResourceHandle large = pool.Add("large", ("Fonts/Cousine-Regular.ttf", 24f));
+        ResourceHandle found = default;
+
+        pool.TryGetHandle(("Fonts/Cousine-Regular.ttf", 24f), out found).Should().BeTrue();
+        found.Should().Be(large, "the key is the pair, not the file it names");
+        found.Should().NotBe(small);
+        pool.TryGetHandle(("Fonts/Cousine-Regular.ttf", 18f), out _).Should().BeFalse("a height that was never added is not the same key");
+
+        pool.Release(small).Should().BeTrue();
+        pool.TryGetHandle(("Fonts/Cousine-Regular.ttf", 12f), out _).Should().BeFalse("releasing a resource forgets its key");
+        pool.TryGetHandle(("Fonts/Cousine-Regular.ttf", 24f), out _).Should().BeTrue("the other key of the same file stays");
     }
 }

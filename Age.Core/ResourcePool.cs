@@ -3,12 +3,13 @@ using System.Diagnostics.CodeAnalysis;
 namespace Age.Core;
 
 /// <summary>
-/// Stores resources of a single kind behind <see cref="ResourceHandle"/> values, with a path index for caching.
+/// Stores resources of a single kind behind <see cref="ResourceHandle"/> values, with a key index for caching.
 /// </summary>
+/// <typeparam name="TKey">The type of the key a resource is registered under, such as a path or a tuple of what a cache is keyed by.</typeparam>
 /// <typeparam name="T">The resource payload, such as a device identifier or a small descriptor.</typeparam>
 /// <remarks>
 /// <para>
-/// A pool owns the bookkeeping, not the payload. <see cref="Add"/> hands out a handle and <see cref="TryGet"/> resolves
+/// A pool owns the bookkeeping, not the payload. <see cref="Add(T, TKey)"/> hands out a handle and <see cref="TryGet"/> resolves
 /// one. <see cref="Release"/> drops the payload of a single slot and <see cref="Clear"/> drops the payloads of all of
 /// them, but neither frees the underlying resource, and only <see cref="Clear"/> can run a callback, so the caller is
 /// the one that has to delete the device object.
@@ -19,7 +20,7 @@ namespace Age.Core;
 /// issued it, so a handle passed to the wrong pool is rejected.
 /// </para>
 /// <para>
-/// Every method of the pool is safe to call from more than one thread: the slots, the path index and the counter are
+/// Every method of the pool is safe to call from more than one thread: the slots, the key index and the counter are
 /// guarded by a lock, and the token of the owner is taken atomically, so a background loader cannot corrupt the pool
 /// while it resolves handles. The payloads are not synchronized, and neither are the device objects a caller creates
 /// around them: creating and deleting those belongs to the thread that owns the device.
@@ -27,7 +28,7 @@ namespace Age.Core;
 /// </remarks>
 /// <example>
 /// <code>
-/// var textures = new ResourcePool&lt;uint&gt;();
+/// var textures = new ResourcePool&lt;string, uint&gt;();
 ///
 /// ResourceHandle handle = textures.Add(deviceId, "art/player.png");
 /// if (textures.TryGet(handle, out uint id))
@@ -38,12 +39,13 @@ namespace Age.Core;
 /// textures.Clear(id =&gt; DeleteDeviceTexture(id));
 /// </code>
 /// </example>
-public sealed class ResourcePool<T>
+public sealed class ResourcePool<TKey, T>
+    where TKey : notnull
 {
     private readonly int _owner = ResourceHandle.NextOwner();
     private readonly object _gate = new();
     private Slot[] _slots = new Slot[4];
-    private readonly Dictionary<string, ResourceHandle> _byPath = new(StringComparer.Ordinal);
+    private readonly Dictionary<TKey, ResourceHandle> _byKey = new();
     private int _count;
 
     /// <summary>Gets the number of live resources.</summary>
@@ -58,37 +60,41 @@ public sealed class ResourcePool<T>
         }
     }
 
-    /// <summary>Stores a resource and returns the handle that identifies it.</summary>
+    /// <summary>Stores a resource that no key names and returns the handle that identifies it.</summary>
     /// <param name="value">The resource payload, owned by the pool from now on.</param>
-    /// <param name="path">An optional path to register the resource under so it can be found again with <see cref="TryGetHandle"/>. Pass null for resources that have no path.</param>
     /// <returns>A handle to the stored resource. Its <see cref="ResourceHandle.Generation"/> is new even when the slot was used before.</returns>
-    /// <exception cref="InvalidOperationException">A resource is already registered under the path; look it up with <see cref="TryGetHandle"/> instead of adding a second one.</exception>
-    public ResourceHandle Add(T value, string? path = null)
-    {
-        if (path is not null)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        }
+    public ResourceHandle Add(T value) => AddSlot(value, default!, keyed: false);
 
+    /// <summary>Stores a resource under a key, so that the same resource is not stored twice.</summary>
+    /// <param name="value">The resource payload, owned by the pool from now on.</param>
+    /// <param name="key">The key to register the resource under, so it can be found again with <see cref="TryGetHandle"/>.</param>
+    /// <returns>A handle to the stored resource. Its <see cref="ResourceHandle.Generation"/> is new even when the slot was used before.</returns>
+    /// <exception cref="InvalidOperationException">A resource is already registered under the key; look it up with <see cref="TryGetHandle"/> instead of adding a second one.</exception>
+    public ResourceHandle Add(T value, TKey key) => AddSlot(value, key, keyed: true);
+
+    /// <summary>Stores a resource and returns the handle that identifies it. The caller holds the lock.</summary>
+    private ResourceHandle AddSlot(T value, TKey key, bool keyed)
+    {
         lock (_gate)
         {
-            if (path is not null && _byPath.ContainsKey(path))
+            if (keyed && _byKey.ContainsKey(key))
             {
-                throw new InvalidOperationException($"A resource is already registered under '{path}'.");
+                throw new InvalidOperationException($"A resource is already registered under '{key}'.");
             }
 
             int id = FindFreeSlot();
             ref Slot slot = ref _slots[id - 1];
             slot.Value = value;
-            slot.Path = path;
+            slot.Key = key;
+            slot.HasKey = keyed;
             slot.Generation++;
             slot.InUse = true;
             _count++;
 
             var handle = new ResourceHandle(_owner, id, slot.Generation);
-            if (path is not null)
+            if (keyed)
             {
-                _byPath[path] = handle;
+                _byKey[key] = handle;
             }
 
             return handle;
@@ -118,18 +124,15 @@ public sealed class ResourcePool<T>
         }
     }
 
-    /// <summary>Returns the handle that was registered under the given path, which is how a cache avoids loading the same file twice.</summary>
-    /// <param name="path">A path that a resource was registered under.</param>
-    /// <param name="handle">Receives the handle when the path is known.</param>
-    /// <returns><see langword="true"/> when the path is still registered.</returns>
-    /// <exception cref="ArgumentException">The path is null, empty or whitespace.</exception>
-    public bool TryGetHandle(string path, out ResourceHandle handle)
+    /// <summary>Returns the handle that was registered under the given key, which is how a cache avoids loading the same resource twice.</summary>
+    /// <param name="key">A key that a resource was registered under.</param>
+    /// <param name="handle">Receives the handle when the key is known.</param>
+    /// <returns><see langword="true"/> when the key is still registered.</returns>
+    public bool TryGetHandle(TKey key, out ResourceHandle handle)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
         lock (_gate)
         {
-            return _byPath.TryGetValue(path, out handle);
+            return _byKey.TryGetValue(key, out handle);
         }
     }
 
@@ -165,7 +168,7 @@ public sealed class ResourcePool<T>
         }
     }
 
-    /// <summary>Releases the resource behind the handle and forgets its path, so the slot becomes available for reuse with a new generation.</summary>
+    /// <summary>Releases the resource behind the handle and forgets its key, so the slot becomes available for reuse with a new generation.</summary>
     /// <param name="handle">The handle to release.</param>
     /// <returns><see langword="true"/> when a live resource was released, <see langword="false"/> when the handle was stale or already released.</returns>
     /// <remarks>The pool does not free anything itself: delete the underlying device object next to the call.</remarks>
@@ -178,7 +181,7 @@ public sealed class ResourcePool<T>
                 return false;
             }
 
-            Forget(handle.Id, slot.Path);
+            Forget(handle.Id, slot.Key, slot.HasKey);
             return true;
         }
     }
@@ -222,7 +225,7 @@ public sealed class ResourcePool<T>
                 }
 
                 value = slot.Value;
-                Forget(handle.Id, slot.Path);
+                Forget(handle.Id, slot.Key, slot.HasKey);
             }
 
             release(value);
@@ -241,22 +244,23 @@ public sealed class ResourcePool<T>
             }
 
             T value = slot.Value;
-            Forget(index + 1, slot.Path);
+            Forget(index + 1, slot.Key, slot.HasKey);
             release?.Invoke(value);
         }
     }
 
-    /// <summary>Marks the slot as free and forgets its path. The caller holds the lock.</summary>
-    private void Forget(int id, string? path)
+    /// <summary>Marks the slot as free and forgets its key. The caller holds the lock.</summary>
+    private void Forget(int id, TKey key, bool hasKey)
     {
-        if (path is not null)
+        if (hasKey)
         {
-            _byPath.Remove(path);
+            _byKey.Remove(key);
         }
 
         ref Slot slot = ref _slots[id - 1];
         slot.Value = default!;
-        slot.Path = null;
+        slot.Key = default!;
+        slot.HasKey = false;
         slot.InUse = false;
         _count--;
     }
@@ -304,7 +308,8 @@ public sealed class ResourcePool<T>
     private struct Slot
     {
         public T Value;
-        public string? Path;
+        public TKey Key;
+        public bool HasKey;
         public int Generation;
         public bool InUse;
     }

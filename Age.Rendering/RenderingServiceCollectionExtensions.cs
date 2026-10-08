@@ -26,6 +26,8 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<ITextureService, TextureService>();
         services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<SplashScreen>();
+        services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();
+        services.AddSingleton<IGameShutdownStep, WindowShutdownStep>();
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
         services.AddSingleton<RenderPipeline>();
         services.AddSingleton<RenderSystem>();

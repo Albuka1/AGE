@@ -36,11 +36,34 @@ public sealed class SplashScreenTests
         splash.Draw(renderer, new GameTime(0.016, 0));
 
         renderer.Drawn.Should().HaveCount(1);
-        renderer.LastPosition.Should().Be(new Vector2((1280f - 320f) / 2f, (720f - 320f) / 2f));
-        renderer.LastSize.Should().Be(new Vector2(320f, 320f));
+
+        // The logo of a game that did not size it covers a share of the shorter side of the viewport, so the exact size
+        // follows the window: a viewport 720 pixels tall gives a square of 320 pixels.
+        renderer.LastSize.X.Should().BeApproximately(320f, 0.001f);
+        renderer.LastSize.Y.Should().BeApproximately(320f, 0.001f);
+        renderer.LastPosition.X.Should().BeApproximately((1280f - renderer.LastSize.X) / 2f, 0.001f);
+        renderer.LastPosition.Y.Should().BeApproximately((720f - renderer.LastSize.Y) / 2f, 0.001f);
         renderer.LastColor.Should().Be(Color.White);
         renderer.Cleared.Should().BeTrue();
         renderer.FrameEnded.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_LogoFollowsAResizedWindow()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen();
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+        Vector2 first = renderer.LastSize;
+
+        renderer.ViewportSize = new Vector2(640f, 480f);
+        splash.Draw(renderer, new GameTime(0.016, 0.5));
+
+        renderer.LastSize.X.Should().BeApproximately(480f * (320f / 720f), 0.001f, "the shorter side of the window decides the size of the logo");
+        renderer.LastSize.Should().NotBe(first, "a logo that nobody sized follows the window instead of living with one size");
+        renderer.LastPosition.X.Should().BeApproximately((640f - renderer.LastSize.X) / 2f, 0.001f);
+        renderer.LastPosition.Y.Should().BeApproximately((480f - renderer.LastSize.Y) / 2f, 0.001f);
     }
 
     [Fact]
@@ -163,7 +186,7 @@ public sealed class SplashScreenTests
         public bool Cleared { get; private set; }
         public bool FrameEnded { get; private set; }
 
-        public Vector2 ViewportSize => new(1280f, 720f);
+        public Vector2 ViewportSize { get; set; } = new(1280f, 720f);
 
         public void Attach(IWindowService window)
         {

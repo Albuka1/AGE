@@ -6,7 +6,7 @@ namespace Age.Audio;
 
 /// <summary>
 /// The default <see cref="ISoundService"/>. It decodes through <see cref="ISoundLoader"/>, uploads through
-/// <see cref="IAudioService"/>, and keeps the slot of every sound in a <see cref="ResourcePool{T}"/> keyed by path.
+/// <see cref="IAudioService"/>, and keeps the slot of every sound in a <see cref="ResourcePool{TKey, T}"/> keyed by path.
 /// </summary>
 /// <remarks>
 /// A handle carries the slot it was issued from, so a handle from before an unload stops resolving instead of pointing
@@ -18,7 +18,7 @@ public sealed class SoundService : ISoundService, IDisposable
 {
     private readonly ISoundLoader _sounds;
     private readonly IAudioService _audio;
-    private readonly ResourcePool<int> _loaded = new();
+    private readonly ResourcePool<string, int> _loaded = new();
 
     /// <summary>Initializes the service with the decoder and the audio device it works through.</summary>
     /// <param name="sounds">The loader that decodes the sound files.</param>

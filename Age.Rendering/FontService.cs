@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Runtime.ExceptionServices;
 using Age.Assets;
 using Age.Core;
@@ -11,7 +10,7 @@ namespace Age.Rendering;
 /// <see cref="IRenderer.DrawTextureRegion"/>.
 /// </summary>
 /// <remarks>
-/// The slot of every baked font lives in a <see cref="ResourcePool{T}"/>, keyed by the path and the height, so a handle
+/// The slot of every baked font lives in a <see cref="ResourcePool{TKey, T}"/>, keyed by the pair of the path and the height, so a handle
 /// from before an unload stops resolving instead of pointing at the atlas that replaced it. The service owns the device
 /// textures of the atlases: disposing it releases them all, and a disposed service refuses to load another font while
 /// <see cref="UnloadAll"/> stays available for what a renderer refused to release. It is not thread-safe, so call it
@@ -22,7 +21,7 @@ public sealed class FontService : IFontService, IDisposable
 {
     private readonly IAssetLoader _assets;
     private readonly IRenderer _renderer;
-    private readonly ResourcePool<FontData> _fonts = new();
+    private readonly ResourcePool<(string Path, float Height), FontData> _fonts = new();
     private bool _disposed;
 
     /// <summary>Initializes the service with the loader of the font files and the renderer it draws through.</summary>
@@ -52,7 +51,9 @@ public sealed class FontService : IFontService, IDisposable
             throw new ArgumentOutOfRangeException(nameof(pixelHeight), pixelHeight, "The height of a line has to be a finite number of pixels.");
         }
 
-        string key = Key(relativePath, pixelHeight);
+        // The key of a baked font is the pair of what it was baked from: the path of the file and the height of a line.
+        // A string that joins them would have to be unambiguous, which is a property a tuple has and a string does not.
+        var key = (Path: relativePath, Height: pixelHeight);
 
         if (_fonts.TryGetHandle(key, out ResourceHandle slot) && _fonts.TryGet(slot, out FontData? cached) && cached is not null)
         {
@@ -182,10 +183,6 @@ public sealed class FontService : IFontService, IDisposable
 
         throw new InvalidOperationException("The handle is not a live font of this service. Load the font first, and do not use a handle after its font was unloaded.");
     }
-
-    /// <summary>Returns the key that caches a font: its path and the height it was baked at, in an invariant form.</summary>
-    private static string Key(string relativePath, float pixelHeight) =>
-        relativePath + "@" + pixelHeight.ToString("R", CultureInfo.InvariantCulture);
 
     /// <summary>The atlas of a baked font and the device texture that it was uploaded to.</summary>
     private sealed class FontData

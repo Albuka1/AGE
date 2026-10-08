@@ -26,6 +26,7 @@ public static class CoreServiceCollectionExtensions
         services.AddSingleton<SpriteSorter>();
         services.AddSingleton<TimerSystem>();
         services.AddSingleton<TweenSystem>();
+        services.AddSingleton<GameShutdown>();
         services.AddSingleton(new FixedTimestep(FixedTimestep.DefaultStep));
         services.AddSingleton<IComponentRegistrations, CoreComponentRegistrations>();
         services.AddSingleton<ComponentRegistry>(CreateComponentRegistry);
