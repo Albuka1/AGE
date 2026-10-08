@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never has to wire logging and a logger is never null.
 - `SceneSerializer` reports what it did through an `ILogger<SceneSerializer>`: a scene that was refused leaves the reason
   in the log before the exception reaches the caller, and one that was applied leaves the number of entities it brought.
+  `NullAssetLoader` does the same for an asset that does not exist or whose path escapes the game root, and `SilkRenderer`
+  for a frame that was drawn before it was attached to a window, so a failure of a load or of a frame is a line a person
+  reads rather than a silence.
 - `GameShutdown` and `IGameShutdownStep`: the engine releases what it holds in one call, in an order that every assembly
   declares next to the thing it releases, instead of leaving that order to the game. The splash and what it uploaded, the
   atlases and the textures of a frame, the samples of the sound device, the renderer, and the window that owns the context

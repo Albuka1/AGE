@@ -1,4 +1,5 @@
 using Age.Core;
+using Microsoft.Extensions.Logging;
 using Silk.NET.OpenGL;
 
 namespace Age.Rendering;
@@ -274,7 +275,23 @@ public sealed class SilkRenderer : IRenderer
         ViewportSize = new Vector2(size.X, size.Y);
     }
 
-    private GL RequireContext() => _gl ?? throw new InvalidOperationException("The renderer has not been attached to a window.");
+    private readonly ILogger<SilkRenderer>? _logger;
+
+    /// <summary>Initializes the renderer, which reports a frame that was drawn before the device was there.</summary>
+    /// <param name="logger">The logger that reports a refused frame, or null to report nothing.</param>
+    public SilkRenderer(ILogger<SilkRenderer>? logger = null) => _logger = logger;
+
+    /// <summary>Returns the device of the attached window, and leaves a record when there is none, which is what a refused frame looks like.</summary>
+    private GL RequireContext()
+    {
+        if (_gl is null)
+        {
+            _logger?.LogError("A frame was drawn before the renderer was attached to a window, so nothing was drawn.");
+            throw new InvalidOperationException("The renderer has not been attached to a window.");
+        }
+
+        return _gl;
+    }
 
     /// <summary>Deletes the program, the buffers and the font texture of this renderer. Safe to call when nothing was created.</summary>
     private void ReleaseResources()

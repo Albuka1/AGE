@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.Extensions.Logging;
 
 namespace Age.Assets;
 
@@ -23,7 +24,12 @@ public sealed class NullAssetLoader : IAssetLoader
         ReadCommentHandling = JsonCommentHandling.Skip,
     };
 
+    private readonly ILogger<NullAssetLoader>? _logger;
     private string? _root;
+
+    /// <summary>Initializes the loader, which reports what it refuses to load.</summary>
+    /// <param name="logger">The logger that reports an asset that cannot be read, or null to report nothing.</param>
+    public NullAssetLoader(ILogger<NullAssetLoader>? logger = null) => _logger = logger;
 
     /// <inheritdoc />
     public void Initialize(string gameRoot)
@@ -36,7 +42,19 @@ public sealed class NullAssetLoader : IAssetLoader
     public bool Exists(string relativePath) => File.Exists(Resolve(relativePath));
 
     /// <inheritdoc />
-    public Stream OpenRead(string relativePath) => File.OpenRead(Resolve(relativePath));
+    public Stream OpenRead(string relativePath)
+    {
+        string path = Resolve(relativePath);
+
+        if (!File.Exists(path))
+        {
+            // A missing asset is the failure a game hits first, so it is one that a person has to find in the log.
+            _logger?.LogError("The asset '{Path}' does not exist under the game root.", relativePath);
+            throw new FileNotFoundException($"The asset '{relativePath}' does not exist under the game root.", path);
+        }
+
+        return File.OpenRead(path);
+    }
 
     /// <inheritdoc />
     public T Load<T>(string relativePath)
@@ -91,13 +109,13 @@ public sealed class NullAssetLoader : IAssetLoader
 
         if (Path.IsPathRooted(relativePath))
         {
-            throw new InvalidOperationException($"Absolute paths are not allowed: '{relativePath}'.");
+            Refuse($"Absolute paths are not allowed: '{relativePath}'.");
         }
 
         string combined = Path.GetFullPath(Path.Combine(root, relativePath));
         if (!IsInside(root, combined))
         {
-            throw new InvalidOperationException($"The path escapes the game root: '{relativePath}'.");
+            Refuse($"The path escapes the game root: '{relativePath}'.");
         }
 
         EnsureLinksStayInside(root, combined, relativePath);
@@ -122,6 +140,13 @@ public sealed class NullAssetLoader : IAssetLoader
 
             current = Path.GetDirectoryName(current) ?? string.Empty;
         }
+    }
+
+    /// <summary>Leaves a record of an asset that was refused and throws, which is what every refusal of this loader does.</summary>
+    private void Refuse(string message)
+    {
+        _logger?.LogError("{Reason}", message);
+        throw new InvalidOperationException(message);
     }
 
     private static bool IsInside(string root, string path) =>
