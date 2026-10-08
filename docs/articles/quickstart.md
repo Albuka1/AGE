@@ -238,6 +238,7 @@ provider.GetRequiredService<IGameLoop>().Run(
     update: step => world.Update(step, pipeline),
     render: time =>
     {
+        world.UpdateFrame(time, pipeline);
         camera.ViewportSize = renderer.ViewportSize;
         renderPipeline.Render(world, camera);
     });
@@ -268,3 +269,25 @@ callback runs once per frame after those steps. A frame that took longer than a 
 took that long, so a breakpoint or a window drag does not produce a burst of steps. Register a `FixedTimestep` of your
 own before the loop is resolved to change the step, and read `FixedTimestep.Alpha` to draw a position between two steps.
 Call `Run(tick)` instead to receive the time of every frame directly.
+
+## Pause the game and follow the display
+
+```csharp
+FixedTimestep clock = provider.GetRequiredService<FixedTimestep>();
+
+pipeline.AddFrame(provider.GetRequiredService<UIUpdateSystem>());  // once per frame: the interface
+
+clock.Paused = true;     // the steps stop, the frames keep coming
+clock.TimeScale = 0.5d;  // slow motion, without touching FixedTimestep.Step
+```
+
+`FixedTimestep` is the clock of the game as well as the accumulator of the frame time. `Paused` stops the simulation
+without stopping the frames: the render callback of the loop still runs, and so do the frame systems of the pipeline, so
+a pause menu still reacts to the pointer and still animates. The time of a paused frame is discarded rather than
+accumulated, and a pause that a system sets from inside a step stops the remaining steps of that frame, so resuming does
+not replay the time that passed while the game stood still; `Tick` and `Elapsed` describe the simulation and stop with it.
+
+A system that has to follow the display rather than the simulation implements `IFrameSystem` instead of `ISystem`, is
+registered with `SystemPipeline.AddFrame`, and is called by `World.UpdateFrame` from the render callback. A long frame
+runs several steps and exactly one frame, which is what a camera that smooths, a menu that fades or a debug overlay
+needs. `FixedTimestep.Alpha` still reports the fraction of a step that is left over, for a world that interpolates.

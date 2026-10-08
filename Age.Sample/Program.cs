@@ -24,7 +24,10 @@ var world = new World();
 SystemPipeline pipeline = provider.GetRequiredService<SystemPipeline>();
 CollisionSystem collisions = provider.GetRequiredService<CollisionSystem>();
 pipeline.Add(collisions);
-pipeline.Add(provider.GetRequiredService<UIUpdateSystem>());
+
+// The interface is a frame system, not a step system: the pointer is a state of the frame, and it keeps working while
+// the simulation is paused, which is the whole point of a pause menu.
+pipeline.AddFrame(provider.GetRequiredService<UIUpdateSystem>());
 
 IWindowService windowService = provider.GetRequiredService<IWindowService>();
 windowService.Create(1280, 720, "AGE Sample");
@@ -74,6 +77,11 @@ renderPipeline.Add(uiRenderSystem);
 IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
+FixedTimestep timestep = provider.GetRequiredService<FixedTimestep>();
+
+// The simulation does not start until the splash is over, so the clock starts paused: no step runs behind the logo, and
+// the tick the HUD reports counts the simulation of this game rather than the frames of the splash.
+timestep.Paused = true;
 
 ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
 string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
@@ -100,7 +108,8 @@ lastSpawned = Spawn(world, spawned);
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
-// stays paused until the splash is over, so nothing moves behind the logo.
+// stays paused until the splash is over, so nothing moves behind the logo. `Q` pauses the clock, which stops the steps
+// without stopping the frames, and holding `Tab` slows the simulation down with `FixedTimestep.TimeScale`.
 bool started = false;
 
 gameLoop.Run(
@@ -121,6 +130,10 @@ gameLoop.Run(
     },
     render: time =>
     {
+        // The frame systems run on the time of this frame, whether or not the simulation advanced, so the interface and
+        // the overlays of this game keep working while the clock is paused.
+        world.UpdateFrame(time, pipeline);
+
         if (splash.Draw(renderer, time, input))
         {
             return;
@@ -128,10 +141,22 @@ gameLoop.Run(
 
         started = true;
 
+        // The splash is over, so the clock runs: from here the tick of the HUD counts the steps of this game.
+        timestep.Paused = false;
+
         if (input.IsKeyPressed(Key.Space))
         {
             sounds.Play(click);
         }
+
+        if (input.IsKeyPressed(Key.Q))
+        {
+            timestep.Paused = !timestep.Paused;
+        }
+
+        // Held rather than pressed: the factor is a live state of the clock, so holding the key slows the world down and
+        // letting go brings it back to normal speed.
+        timestep.TimeScale = input.IsKeyDown(Key.Tab) ? 0.25d : 1d;
 
         if (input.IsKeyPressed(Key.F))
         {
@@ -167,8 +192,14 @@ gameLoop.Run(
             ? "nothing spawned yet"
             : $"last spawn is entity {lastSpawned.Id}, generation {lastSpawned.Generation}, {(world.IsAlive(lastSpawned) ? "alive" : "destroyed")}";
 
-        fonts.Draw(font, $"AGE {version} - WASD to move, E to spawn, Space to play, F to save, R to load", new Vector2(24f, 24f), Color.White);
-        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, {spawnText}", new Vector2(24f, 56f), Color.White);
+        // The clock describes the simulation: the tick counts the steps that ran, and it stands still while the game is
+        // paused, even though the frames keep coming.
+        string clockText = timestep.Paused
+            ? $"paused at tick {timestep.Tick}"
+            : $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x";
+
+        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, Space sound, F save, R load, Q pause, Tab slow motion", new Vector2(24f, 24f), Color.White);
+        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open:

@@ -6,7 +6,11 @@ namespace Age.UI;
 /// <summary>
 /// Updates hover and press state for the buttons of a world.
 /// </summary>
-public sealed class UIUpdateSystem : ISystem
+/// <remarks>
+/// The system is an <see cref="IFrameSystem"/>: the pointer is a state of the frame, not of the simulation, so it runs
+/// once per frame and keeps working while the clock is paused, which is what a paused game needs from its interface.
+/// </remarks>
+public sealed class UIUpdateSystem : IFrameSystem
 {
     private readonly IInputService _input;
     private readonly List<Entity> _buttons = new();
@@ -20,7 +24,7 @@ public sealed class UIUpdateSystem : ISystem
 
     /// <summary>Recomputes the hover and press state of the buttons in the given world for the current pointer position.</summary>
     /// <param name="world">The world to update.</param>
-    /// <param name="time">The frame time. The system does not use it.</param>
+    /// <param name="frame">The time of the frame. The system does not use it.</param>
     /// <remarks>
     /// Every button first has <see cref="ButtonComponent.IsHovered"/> and <see cref="ButtonComponent.IsPressed"/> cleared,
     /// so a button that lost the pointer stops reporting a state. Then the buttons that are interactable and have a
@@ -28,7 +32,7 @@ public sealed class UIUpdateSystem : ISystem
     /// <see cref="RectTransformComponent.ZOrder"/> wins; when two share a ZOrder the later entity wins, which matches the
     /// order the UI renderer draws them in. That button is marked hovered, and pressed while the left mouse button is held.
     /// </remarks>
-    public void Update(World world, in GameTime time)
+    public void UpdateFrame(World world, in GameTime frame)
     {
         ArgumentNullException.ThrowIfNull(world);
 

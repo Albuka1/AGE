@@ -42,6 +42,10 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 - **DI-first.** Every subsystem registers through an `AddAge*` extension.
   `World` is deliberately *not* in the container — its lifetime belongs to the
   caller.
+- **Time you can stop.** `FixedTimestep` is the clock of the game as well: `Paused` stops the
+  simulation without stopping the frames, `TimeScale` slows it down or speeds it up, and `Tick`
+  counts the steps. Behaviour that follows the display rather than the simulation implements
+  `IFrameSystem`, so a paused game still moves its menu, its camera and its overlays.
 - **Testable by design.** Renderer, audio device and window are never
   instantiated by the test suite; null services cover the rest.
 

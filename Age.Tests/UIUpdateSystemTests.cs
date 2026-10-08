@@ -17,7 +17,7 @@ public sealed class UIUpdateSystemTests
         var input = new NullInputService { State = new UIInputState(new Vector2(20f, 20f), true) };
         var system = new UIUpdateSystem(input);
 
-        system.Update(world, new GameTime(0d, 0d));
+        system.UpdateFrame(world, new GameTime(0d, 0d));
 
         world.Get<ButtonComponent>(upper).IsPressed.Should().BeTrue();
         world.Get<ButtonComponent>(upper).IsHovered.Should().BeTrue();
