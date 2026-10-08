@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Age.Tests</RootNamespace>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="sounds\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Age.Sample\content\fonts\Cousine-Regular.ttf" CopyToOutputDirectory="PreserveNewest" Link="fonts\Cousine-Regular.ttf" />
+    <None Include="..\Age.Sample\content\fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="fonts\OFL.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
+    <ProjectReference Include="..\Age.Assets\Age.Assets.csproj" />
+    <ProjectReference Include="..\Age.Input\Age.Input.csproj" />
+    <ProjectReference Include="..\Age.Audio\Age.Audio.csproj" />
+    <ProjectReference Include="..\Age.Physics\Age.Physics.csproj" />
+    <ProjectReference Include="..\Age.UI\Age.UI.csproj" />
+    <ProjectReference Include="..\Age.Rendering\Age.Rendering.csproj" />
+  </ItemGroup>
+
+</Project>
