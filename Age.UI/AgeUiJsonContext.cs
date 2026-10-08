@@ -13,6 +13,7 @@ namespace Age.UI;
 [JsonSerializable(typeof(RectTransformComponent))]
 [JsonSerializable(typeof(ButtonComponent))]
 [JsonSerializable(typeof(TextLabelComponent))]
+[JsonSerializable(typeof(CanvasComponent))]
 internal sealed partial class AgeUiJsonContext : JsonSerializerContext
 {
 }

@@ -114,8 +114,7 @@ not have yet, then the platform work.
 - UI widgets: slider, drop-down, check box, text field, scrollable panel, with anchors and clipping.
 - Positional audio with a listener.
 - Text in a scene, and UI labels that can pick a font.
-- Hierarchy and entity references that survive a save.
-- Timers and tweens.
+- Hierarchy.
 - User-defined shaders and materials.
 - OBB collision and multiple contacts.
 - AOT.

@@ -9,6 +9,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Age.SourceGen`, a source generator that writes the `IComponentRegistrations` of an assembly from its `[Component]`
+  attributes, so a component is declared once and its registration follows. The hand-written registration classes of
+  `Age.Core`, `Age.UI`, `Age.Physics` and `Age.Rendering` are gone. A type that is named as a component but is not a
+  struct, or does not implement `IComponent`, is an error of the build (AGE0001, AGE0002) rather than a silent omission.
+  The serialization context cannot be written the same way, and is not: the source generator of `System.Text.Json` never
+  sees what another generator adds to a compilation, so the `[JsonSerializable]` entry stays with the context of the
+  assembly. A missing one is now a compile error of the generated registration, which is louder than a component that
+  turns out to be unsavable after a restart.
+- `[Component("Transform")]`: the one declaration that makes a component type part of a scene, and the name a scene file
+  uses for it. A test of the engine walks every public component of `Age.Core`, `Age.Physics`, `Age.UI` and
+  `Age.Rendering` and fails when one of them has no name, is not registered in the `ComponentRegistry`, or shares a name
+  with another component, so a forgotten registration is a failing test rather than a component that turns out to be
+  unsavable after a restart.
+- `ITextInputService`: the characters that were typed during the current frame, which is what a console or a text field
+  reads. It is a separate interface from `IInputService` because it describes text rather than keys, and a service with no
+  keyboard reports none rather than being absent. `NullInputService` answers it from its `Typed` property, so a test drives
+  what a console reads, and `SilkInputService` collects the characters of the window. `AddAgeInput` registers one instance
+  behind both interfaces, and `AddAgeSilkInput` registers the service that reads the window behind both as well.
+- `DevOverlay`, the developer overlay of a game: the numbers of the frame (frames per second, entities, the tick of the
+  clock, and what every system spent, step and frame) and the console of the engine, drawn with the built-in bitmap font
+  over everything else because it is a render pass like any other. Its console key, Tab by default, opens and closes the
+  console and stands the simulation still while it is open, putting the clock back the way it was when it closes; the
+  characters that were typed reach it, Enter runs the line, backspace removes a character, and the up and down keys walk
+  its history. Its second key, F1 by default, shows and hides the numbers. `Key.Backspace` and `Key.F1` are part of the
+  input of the engine from now on, and the sample registers a command, a setting and the overlay itself.
+- `IConsoleService` and `ConsoleService`: the commands a developer registers, the lines that were entered with their
+  history, and the lines that were written, which the engine draws and a game drives from a key of its own. Typing,
+  backspace, submitting and walking the history are the service, so a command is testable without a window, and it is
+  safe to write to from another thread. `help` and `clear` are always there, and a name is matched without regard to case.
+- `CVarService`: named settings with a type, a description and a default, which code, a configuration source and the
+  console all read and write with the invariant culture. Give the service a console and every setting becomes a command
+  of its own, next to a `cvars` listing, so a parameter can be looked at and changed without rebuilding the game.
+- `SystemTiming`, `SystemPipeline.StepTimings` and `SystemPipeline.FrameTimings`: what every system spent inside the last
+  step and the last frame, in milliseconds, which is what the developer overlay of a game prints.
+- `ConsoleLoggerProvider`, which writes log records into a console, so what the engine and a game report is visible in a
+  running build. `AddAgeCore` also registers `NullLogger<T>` as the logger of every service that asks for one, so a game
+  never has to wire logging and a logger is never null.
+- `SceneSerializer` reports what it did through an `ILogger<SceneSerializer>`: a scene that was refused leaves the reason
+  in the log before the exception reaches the caller, and one that was applied leaves the number of entities it brought.
+  `NullAssetLoader` does the same for an asset that does not exist or whose path escapes the game root, and `SilkRenderer`
+  for a frame that was drawn before it was attached to a window, so a failure of a load or of a frame is a line a person
+  reads rather than a silence.
+- `GameShutdown` and `IGameShutdownStep`: the engine releases what it holds in one call, in an order that every assembly
+  declares next to the thing it releases, instead of leaving that order to the game. The splash and what it uploaded, the
+  atlases and the textures of a frame, the samples of the sound device, the renderer, and the window that owns the context
+  last. A game registers steps of its own for what it holds. A step that throws does not stop the steps behind it,
+  because a shutdown that stopped halfway would leak everything it skipped, and the call is idempotent.
+- Scenes carry the identifier of every entity (`SceneEntity.Id`) and the version of the format (`SceneData.Version`), so
+  a reference between entities survives a save and a load. `World.SceneIdOf` reports the identifier an entity carries,
+  `World.TryEntityOf` and `World.Resolve` map one back to an entity, and `World.Reference` makes a reference out of an
+  entity. A load writes the identifiers of the scene into the world; an entity the world already holds that uses one of
+  them is given a fresh identifier, because the identifiers of the scene win. A scene that names the same identifier
+  twice, or one that was written in a version this build does not read, is refused before the world is touched. Text
+  without a version counts as the current one, so a scene that was written by hand still reads.
+- `EntityRef`, a reference to another entity that survives a save and a load, which is written as a plain number by
+  `EntityRefJsonConverter`. A reference to an entity that a world does not know resolves to the default entity, not to a
+  wrong one, so a scene that refers to something it does not hold cannot be mistaken for a working one.
+- `SceneEntity.Prototype`, which a scene writes and reads but which nothing turns into an entity yet: it is where an
+  entity stops repeating the components of its kind and starts referring to them.
+- `TimerComponent` and the `TimerSystem` that advances it. A timer counts down on the time of the simulation, keeps the
+  leftover of the step that ran past its end, repeats on request, and stands still while it is paused, which is how a game
+  cancels one. A timer that runs out announces it through `TimerElapsedEvent` and stops instead of removing itself, so
+  the entity keeps the record of what happened and the game decides what to do with it.
+- `TweenComponent` and the `TweenSystem` that advances it. A tween moves a value from one number to another over a
+  duration, with an easing, and announces the value it has reached through `TweenUpdatedEvent` on every step it moves,
+  which is what lets the game write that value where it belongs while the component itself holds nothing but numbers: a
+  delegate in a component could neither be saved nor described without reflection. `Value` and `Progress` are readable at
+  any time as well, so a game that only reads the value does not have to subscribe. A tween that does not loop reports
+  its end once and then stops, and a looping one starts over.
+- An event that carries its own entity, such as a timer or a tween, is raised without naming an entity to the bus, so the
+  first parameter of a handler is the default entity for those. Read the entity out of the event itself; the world names
+  one to the handler only for the events that come without one, such as a creation or a component that was added.
+- The event bus: `World.Events` delivers events to the code that subscribed to them. An event is a value, raising one
+  queues it, and `EventBus.Dispatch` hands the queue out. `World.Update` and `World.UpdateFrame` dispatch it at the
+  boundaries of the step, next to `World.ApplyPending`, so a handler never runs in the middle of a system that is
+  changing the world, and an event that a handler raises waits for the next boundary instead of cascading inside the
+  same step. `Subscribe`, `Unsubscribe` and the two `Raise` overloads are the whole surface; a subscriber receives the
+  entity an event was raised for, or the default one for a broadcast.
+- The world announces its own events: `EntityCreatedEvent`, `EntityDestroyedEvent`, `ComponentAddedEvent{T}` (a
+  component that appears, not one that is written over) and `ComponentRemovedEvent{T}`.
+- `EntitySystem`, a base for systems that react to events: it declares what it listens to in `Subscribe`, once, before
+  its first update, and works per step in `OnUpdate`. `Enabled` stops a system from updating while leaving its
+  subscriptions in place, which is what a pause needs.
+- `CollisionEvent`, raised by `CollisionSystem` for every overlapping pair of a step, and `ButtonPressedEvent`, raised
+  by `UIUpdateSystem` in the frame the pointer goes down on a button.
+- Deferred operations on a world, for the code that runs while the world is being enumerated:
+  `World.RequestCreate`, `RequestDestroy`, `RequestSet{T}` and `RequestRemove{T}` queue an operation, and
+  `ApplyPending` applies the queue in the order it was received. `World.Update` and `World.UpdateFrame` apply it before
+  and after the systems of the step, so a request made by a system or a frame system takes effect before the next one.
+  An entity whose destruction was requested is not alive any more for the rest of the step, so `IsAlive` and `Has{T}`
+  already report it as gone while its components stay in place until the queue is applied, and neither `Enumerate` nor
+  `Enumerate{T}` visits it. Creation is queued as well: `RequestCreate` reserves the identifier right away, so the
+  requests that follow it can already use it, and the entity becomes part of the world when the queue is applied. A
+  write that was requested for an entity that is destroyed earlier in the same batch is dropped, while one that was
+  requested before that destruction still lands: the queue decides the order. Destroying a reserved
+  entity outright cancels the creation: the slot goes back to the pool, its generation advances so the identifier stays
+  stale, and the queued creation for it becomes a no-op.
 - The game clock: `FixedTimestep` gained `Tick`, `Paused` and `TimeScale`, so a game stops the simulation without
   stopping the frames and slows it down or speeds it up without changing the step. A paused clock discards the time of
   the frames that pass instead of accumulating it, so a game that was paused for a minute does not resume by running a
@@ -24,6 +121,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Every assembly keeps its files in folders of their kind rather than in one flat folder: `Components`, `Systems`,
+  `Events`, `Scenes`, `World`, `Time`, `Math`, `Graphics`, `Resources`, `Diagnostics`, `Shutdown`, `Passes`, `Overlays`,
+  `Silk`, `Loaders`, `Formats`, `Devices` and `Collisions`, with the service collection extension of an assembly left at
+  its root as its entry point. Nothing about the namespaces changed, so no code has to follow the move: a folder says what
+  a file is, and the namespace says what an assembly offers. The tests are grouped the same way, by the part of the engine
+  they cover.
+- `Canvas` and `Collider` are components of a scene from now on: the canvas had no name and the physics assembly had no
+  serialization context at all, so a scene could hold neither. `AddAgePhysics` registers them, next to the system it already
+  registered. `Collision` is named but stays out of a scene, because a system computes its contact every step:
+  `[Component("Collision", Scene = false)]` keeps what it is without letting a scene write the contact of one frame.
+- **Breaking:** `ResourcePool<T>` became `ResourcePool<TKey, T>`, so a resource is registered under a key of the
+  caller's own type rather than under a string, and `Add(value)` and `Add(value, key)` are separate calls. A cache that is
+  keyed by more than one value, such as the fonts of `FontService`, registers the pair of the path and the height instead
+  of joining them into a string with a separator of its own. `TryGetHandle` no longer rejects an empty key: a key is the
+  caller's type now, and the services that load by path already reject a path that is not a path.
+- **Breaking:** `SplashScreen.LogoSize` is nullable and null by default, which is what makes the logo follow the window
+  instead of living with one size. Set it to draw the logo at exactly that many pixels.
 - **Breaking:** `UIUpdateSystem` is an `IFrameSystem` rather than an `ISystem`, because the pointer is a state of the
   frame and an interface has to keep working while the simulation is paused. Register it with `SystemPipeline.AddFrame`
   rather than `Add`, call `World.UpdateFrame` from the render callback of the loop, and read its `UpdateFrame` where the
@@ -41,6 +155,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `Age.Rendering` embeds its branding images under the logical names
   `Age.Rendering.Resources.Textures.Icons.*` and `Age.Rendering.Resources.Textures.Logo.*` instead of
   `Age.Rendering.Resources.*`, so a game that reads the manifest stream by name has to update the name.
+
+### Fixed
+
+- `World.AssignSceneId` refused to name an entity only after the entity had already given up the identifier it held, which
+  left the world unable to resolve that identifier in the one case that reaches the refusal, a world that ran out of them:
+  the refusal comes first now, and a creation whose identifier cannot be claimed gives its slot back and reports the
+  failure instead of publishing an entity that has none.
+- The generator of the component registrations takes a project property (`RootNamespace`, `AgeComponentRegistrations`,
+  `AgeComponentsJsonContext`) as missing when the project declares it empty, and writes its own defaults, and it escapes a
+  component name when it emits it as a literal, so a name that holds a quote cannot break the generated code.
+- A command of the console that throws no longer reaches the caller: the console reports what happened in a line of its
+  own and answers `false`, so a command that fails is a line a person reads rather than a game that stops.
+- A scene whose identifiers are negative, or one that reaches the end of the type, is refused before the world is touched.
+  The counter of the identifiers of a world saturates instead of wrapping, and it never names two entities with one number:
+  a world that ran out of identifiers refuses instead of handing out one that is taken.
+- `AddAgeSilkInput` registers one `SilkInputService`: the two input interfaces used to be answered by two instances, which
+  opened the input context of the window twice.
+- A repeating `TimerComponent` reported one run per step whatever the step consumed, so a step longer than the run left
+  the timer sinking a step further behind on every step and its remaining time drifting away from zero. It now reports
+  every run that the step consumed and carries the deficit into the run behind it, and a run of no length reports once per
+  step and stands at zero.
+- `RenderingShutdownStep` stopped at the first release that failed, which left the device objects behind it to leak: every
+  release is attempted, and the first failure is thrown once all of them ran.
+- A scene that turned out to be broken after part of it was checked no longer changes the world: `SceneSerializer.Load`
+  records the entities that already hold an identifier of the scene and moves them aside after the whole scene was
+  checked, instead of moving them while the check was still running. It also reserves every identifier of the scene before
+  it creates the first entity, so an identifier this world hands out cannot land on one the scene is about to map, which
+  used to make a load throw in the middle and leave the world half changed.
+- `World.Enumerate<T>` built the text of its exception for every slot it walked, whether it threw or not: the message is
+  built only when the storage of the component type actually changed under the enumeration.
+- The built-in font drew a quad for the space of every line, whose cell in the atlas is blank: only the characters the font
+  draws a mark for reach the draw call now, while the cursor still moves on for every character of the line.
+- A logo the game did not size itself lived with 320 by 320 pixels, whatever the window did: the splash now computes the
+  size of every frame from the shorter side of the viewport.
+- `TrueTypeFontBake` allocated a coverage buffer for every glyph it rasterized, which is one allocation per glyph of every
+  font: a font now allocates one buffer, as large as its largest glyph, and every rasterization writes over the beginning
+  of it. `CoverageBytes` became `CoverageByteCount`, because what it returns is the number of bytes of that buffer.
+- The order in which a game releases its device objects lived in the game and had to be repeated by every game: it is a
+  `GameShutdown` call now, which the assemblies of the engine fill in.
 
 ## [0.2.0] - 2026-10-07
 

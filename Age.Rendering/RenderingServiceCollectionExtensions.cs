@@ -26,6 +26,9 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<ITextureService, TextureService>();
         services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<SplashScreen>();
+        services.AddSingleton<DevOverlay>();
+        services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();
+        services.AddSingleton<IGameShutdownStep, WindowShutdownStep>();
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
         services.AddSingleton<RenderPipeline>();
         services.AddSingleton<RenderSystem>();
@@ -39,13 +42,15 @@ public static class RenderingServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// Call it after <c>AddAgeInput</c>, because the last registration of <see cref="IInputService"/> is the one that a
-    /// single resolve returns. Use it only when the game runs with a window: the service opens the Silk.NET input
-    /// context from that window on the first frame.
+    /// single resolve returns. The same service answers <see cref="ITextInputService"/>. Use it only when the game runs
+    /// with a window: the service opens the Silk.NET input context from that window on the first frame.
     /// </remarks>
     public static IServiceCollection AddAgeSilkInput(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddSingleton<IInputService, SilkInputService>();
+        services.AddSingleton<SilkInputService>();
+        services.AddSingleton<IInputService>(provider => provider.GetRequiredService<SilkInputService>());
+        services.AddSingleton<ITextInputService>(provider => provider.GetRequiredService<SilkInputService>());
         return services;
     }
 }

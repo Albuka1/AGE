@@ -7,5 +7,6 @@
   <Project Path="Age.Rendering/Age.Rendering.csproj" />
   <Project Path="Age.UI/Age.UI.csproj" />
   <Project Path="Age.Sample/Age.Sample.csproj" />
+  <Project Path="Age.SourceGen/Age.SourceGen.csproj" />
   <Project Path="Age.Tests/Age.Tests.csproj" />
 </Solution>

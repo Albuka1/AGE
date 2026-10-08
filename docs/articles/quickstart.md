@@ -72,6 +72,44 @@ The generation checks of `IsAlive`, `Borrow` and `GetRef` are correctness for th
 identifier or a borrow that outlived its entity from reaching the component of the entity that took the slot — and they
 are not a concurrency guarantee, because validation and access are two separate steps.
 
+A world cannot be changed while one of its sequences is being enumerated: a component that appears or disappears, and
+an entity that is created or destroyed, all throw once the sequence notices. Collect the entities into a list first, or
+request the change, which is applied at the end of the step:
+
+```csharp
+foreach (Entity entity in world.Enumerate<TransformComponent>())
+{
+    world.RequestDestroy(entity);   // gone at the end of the step, while this loop runs to its end
+}
+
+world.ApplyPending();   // the loop does this itself, before and after the systems of the step
+```
+
+An entity whose destruction was requested is not alive for the rest of the step, so `IsAlive` and `Has<T>` already report
+it as gone, while its components stay in place until the queue is applied. Neither `Enumerate` nor `Enumerate<T>` visits
+it. `RequestCreate` works the same way for spawning: the identifier is reserved right away and the entity joins the world
+when the queue is applied. Writing over a component that is already there is allowed, and so is changing a component type
+that the sequence you are walking does not look at.
+
+A system can react instead of looking for something every step: the world raises events for its own changes, and the
+systems of the engine raise theirs.
+
+```csharp
+world.Events.Subscribe<CollisionEvent>((_, collision) => Console.WriteLine($"{collision.First} touched {collision.Second}"));
+world.Events.Subscribe<ButtonPressedEvent>((_, pressed) => Console.WriteLine($"button {pressed.Button} was pressed"));
+
+world.Events.Raise(new EntityDestroyedEvent(entity));   // queued like everything else
+world.Events.Dispatch();                                // or let World.Update do it around the systems of the step
+```
+
+`CollisionEvent` comes from the collision system for every overlapping pair of the step, `ButtonPressedEvent` from the UI
+in the frame the pointer goes down on a button, and the world itself announces `EntityCreatedEvent`,
+`EntityDestroyedEvent`, `ComponentAddedEvent<T>` (a component that appears, not one that is written over) and
+`ComponentRemovedEvent<T>`. `EntitySystem` is a base for systems that work this way: it declares its subscriptions in
+`Subscribe` once, before its first update, and works per step in `OnUpdate`; `Enabled` stops a system from updating while
+leaving its subscriptions in place, which is what a pause menu wants. The bus belongs to the world, so a new world needs
+its subscriptions again.
+
 ## Save and load a scene
 
 ```csharp
@@ -105,6 +143,29 @@ services.AddSingleton<IComponentRegistrations, GameComponentRegistrations>();
 A component that refers to a device resource, such as the texture of a `SpriteComponent`, is written
 as the identifier it carried, and that identifier does not survive a reload: load the texture again
 and set it on the component after the scene was loaded.
+
+A scene keeps the identifier of every entity, so a component that refers to another entity survives the save: write the
+reference as `EntityRef`, which a world makes with `World.Reference` and reads back with `World.Resolve`.
+
+```csharp
+world.Set(unit, new TargetComponent { Target = world.Reference(enemy) });
+
+foreach (Entity owner in world.Enumerate<TargetComponent>())
+{
+    Entity target = world.Resolve(world.Get<TargetComponent>(owner).Target);
+
+    if (world.IsAlive(target))
+    {
+        // the reference still names an entity that exists
+    }
+}
+```
+
+`World.SceneIdOf` reports the identifier an entity carries and `World.TryEntityOf` maps one back to an entity. A load
+writes the identifiers of the scene into the world, and an entity the world already holds that uses one of them is given
+a fresh identifier, because the identifiers of the scene win. A scene that was written in a version this build does not
+read is refused, and so is one that names the same identifier twice. `Save` writes `SceneData.Version`, and text without
+it counts as the current version.
 
 ## Load an asset
 
