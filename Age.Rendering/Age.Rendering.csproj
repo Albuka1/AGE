@@ -20,10 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\icon-20.png" />
-    <EmbeddedResource Include="Resources\icon-40.png" />
-    <EmbeddedResource Include="Resources\icon-60.png" />
-    <EmbeddedResource Include="Resources\logo-320.png" />
+    <!-- The branding images live in the shared Resources folder. The logical name keeps them addressable as
+         Age.Rendering.Resources.Textures.*, so where the project sits on disk does not reach the assembly. -->
+    <EmbeddedResource Include="$(AgeResources)Textures/Icons/icon-20.png" LogicalName="Age.Rendering.Resources.Textures.Icons.icon-20.png" />
+    <EmbeddedResource Include="$(AgeResources)Textures/Icons/icon-40.png" LogicalName="Age.Rendering.Resources.Textures.Icons.icon-40.png" />
+    <EmbeddedResource Include="$(AgeResources)Textures/Icons/icon-60.png" LogicalName="Age.Rendering.Resources.Textures.Icons.icon-60.png" />
+    <EmbeddedResource Include="$(AgeResources)Textures/Logo/logo-320.png" LogicalName="Age.Rendering.Resources.Textures.Logo.logo-320.png" />
   </ItemGroup>
 
   <ItemGroup>

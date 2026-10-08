@@ -62,6 +62,13 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 Every project lives in a folder named after it at the repository root, and all build output is
 collected in a single `artifacts/` folder.
 
+Every asset the repository ships lives in one `Resources/` folder at the root, split by kind — `Audio/Effects`,
+`Audio/Samples`, `Fonts`, `Textures/Icons`, `Textures/Logo`, `Textures/Tiles`. `Directory.Build.props` exposes the
+folder as `$(AgeResources)`: `Age.Rendering` embeds the branding images from it, and the sample and the tests copy it
+next to their output, which makes `Resources` the asset root of `Age.Sample` — its paths are written against that
+folder, such as `Fonts/Cousine-Regular.ttf` or `Textures/Tiles/tiles.bmp`. The `Resources/README.md` file lists what
+each of them is and who uses it.
+
 ## Requirements
 
 - .NET SDK **10.0.100** or later

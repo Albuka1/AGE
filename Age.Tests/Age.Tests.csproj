@@ -14,9 +14,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="sounds\**" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\Age.Sample\content\fonts\Cousine-Regular.ttf" CopyToOutputDirectory="PreserveNewest" Link="fonts\Cousine-Regular.ttf" />
-    <None Include="..\Age.Sample\content\fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="fonts\OFL.txt" />
+    <!-- The tests read the whole shared Resources folder, the recordings included, so a fixture is the file the
+         repository ships rather than a copy of it. -->
+    <None Include="$(AgeResources)**" Link="Resources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

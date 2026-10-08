@@ -149,7 +149,7 @@ image twice returns the same texture. Release it with `Unload` when the level th
 
 ```csharp
 IFontService fonts = provider.GetRequiredService<IFontService>();
-FontHandle font = fonts.Load("fonts/Cousine-Regular.ttf", 24f);
+FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f);
 
 Vector2 size = fonts.Measure(font, "Hello AGE");
 fonts.Draw(font, "Hello AGE", new Vector2(32f, 32f), Color.White);
@@ -160,8 +160,9 @@ uploads that atlas as a texture, so text is tinted and drawn like any other spri
 height, so the same file at the same size returns the same atlas. The bake covers the printable ASCII range, and a
 character outside it is drawn as a space, which keeps the rest of the line where it was. `Measure` reports what a line
 advances and how tall it is, which is what places the text of a menu. Draw between `BeginFrame` and `EndFrame`, from the
-render callback of the loop or from a render pass. The sample ships `content/fonts/Cousine-Regular.ttf` under the SIL
-Open Font License 1.1 for exactly this call.
+render callback of the loop or from a render pass. The sample ships `Resources/Fonts/Cousine-Regular.ttf` under the SIL
+Open Font License 1.1 for exactly this call, and its asset root is the shared `Resources` folder, so the paths it
+passes are relative to that folder.
 
 The built-in 8x8 bitmap font is still there for a game that ships no font: `IRenderer.DrawText` draws with it, which is
 what the UI pass uses.
@@ -170,7 +171,7 @@ what the UI pass uses.
 
 ```csharp
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
-SoundHandle click = sounds.Load("sfx/click.wav");
+SoundHandle click = sounds.Load("Audio/Effects/click.wav");
 
 sounds.Play(click, volume: 0.8f);
 ```

@@ -16,7 +16,7 @@ namespace Age.Rendering;
 /// <example>
 /// <code>
 /// IFontService fonts = provider.GetRequiredService&lt;IFontService&gt;();
-/// FontHandle font = fonts.Load("fonts/Cousine-Regular.ttf", 24f);
+/// FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f);
 ///
 /// Vector2 size = fonts.Measure(font, "Hello AGE");
 /// fonts.Draw(font, "Hello AGE", new Vector2(32f, 32f), Color.White);

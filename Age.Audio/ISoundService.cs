@@ -6,7 +6,7 @@ namespace Age.Audio;
 /// </summary>
 /// <example>
 /// <code>
-/// SoundHandle click = sounds.Load("sfx/click.wav");
+/// SoundHandle click = sounds.Load("Audio/Effects/click.wav");
 /// sounds.Play(click);
 ///
 /// sounds.Unload(click);

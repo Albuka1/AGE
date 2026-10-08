@@ -1,6 +1,7 @@
-# Sound fixtures
+# Sound samples
 
-Two short real recordings that the sound tests decode. They are the first two seconds of two public
+Two short real recordings that the sound tests decode. They are part of the shared [`Resources`](../README.md)
+folder, and the tests read them from `Audio/Samples` relative to it. They are the first two seconds of two public
 samples, cut at a page boundary (`sample.ogg`) and at a frame boundary (`sample.mp3`) so that each
 file stays a valid stream:
 

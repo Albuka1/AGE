@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`artifacts/bin/<project>/`, `artifacts/obj/<project>/`) instead of a `bin`/`obj` pair next to each
   project. Consumers must update project references and script paths: the paths are now
   `Age.Core/Age.Core.csproj`, `Age.Tests/Age.Tests.csproj`, `Age.Sample/Age.Sample.csproj` and so on.
+- Every asset the repository ships moved out of the projects and into one `Resources/` folder at the root, split by
+  kind: `Audio/Effects`, `Audio/Samples`, `Fonts`, `Textures/Icons`, `Textures/Logo` and `Textures/Tiles`.
+  `Directory.Build.props` exposes the folder as `$(AgeResources)`, `Age.Rendering` embeds the branding images from
+  it, and `Age.Sample` and `Age.Tests` copy it next to their output, so `Resources` is the asset root a game writes
+  its paths against, such as `Fonts/Cousine-Regular.ttf` or `Textures/Tiles/tiles.bmp`.
+- **Breaking:** `Age.Rendering` embeds its branding images under the logical names
+  `Age.Rendering.Resources.Textures.Icons.*` and `Age.Rendering.Resources.Textures.Logo.*` instead of
+  `Age.Rendering.Resources.*`, so a game that reads the manifest stream by name has to update the name.
 
 ## [0.2.0] - 2026-10-07
 

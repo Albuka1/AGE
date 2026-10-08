@@ -19,6 +19,10 @@
     <BaseOutputPath>$(MSBuildThisFileDirectory)artifacts/bin/$(MSBuildProjectName)/</BaseOutputPath>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)artifacts/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
     <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+
+    <!-- Every asset the repository ships sits in one Resources/ folder at the root, split by kind, so a
+         project embeds a file from there or copies the folder next to its output. -->
+    <AgeResources>$(MSBuildThisFileDirectory)Resources/</AgeResources>
   </PropertyGroup>
 
 </Project>
