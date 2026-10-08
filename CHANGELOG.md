@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Age.Content`, the assembly that holds the content of a game, with its `YamlReader` first: the subset of YAML that the
+  content of the engine is written in — scalars, lists, dictionaries and the nesting of them, with comments, empty lines
+  and quotes — read into a tree where every value remembers the line it came from. The subset is fixed on purpose
+  (ADR-8): a document that asks for anchors, aliases, tags, flow style or block scalars is refused with the line and the
+  column of the mistake, and so is a name that appears twice, a line that does not line up with its block, and a value
+  that is both a word and a block.
 - `Age.SourceGen`, a source generator that writes the `IComponentRegistrations` of an assembly from its `[Component]`
   attributes, so a component is declared once and its registration follows. The hand-written registration classes of
   `Age.Core`, `Age.UI`, `Age.Physics` and `Age.Rendering` are gone. A type that is named as a component but is not a
