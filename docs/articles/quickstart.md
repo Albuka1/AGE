@@ -91,6 +91,25 @@ it. `RequestCreate` works the same way for spawning: the identifier is reserved 
 when the queue is applied. Writing over a component that is already there is allowed, and so is changing a component type
 that the sequence you are walking does not look at.
 
+A system can react instead of looking for something every step: the world raises events for its own changes, and the
+systems of the engine raise theirs.
+
+```csharp
+world.Events.Subscribe<CollisionEvent>((_, collision) => Console.WriteLine($"{collision.First} touched {collision.Second}"));
+world.Events.Subscribe<ButtonPressedEvent>((_, pressed) => Console.WriteLine($"button {pressed.Button} was pressed"));
+
+world.Events.Raise(new EntityDestroyedEvent(entity));   // queued like everything else
+world.Events.Dispatch();                                // or let World.Update do it around the systems of the step
+```
+
+`CollisionEvent` comes from the collision system for every overlapping pair of the step, `ButtonPressedEvent` from the UI
+in the frame the pointer goes down on a button, and the world itself announces `EntityCreatedEvent`,
+`EntityDestroyedEvent`, `ComponentAddedEvent<T>` (a component that appears, not one that is written over) and
+`ComponentRemovedEvent<T>`. `EntitySystem` is a base for systems that work this way: it declares its subscriptions in
+`Subscribe` once, before its first update, and works per step in `OnUpdate`; `Enabled` stops a system from updating while
+leaving its subscriptions in place, which is what a pause menu wants. The bus belongs to the world, so a new world needs
+its subscriptions again.
+
 ## Save and load a scene
 
 ```csharp

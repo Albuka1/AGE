@@ -56,6 +56,11 @@ public sealed class UIUpdateSystem : IFrameSystem
         pressed.IsHovered = true;
         pressed.IsPressed = _input.IsMouseButtonDown(MouseButton.Left);
         world.Set(topMost.Value, pressed);
+
+        if (_input.IsMouseButtonPressed(MouseButton.Left))
+        {
+            world.Events.Raise(new ButtonPressedEvent(topMost.Value));
+        }
     }
 
     private void CollectButtons(World world)

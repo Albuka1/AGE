@@ -93,6 +93,17 @@ if (File.Exists(scenePath))
     Console.WriteLine($"Loaded the scene from {scenePath}.");
 }
 
+// A bus belongs to a world, so every world this game makes needs its subscriptions again: the collision system
+// announces each overlapping pair it found, and the UI announces a press on a button. Both save this game from looking
+// for the same thing every step, and both run at the boundary of the step.
+void SubscribeEvents(World subscribed)
+{
+    subscribed.Events.Subscribe<CollisionEvent>((_, collision) => TintByCollision(subscribed, collision.First, collision.Second));
+    subscribed.Events.Subscribe<ButtonPressedEvent>((_, _) => sounds.Play(click));
+}
+
+SubscribeEvents(world);
+
 const float MoveSpeed = 240f;
 const float SpawnLifetime = 2f;
 
@@ -125,8 +136,10 @@ gameLoop.Run(
         AgeSpawned(world, spawned, step.Delta, SpawnLifetime);
         world.Update(step, pipeline);
 
-        // The collision system resolved the contacts of this step, so the sprites show whether they touch right now.
-        TintByCollision(world, first, second);
+        // A contact is announced by `CollisionEvent`, but a pair that came apart raises nothing: the collision component
+        // of the sprite is gone and the event was about the contact, so the calm colour goes back on here, every step.
+        RestoreCalmColour(world, first, Color.White);
+        RestoreCalmColour(world, second, Color.Green);
     },
     render: time =>
     {
@@ -143,11 +156,6 @@ gameLoop.Run(
 
         // The splash is over, so the clock runs: from here the tick of the HUD counts the steps of this game.
         timestep.Paused = false;
-
-        if (input.IsKeyPressed(Key.Space))
-        {
-            sounds.Play(click);
-        }
 
         if (input.IsKeyPressed(Key.Q))
         {
@@ -168,6 +176,7 @@ gameLoop.Run(
         {
             world = LoadScene(scenes, scenePath);
             first = MoveTarget(world, tiles);
+            SubscribeEvents(world);
             Console.WriteLine("Loaded the scene again.");
         }
 
@@ -198,7 +207,7 @@ gameLoop.Run(
             ? $"paused at tick {timestep.Tick}"
             : $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x";
 
-        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, Space sound, F save, R load, Q pause, Tab slow motion", new Vector2(24f, 24f), Color.White);
+        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Tab slow motion", new Vector2(24f, 24f), Color.White);
         fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
     });
 
@@ -322,6 +331,19 @@ static Entity Spawn(World world, List<(Entity Entity, float Age)> spawned)
     spawned.Add((entity, 0f));
 
     return entity;
+}
+
+// Puts the calm colour back on a sprite that is not touching anything any more. A contact is announced as long as it
+// exists, so the sprite of a pair that came apart would keep its touching colour without this.
+static void RestoreCalmColour(World world, Entity entity, Color calm)
+{
+    if (!world.IsAlive(entity) || !world.Has<SpriteComponent>(entity) || world.Has<CollisionComponent>(entity))
+    {
+        return;
+    }
+
+    ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
+    sprite.Color = calm;
 }
 
 // Tints a sprite while its collider touches another one, so the contacts of the collision system are visible.

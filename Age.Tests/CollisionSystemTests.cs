@@ -25,6 +25,27 @@ public sealed class CollisionSystemTests
     }
 
     [Fact]
+    public void CollisionSystem_OverlappingColliders_RaisesTheCollisionEvent()
+    {
+        var world = new World();
+        CreateBox(world, new Vector2(0f, 0f));
+        CreateBox(world, new Vector2(16f, 16f));
+        var collisions = new List<CollisionEvent>();
+        world.Events.Subscribe<CollisionEvent>((_, collision) => collisions.Add(collision));
+        var system = new CollisionSystem();
+
+        system.Update(world, new GameTime(0d, 0d));
+
+        collisions.Should().BeEmpty("the event waits for the boundary of the step");
+
+        world.Events.Dispatch();
+
+        collisions.Should().ContainSingle();
+        collisions[0].First.Should().Be(system.LastPairs[0].A);
+        collisions[0].Second.Should().Be(system.LastPairs[0].B);
+    }
+
+    [Fact]
     public void CollisionSystem_NonOverlappingColliders_ProducesEmpty()
     {
         var world = new World();

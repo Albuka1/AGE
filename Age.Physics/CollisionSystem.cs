@@ -200,6 +200,9 @@ public sealed class CollisionSystem : ISystem
                     _pairs.Add(new CollisionPair(a, b));
                     Attach(world, a, b);
                     Attach(world, b, a);
+
+                    // The pair is announced as well, so a game reacts to a contact instead of looking for one every step.
+                    world.Events.Raise(new CollisionEvent(a, b));
                 }
             }
         }

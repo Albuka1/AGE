@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The event bus: `World.Events` delivers events to the code that subscribed to them. An event is a value, raising one
+  queues it, and `EventBus.Dispatch` hands the queue out. `World.Update` and `World.UpdateFrame` dispatch it at the
+  boundaries of the step, next to `World.ApplyPending`, so a handler never runs in the middle of a system that is
+  changing the world, and an event that a handler raises waits for the next boundary instead of cascading inside the
+  same step. `Subscribe`, `Unsubscribe` and the two `Raise` overloads are the whole surface; a subscriber receives the
+  entity an event was raised for, or the default one for a broadcast.
+- The world announces its own events: `EntityCreatedEvent`, `EntityDestroyedEvent`, `ComponentAddedEvent{T}` (a
+  component that appears, not one that is written over) and `ComponentRemovedEvent{T}`.
+- `EntitySystem`, a base for systems that react to events: it declares what it listens to in `Subscribe`, once, before
+  its first update, and works per step in `OnUpdate`. `Enabled` stops a system from updating while leaving its
+  subscriptions in place, which is what a pause needs.
+- `CollisionEvent`, raised by `CollisionSystem` for every overlapping pair of a step, and `ButtonPressedEvent`, raised
+  by `UIUpdateSystem` in the frame the pointer goes down on a button.
 - Deferred operations on a world, for the code that runs while the world is being enumerated:
   `World.RequestCreate`, `RequestDestroy`, `RequestSet{T}` and `RequestRemove{T}` queue an operation, and
   `ApplyPending` applies the queue in the order it was received. `World.Update` and `World.UpdateFrame` apply it before
@@ -17,7 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already report it as gone while its components stay in place until the queue is applied, and neither `Enumerate` nor
   `Enumerate{T}` visits it. Creation is queued as well: `RequestCreate` reserves the identifier right away, so the
   requests that follow it can already use it, and the entity becomes part of the world when the queue is applied. A
-  write that was requested for an entity that is destroyed earlier in the same batch is dropped. Destroying a reserved
+  write that was requested for an entity that is destroyed earlier in the same batch is dropped, while one that was
+  requested before that destruction still lands: the queue decides the order. Destroying a reserved
   entity outright cancels the creation: the slot goes back to the pool, its generation advances so the identifier stays
   stale, and the queued creation for it becomes a no-op.
 - The game clock: `FixedTimestep` gained `Tick`, `Paused` and `TimeScale`, so a game stops the simulation without

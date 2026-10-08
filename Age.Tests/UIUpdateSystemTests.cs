@@ -25,6 +25,31 @@ public sealed class UIUpdateSystemTests
         world.Get<ButtonComponent>(lower).IsHovered.Should().BeFalse();
     }
 
+    [Fact]
+    public void UIUpdateSystem_PressOnAButton_RaisesThePressedEventOnce()
+    {
+        var world = new World();
+        Entity button = CreateButton(world, zOrder: 0);
+        var input = new NullInputService();
+        var system = new UIUpdateSystem(input);
+        var pressed = new List<Entity>();
+        world.Events.Subscribe<ButtonPressedEvent>((_, e) => pressed.Add(e.Button));
+
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(20f, 20f), true);
+        input.BeginFrame();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+        world.Events.Dispatch();
+
+        pressed.Should().ContainSingle().Which.Should().Be(button);
+
+        input.BeginFrame();   // the frame the loop opens while the button is still held
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+        world.Events.Dispatch();
+
+        pressed.Should().ContainSingle("holding the button does not press it again");
+    }
+
     private static Entity CreateButton(World world, int zOrder)
     {
         Entity entity = world.CreateEntity();

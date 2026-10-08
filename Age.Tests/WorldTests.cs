@@ -414,6 +414,78 @@ public sealed class WorldTests
         world.Enumerate().Should().ContainSingle();
     }
 
+    [Fact]
+    public void World_LifecycleEvents_WaitForTheBoundary()
+    {
+        var world = new World();
+        var seen = new List<string>();
+        world.Events.Subscribe<EntityCreatedEvent>((_, e) => seen.Add($"created {e.Entity.Id}"));
+        world.Events.Subscribe<ComponentAddedEvent<TransformComponent>>((_, e) => seen.Add($"added {e.Entity.Id}"));
+        world.Events.Subscribe<ComponentRemovedEvent<TransformComponent>>((_, e) => seen.Add($"removed {e.Entity.Id}"));
+        world.Events.Subscribe<EntityDestroyedEvent>((_, e) => seen.Add($"destroyed {e.Entity.Id}"));
+
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new TransformComponent());
+        world.Remove<TransformComponent>(entity);
+        world.DestroyEntity(entity);
+
+        seen.Should().BeEmpty("the events of a step are delivered at its boundary");
+
+        world.Events.Dispatch().Should().Be(4);
+        seen.Should().Equal("created 0", "added 0", "removed 0", "destroyed 0");
+    }
+
+    [Fact]
+    public void World_ComponentThatIsWrittenOver_IsNotAnnouncedAgain()
+    {
+        var world = new World();
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new TransformComponent());
+        world.Events.Dispatch();   // what the setup did has announced itself already
+        int added = 0;
+        world.Events.Subscribe<ComponentAddedEvent<TransformComponent>>((_, _) => added++);
+
+        world.Set(entity, new TransformComponent { Position = new Vector2(1f, 1f) });
+
+        world.Events.Dispatch().Should().Be(0, "only a component that appears is announced");
+        added.Should().Be(0);
+    }
+
+    [Fact]
+    public void World_Update_DeliversTheEventsOfTheStep()
+    {
+        var world = new World();
+        Entity entity = world.CreateEntity();
+        var destroyed = new List<Entity>();
+        world.Events.Subscribe<EntityDestroyedEvent>((_, e) => destroyed.Add(e.Entity));
+        world.Events.Dispatch();
+        var pipeline = new SystemPipeline();
+        pipeline.Add(new DestroyRequestingSystem(entity));
+
+        world.Update(new GameTime(0d, 0d), pipeline);
+
+        destroyed.Should().ContainSingle().Which.Should().Be(entity, "the boundary of the step delivered the event");
+    }
+
+    [Fact]
+    public void World_WriteRequestedBeforeTheDestruction_StillLands()
+    {
+        var world = new World();
+        Entity entity = world.CreateEntity();
+        world.Events.Dispatch();
+        var added = new List<Entity>();
+        world.Events.Subscribe<ComponentAddedEvent<TransformComponent>>((_, e) => added.Add(e.Entity));
+
+        world.RequestSet(entity, new TransformComponent());
+        world.RequestDestroy(entity);
+
+        world.ApplyPending();
+        world.Events.Dispatch();
+
+        added.Should().ContainSingle("the write was requested before the destruction, so the queue applies it first");
+        world.IsAlive(entity).Should().BeFalse();
+    }
+
     private struct TestComponent : IComponent
     {
         public int Value;

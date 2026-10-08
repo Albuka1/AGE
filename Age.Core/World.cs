@@ -30,6 +30,15 @@ public sealed class World
     private readonly HashSet<int> _reserved = new();
     private int _structureVersion;
 
+    /// <summary>Gets the bus that delivers events to the subscribers of this world.</summary>
+    /// <remarks>
+    /// The bus belongs to the world, not to the container, so two worlds never share subscribers. Raising an event
+    /// queues it; <see cref="Update"/> and <see cref="UpdateFrame"/> dispatch the queue at the boundaries of the step.
+    /// The world uses it for its own events as well: <see cref="EntityCreatedEvent"/>, <see cref="EntityDestroyedEvent"/>
+    /// and the two component events of <see cref="Set{T}"/> and <see cref="Remove{T}"/>.
+    /// </remarks>
+    public EventBus Events { get; } = new();
+
     /// <summary>Creates an entity and returns its identifier. The slot of a destroyed entity is handed out again in a new generation.</summary>
     /// <remarks>
     /// The components of the entity that used the slot before were removed with it, and the storage of the slot is
@@ -80,6 +89,8 @@ public sealed class World
         {
             store.Remove(entity.Id);
         }
+
+        Events.Raise(new EntityDestroyedEvent(entity));
     }
 
     /// <summary>Requests the creation of an entity, which is applied with the other pending operations.</summary>
@@ -127,8 +138,8 @@ public sealed class World
     /// <param name="entity">The entity that receives the component.</param>
     /// <param name="value">The component to attach.</param>
     /// <remarks>
-    /// A request for an entity that is destroyed before the pending operations run is dropped, so a sequence like
-    /// «request the destruction, then request a write» does not throw.
+    /// The queue decides the order: a write that was requested before the destruction of the entity still lands, and one
+    /// that was requested after it finds the slot gone and is dropped, so neither order throws.
     /// </remarks>
     public void RequestSet<T>(Entity entity, in T value) where T : struct, IComponent =>
         _pending.Add(new SetOperation<T>(entity, value));
@@ -172,8 +183,7 @@ public sealed class World
     /// gone. See <see cref="RequestDestroy"/>.
     /// </remarks>
     public bool IsAlive(Entity entity) =>
-        entity.Id >= 0 && entity.Id < _alive.Count && _alive[entity.Id] && _generations[entity.Id] == entity.Generation &&
-        (_pendingDestroy.Count == 0 || !_pendingDestroy.Contains(entity));
+        IsSlotAlive(entity) && (_pendingDestroy.Count == 0 || !_pendingDestroy.Contains(entity));
 
     /// <summary>Returns the component of type <typeparamref name="T"/> attached to the entity.</summary>
     /// <typeparam name="T">The component type to read. Components are structs that implement <see cref="IComponent"/>.</typeparam>
@@ -230,11 +240,15 @@ public sealed class World
     }
 
     /// <summary>Attaches a component to the entity, replacing any existing value of the same type.</summary>
-    /// <remarks>A reference that was obtained with <see cref="GetRef{T}"/> is invalidated when the call grows the storage of the component type.</remarks>
+    /// <remarks>
+    /// A reference that was obtained with <see cref="GetRef{T}"/> is invalidated when the call grows the storage of the
+    /// component type. A component that appears — as opposed to one that is written over — queues a
+    /// <see cref="ComponentAddedEvent{T}"/> on <see cref="Events"/>.
+    /// </remarks>
     public void Set<T>(Entity entity, in T value) where T : struct, IComponent
     {
         EnsureAlive(entity);
-        GetStore<T>().Set(entity.Id, value);
+        SetComponent(entity, value);
     }
 
     /// <summary>Determines whether the entity has a component of type <typeparamref name="T"/>.</summary>
@@ -245,13 +259,14 @@ public sealed class World
     /// <remarks>
     /// Removing a component that the entity does not have does nothing. So does an identifier of a destroyed entity,
     /// even when the slot it names was handed out again: its components went with the entity, and the ones now stored in
-    /// the slot belong to another entity.
+    /// the slot belong to another entity. A component that goes away queues a <see cref="ComponentRemovedEvent{T}"/> on
+    /// <see cref="Events"/>.
     /// </remarks>
     public void Remove<T>(Entity entity) where T : struct, IComponent
     {
-        if (IsAlive(entity) && _stores.TryGetValue(typeof(T), out IComponentStore? store))
+        if (IsAlive(entity))
         {
-            store.Remove(entity.Id);
+            RemoveComponent<T>(entity);
         }
     }
 
@@ -341,8 +356,10 @@ public sealed class World
     {
         ArgumentNullException.ThrowIfNull(pipeline);
         ApplyPending();
+        Events.Dispatch();
         pipeline.Update(this, time);
         ApplyPending();
+        Events.Dispatch();
     }
 
     /// <summary>Runs the frame systems of the pipeline against this world, once per frame.</summary>
@@ -356,9 +373,22 @@ public sealed class World
     {
         ArgumentNullException.ThrowIfNull(pipeline);
         ApplyPending();
+        Events.Dispatch();
         pipeline.UpdateFrame(this, frame);
         ApplyPending();
+        Events.Dispatch();
     }
+
+    /// <summary>
+    /// Determines whether the slot of an identifier is alive, which is <see cref="IsAlive"/> without the destruction that
+    /// was only requested.
+    /// </summary>
+    /// <remarks>
+    /// The pending operations use this, because they run in the order they were requested: a write that was requested
+    /// before the destruction of its entity still lands, and one that came after it finds the slot gone.
+    /// </remarks>
+    private bool IsSlotAlive(Entity entity) =>
+        entity.Id >= 0 && entity.Id < _alive.Count && _alive[entity.Id] && _generations[entity.Id] == entity.Generation;
 
     private void EnsureAlive(Entity entity)
     {
@@ -388,6 +418,34 @@ public sealed class World
         var store = new ComponentStore<T>();
         _stores[typeof(T)] = store;
         return store;
+    }
+
+    /// <summary>Writes a component into the slot of an entity, without validating the entity first.</summary>
+    /// <remarks>
+    /// The pending operations call this, because a write they apply was validated against the slot when they ran and the
+    /// entity may be waiting for its destruction. A component that appears is announced on <see cref="Events"/>.
+    /// </remarks>
+    private void SetComponent<T>(Entity entity, in T value) where T : struct, IComponent
+    {
+        ComponentStore<T> store = GetStore<T>();
+        bool appeared = !store.Has(entity.Id);
+        store.Set(entity.Id, value);
+
+        if (appeared)
+        {
+            Events.Raise(new ComponentAddedEvent<T>(entity));
+        }
+    }
+
+    /// <summary>Removes a component from the slot of an entity, without validating the entity first.</summary>
+    /// <remarks>A component that goes away is announced on <see cref="Events"/>.</remarks>
+    private void RemoveComponent<T>(Entity entity) where T : struct, IComponent
+    {
+        if (_stores.TryGetValue(typeof(T), out IComponentStore? store) && store.Has(entity.Id))
+        {
+            store.Remove(entity.Id);
+            Events.Raise(new ComponentRemovedEvent<T>(entity));
+        }
     }
 
     /// <summary>Takes a slot for an entity, without making it part of the world yet.</summary>
@@ -426,6 +484,7 @@ public sealed class World
         _reserved.Remove(entity.Id);
         _alive[entity.Id] = true;
         _structureVersion++;
+        Events.Raise(new EntityCreatedEvent(entity));
     }
 
     /// <summary>Throws when an enumeration that is walking the world notices that the world changed underneath it.</summary>
@@ -481,10 +540,11 @@ public sealed class World
 
         public override void Apply(World world)
         {
-            // The entity may have been destroyed by an earlier operation of the same batch, and that wins.
-            if (world.IsAlive(_entity))
+            // The slot is checked without the destruction that is only requested, because the queue decides the order:
+            // this write was requested before it, so it lands. One requested after it finds the slot gone.
+            if (world.IsSlotAlive(_entity))
             {
-                world.Set(_entity, _value);
+                world.SetComponent(_entity, _value);
             }
         }
     }
@@ -495,7 +555,13 @@ public sealed class World
 
         public RemoveOperation(Entity entity) => _entity = entity;
 
-        public override void Apply(World world) => world.Remove<T>(_entity);
+        public override void Apply(World world)
+        {
+            if (world.IsSlotAlive(_entity))
+            {
+                world.RemoveComponent<T>(_entity);
+            }
+        }
     }
 
     private sealed class ComponentStore<T> : IComponentStore where T : struct, IComponent
