@@ -6,7 +6,7 @@ namespace Age.Assets;
 /// </summary>
 /// <example>
 /// <code>
-/// SoundData click = sounds.Load("sfx/click.wav");
+/// SoundData click = sounds.Load("Audio/Effects/click.wav");
 /// Console.WriteLine($"{click.Duration.TotalSeconds:0.00} s");
 /// </code>
 /// </example>

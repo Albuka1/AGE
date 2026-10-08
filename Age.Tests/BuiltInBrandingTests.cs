@@ -8,6 +8,9 @@ namespace Age.Tests;
 
 public sealed class BuiltInBrandingTests
 {
+    /// <summary>The logical name under which the assembly embeds the logo, which every branding image follows.</summary>
+    private const string LogoResource = "Age.Rendering.Resources.Textures.Logo.logo-320.png";
+
     [Fact]
     public void BuiltInBranding_Assembly_EmbedsTheIconsAndTheLogo()
     {
@@ -15,21 +18,21 @@ public sealed class BuiltInBrandingTests
 
         assembly.GetManifestResourceNames().Should().Contain(
         [
-            "Age.Rendering.Resources.icon-20.png",
-            "Age.Rendering.Resources.icon-40.png",
-            "Age.Rendering.Resources.icon-60.png",
-            "Age.Rendering.Resources.logo-320.png",
+            "Age.Rendering.Resources.Textures.Icons.icon-20.png",
+            "Age.Rendering.Resources.Textures.Icons.icon-40.png",
+            "Age.Rendering.Resources.Textures.Icons.icon-60.png",
+            LogoResource,
         ]);
     }
 
     [Theory]
-    [InlineData("icon-20.png", 20)]
-    [InlineData("icon-40.png", 40)]
-    [InlineData("icon-60.png", 60)]
-    [InlineData("logo-320.png", 320)]
-    public void BuiltInBranding_Asset_DecodesAsASquareRgbaImage(string fileName, int size)
+    [InlineData("Age.Rendering.Resources.Textures.Icons.icon-20.png", 20)]
+    [InlineData("Age.Rendering.Resources.Textures.Icons.icon-40.png", 40)]
+    [InlineData("Age.Rendering.Resources.Textures.Icons.icon-60.png", 60)]
+    [InlineData(LogoResource, 320)]
+    public void BuiltInBranding_Asset_DecodesAsASquareRgbaImage(string resourceName, int size)
     {
-        using Stream stream = typeof(SplashScreen).Assembly.GetManifestResourceStream($"Age.Rendering.Resources.{fileName}")!;
+        using Stream stream = typeof(SplashScreen).Assembly.GetManifestResourceStream(resourceName)!;
         ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha)!;
 
         image.Width.Should().Be(size);
@@ -40,7 +43,7 @@ public sealed class BuiltInBrandingTests
     [Fact]
     public void BuiltInBranding_Logo_HasATransparentBackground()
     {
-        using Stream stream = typeof(SplashScreen).Assembly.GetManifestResourceStream("Age.Rendering.Resources.logo-320.png")!;
+        using Stream stream = typeof(SplashScreen).Assembly.GetManifestResourceStream(LogoResource)!;
         ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha)!;
 
         image.Data[3].Should().Be(0, "the top-left corner of the logo has no background");

@@ -33,16 +33,16 @@ IRenderer renderer = provider.GetRequiredService<IRenderer>();
 renderer.Attach(windowService);
 
 IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
-assets.Initialize(Path.Combine(AppContext.BaseDirectory, "content"));
+assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
 
 ITextureService textures = provider.GetRequiredService<ITextureService>();
-TextureHandle tiles = textures.Load("tiles.bmp");
+TextureHandle tiles = textures.Load("Textures/Tiles/tiles.bmp");
 
 IFontService fonts = provider.GetRequiredService<IFontService>();
-FontHandle font = fonts.Load("fonts/Cousine-Regular.ttf", 24f);
+FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f);
 
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
-SoundHandle click = sounds.Load("click.wav");
+SoundHandle click = sounds.Load("Audio/Effects/click.wav");
 
 var camera = new Camera2D
 {
@@ -161,7 +161,7 @@ gameLoop.Run(
         camera.ViewportSize = renderer.ViewportSize;
         renderPipeline.Render(world, camera);
 
-        // Text of this game, baked from the TrueType font in content/fonts. The UI pass above draws with the built-in
+        // Text of this game, baked from the TrueType font in Resources/Fonts. The UI pass above draws with the built-in
         // bitmap font, so both are visible in the same frame.
         string spawnText = lastSpawned == default
             ? "nothing spawned yet"

@@ -12,7 +12,7 @@ namespace Age.Assets;
 /// </remarks>
 /// <example>
 /// <code>
-/// assets.Initialize("content");
+/// assets.Initialize("Resources");
 ///
 /// TransformComponent spawn = assets.Load&lt;TransformComponent&gt;("spawn.json");
 /// string readme = assets.Load&lt;string&gt;("readme.txt");

@@ -11,8 +11,8 @@ namespace Age.Assets;
 /// </remarks>
 /// <example>
 /// <code>
-/// SoundData music = sounds.Load("music/theme.ogg");
-/// SoundData click = sounds.Load("sfx/click.wav");
+/// SoundData music = sounds.Load("Audio/Music/theme.ogg");
+/// SoundData click = sounds.Load("Audio/Effects/click.wav");
 /// </code>
 /// </example>
 public sealed class SoundLoader : ISoundLoader

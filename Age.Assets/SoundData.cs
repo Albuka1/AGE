@@ -5,7 +5,7 @@ namespace Age.Assets;
 /// </summary>
 /// <example>
 /// <code>
-/// SoundData click = sounds.Load("sfx/click.wav");
+/// SoundData click = sounds.Load("Audio/Effects/click.wav");
 ///
 /// int frame = 10;
 /// short left = click.Samples[frame * click.Channels];

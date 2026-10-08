@@ -18,19 +18,24 @@ internal static class BuiltInBranding
     private static ImageData? _logo;
 
     /// <summary>Gets the icon of the engine, smallest image first, so the operating system can pick a size.</summary>
-    internal static ImageData[] Icons => _icons ??= [Load("icon-20.png"), Load("icon-40.png"), Load("icon-60.png")];
+    internal static ImageData[] Icons => _icons ??=
+    [
+        Load("Textures/Icons/icon-20.png"),
+        Load("Textures/Icons/icon-40.png"),
+        Load("Textures/Icons/icon-60.png"),
+    ];
 
     /// <summary>Gets the logo of the engine, which has no background and is 320 by 320 pixels.</summary>
-    internal static ImageData Logo => _logo ??= Load("logo-320.png");
+    internal static ImageData Logo => _logo ??= Load("Textures/Logo/logo-320.png");
 
     /// <summary>Decodes one of the embedded images.</summary>
-    /// <param name="fileName">The file name of the image under the Resources folder.</param>
+    /// <param name="path">The path of the image relative to the shared Resources folder.</param>
     /// <returns>The decoded pixels.</returns>
     /// <exception cref="InvalidOperationException">The assembly does not embed the image.</exception>
     /// <exception cref="InvalidDataException">The embedded file is not an image in a supported format.</exception>
-    private static ImageData Load(string fileName)
+    private static ImageData Load(string path)
     {
-        string resourceName = $"Age.Rendering.Resources.{fileName}";
+        string resourceName = $"Age.Rendering.Resources.{path.Replace('/', '.')}";
         using Stream stream = typeof(BuiltInBranding).Assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException($"The engine does not embed the branding asset '{resourceName}'.");
 

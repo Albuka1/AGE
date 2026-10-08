@@ -8,7 +8,7 @@ namespace Age.Tests;
 
 public sealed class FontServiceTests : IDisposable
 {
-    private const string FontPath = "fonts/Cousine-Regular.ttf";
+    private const string FontPath = "Fonts/Cousine-Regular.ttf";
 
     private readonly string _root;
     private readonly NullAssetLoader _assets = new();
@@ -18,10 +18,10 @@ public sealed class FontServiceTests : IDisposable
     public FontServiceTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "age-fonts-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Combine(_root, "fonts"));
+        Directory.CreateDirectory(Path.Combine(_root, "Fonts"));
         File.Copy(
-            Path.Combine(AppContext.BaseDirectory, "fonts", "Cousine-Regular.ttf"),
-            Path.Combine(_root, "fonts", "Cousine-Regular.ttf"));
+            Path.Combine(AppContext.BaseDirectory, "Resources", "Fonts", "Cousine-Regular.ttf"),
+            Path.Combine(_root, "Fonts", "Cousine-Regular.ttf"));
         _assets.Initialize(_root);
         _fonts = new FontService(_assets, _renderer);
     }
@@ -149,10 +149,10 @@ public sealed class FontServiceTests : IDisposable
     [Fact]
     public void FontService_MissingFileOrBytesThatHoldNoFont_Throws()
     {
-        File.WriteAllBytes(Path.Combine(_root, "fonts", "not-a-font.ttf"), new byte[2048]);
+        File.WriteAllBytes(Path.Combine(_root, "Fonts", "not-a-font.ttf"), new byte[2048]);
 
-        FluentActions.Invoking(() => _fonts.Load("fonts/missing.ttf", 16f)).Should().Throw<FileNotFoundException>();
-        FluentActions.Invoking(() => _fonts.Load("fonts/not-a-font.ttf", 16f)).Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => _fonts.Load("Fonts/missing.ttf", 16f)).Should().Throw<FileNotFoundException>();
+        FluentActions.Invoking(() => _fonts.Load("Fonts/not-a-font.ttf", 16f)).Should().Throw<ArgumentException>();
     }
 
     [Fact]

@@ -114,7 +114,7 @@ public sealed class TrueTypeFontTests
         font[3].Should().Be(0);
     }
 
-    /// <summary>Reads the font that the repository ships with the sample, which the tests bake instead of a system font.</summary>
+    /// <summary>Reads the font that the repository ships for the sample, which the tests bake instead of a system font.</summary>
     private static byte[] ShippedFont() =>
-        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "fonts", "Cousine-Regular.ttf"));
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Resources", "Fonts", "Cousine-Regular.ttf"));
 }

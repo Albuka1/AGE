@@ -24,7 +24,7 @@
 
 "Area: Assets":
   - changed-files:
-      - any-glob-to-any-file: 'Age.Assets/**'
+      - any-glob-to-any-file: ['Age.Assets/**', 'Resources/**']
 
 "Area: Sample":
   - changed-files:

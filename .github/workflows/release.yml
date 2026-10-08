@@ -28,4 +28,4 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             Age.Sample-${{ github.ref_name }}.zip
-            publish/content/**
+            publish/Resources/**

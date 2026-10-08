@@ -7,4 +7,5 @@
 The font is the one the engine tests bake a glyph atlas from, and the one the sample draws text with, so it has to
 travel with the repository: the OFL allows that as long as the license text and the copyright notice stay with the
 font, which is what `OFL.txt` next to it is for. The sample and the tests share this single copy, so there is nothing to
-keep in step.
+keep in step. It is part of the shared [`Resources`](../README.md) folder, and the path the sample and the tests write
+is `Fonts/Cousine-Regular.ttf` relative to it.

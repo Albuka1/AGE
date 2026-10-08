@@ -81,7 +81,10 @@ public sealed class SoundLoaderTests : IDisposable
 
     /// <summary>Puts a fixture next to the temporary root, because the asset loader works inside the game root.</summary>
     private void Copy(string name) =>
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "sounds", name), Path.Combine(_root, name), overwrite: true);
+        File.Copy(
+            Path.Combine(AppContext.BaseDirectory, "Resources", "Audio", "Samples", name),
+            Path.Combine(_root, name),
+            overwrite: true);
 
     private void Write(string relativePath, byte[] content) => File.WriteAllBytes(Path.Combine(_root, relativePath), content);
 
