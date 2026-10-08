@@ -10,7 +10,7 @@ namespace Age.Core;
 /// Every assembly of the engine has a context for its own components, and a game writes one for the components it adds.
 /// <c>IncludeFields</c> is set because the components hold their data in public fields.
 /// </remarks>
-[JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true)]
+[JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(SceneData))]
 [JsonSerializable(typeof(TransformComponent))]
 [JsonSerializable(typeof(TimerComponent))]

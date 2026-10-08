@@ -9,7 +9,7 @@ namespace Age.Physics;
 /// A context per assembly is what keeps the scene serializer free of reflection, so the components of this assembly can be
 /// written to a scene and read from one in an AOT build as well.
 /// </remarks>
-[JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true)]
+[JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(ColliderComponent))]
 internal sealed partial class AgePhysicsJsonContext : JsonSerializerContext
 {

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ProtoId<T>`, `IPrototype`, `Prototype` and `PrototypeManager`: the content of a game as data. A document declares a
+  prototype by an identifier, names the components it carries and the values they start with, and can inherit from
+  another prototype with `parent`; the manager reads every document first and then builds, which is the point where the
+  mistakes of a whole content are reported at once: an identifier that two files declare, a component that nothing
+  registered, values that the contract of a component cannot read, a field the component does not have, a parent that no
+  document declares, a kind that nothing reads, and prototypes that inherit from each other in a circle. Every refusal
+  names the file and the line, so a broken document is a message at the start of a game rather than a surprise in the
+  middle of a fight. `ProtoId<T>` is how a component refers to a prototype, and a scene writes it as a plain word, so a
+  map refers to the data of an enemy rather than carrying a copy of it.
+- `YamlJson`, which hands the values of a document to the contract a scene uses: a prototype and a scene describe one
+  component with one reader, and the registry gained `TryDeserialize` and `Has` for exactly that, so a component that a
+  prototype names is read by the code that reads a scene.
 - `Age.Content`, the assembly that holds the content of a game, with its `YamlReader` first: the subset of YAML that the
   content of the engine is written in — scalars, lists, dictionaries and the nesting of them, with comments, empty lines
   and quotes — read into a tree where every value remembers the line it came from. The subset is fixed on purpose

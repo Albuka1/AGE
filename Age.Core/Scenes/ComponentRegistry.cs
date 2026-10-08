@@ -93,6 +93,40 @@ public sealed class ComponentRegistry
     /// <summary>Returns the registration behind a name, which is how the scene serializer resolves a component.</summary>
     internal bool TryGet(string name, [NotNullWhen(true)] out ComponentRegistration? registration) =>
         _byName.TryGetValue(name, out registration);
+
+    /// <summary>Returns the names the registry holds, which tells a caller whether a name is a component at all.</summary>
+    /// <param name="name">The name a document uses for a component.</param>
+    /// <returns><see langword="true"/> when the name is registered.</returns>
+    public bool Has(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return _byName.ContainsKey(name);
+    }
+
+    /// <summary>Reads the values of a component from JSON, which is what a prototype does with the values of a document.</summary>
+    /// <param name="name">The name the component is registered under.</param>
+    /// <param name="values">The values of the component, written the way a scene writes them.</param>
+    /// <param name="component">Receives the value that was read, which is of the type the name is registered under.</param>
+    /// <returns><see langword="true"/> when the name is registered, <see langword="false"/> when it is not.</returns>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
+    /// <exception cref="System.Text.Json.JsonException">The values cannot be read as that component.</exception>
+    /// <remarks>
+    /// A prototype and a scene use one contract for a component, so a value that a document writes for a prototype is read
+    /// by exactly the code that reads a scene, and a field the component does not have is refused by the same call.
+    /// </remarks>
+    public bool TryDeserialize(string name, JsonElement values, [NotNullWhen(true)] out object? component)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (_byName.TryGetValue(name, out ComponentRegistration? registration))
+        {
+            component = registration.Deserialize(values);
+            return true;
+        }
+
+        component = null;
+        return false;
+    }
 }
 
 /// <summary>
