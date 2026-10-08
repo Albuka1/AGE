@@ -7,8 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The game clock: `FixedTimestep` gained `Tick`, `Paused` and `TimeScale`, so a game stops the simulation without
+  stopping the frames and slows it down or speeds it up without changing the step. A paused clock discards the time of
+  the frames that pass instead of accumulating it, so a game that was paused for a minute does not resume by running a
+  minute of steps. A pause that a game sets from inside a step stops the remaining steps of that frame and drops what was
+  left of its time, so the simulation stops where it was paused; `Tick` and `Elapsed` describe the simulation and stand
+  still with it.
+- `IFrameSystem`, `SystemPipeline.AddFrame` and `UpdateFrame`, and `World.UpdateFrame`, for behaviour that follows the
+  display rather than the simulation: a frame system runs once per frame from the render callback of the loop, receives
+  the time of that frame rather than the fixed step, and keeps running while the clock is paused. A `SystemPipeline`
+  therefore holds two lists, the systems of the simulation and the frame systems.
+- `FixedTimestep.TimeScale` rejects a value that is negative, not a number or infinite, because such a value would stop
+  the simulation quietly.
+
 ### Changed
 
+- **Breaking:** `UIUpdateSystem` is an `IFrameSystem` rather than an `ISystem`, because the pointer is a state of the
+  frame and an interface has to keep working while the simulation is paused. Register it with `SystemPipeline.AddFrame`
+  rather than `Add`, call `World.UpdateFrame` from the render callback of the loop, and read its `UpdateFrame` where the
+  old code called `Update`.
 - **Breaking:** every project now lives in a folder named after it at the repository root instead of
   `src/` and `tests/`, and all build output is written to one shared `artifacts/` folder
   (`artifacts/bin/<project>/`, `artifacts/obj/<project>/`) instead of a `bin`/`obj` pair next to each

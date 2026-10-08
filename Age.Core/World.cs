@@ -204,6 +204,18 @@ public sealed class World
         pipeline.Update(this, time);
     }
 
+    /// <summary>Runs the frame systems of the pipeline against this world, once per frame.</summary>
+    /// <remarks>
+    /// A game calls this from the render callback of the loop, which runs once per frame whether or not the simulation
+    /// advanced, so the interface and the overlays of a paused game keep working. <see cref="Update"/> is the fixed
+    /// step, which the clock can stop with <see cref="FixedTimestep.Paused"/>.
+    /// </remarks>
+    public void UpdateFrame(in GameTime frame, SystemPipeline pipeline)
+    {
+        ArgumentNullException.ThrowIfNull(pipeline);
+        pipeline.UpdateFrame(this, frame);
+    }
+
     private void EnsureAlive(Entity entity)
     {
         if (!IsAlive(entity))
