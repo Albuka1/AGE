@@ -106,6 +106,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A scene that turned out to be broken after part of it was checked no longer changes the world: `SceneSerializer.Load`
+  records the entities that already hold an identifier of the scene and moves them aside after the whole scene was
+  checked, instead of moving them while the check was still running. It also reserves every identifier of the scene before
+  it creates the first entity, so an identifier this world hands out cannot land on one the scene is about to map, which
+  used to make a load throw in the middle and leave the world half changed.
+- `World.Enumerate<T>` built the text of its exception for every slot it walked, whether it threw or not: the message is
+  built only when the storage of the component type actually changed under the enumeration.
 - The built-in font skipped the first character of its range when it drew a line, because `SilkRenderer.DrawText` compared
   with a strict `>`; the range now matches the one that `BitmapFontMetrics.GetGlyphIndex` uses, so every character of the
   range goes through the same path.

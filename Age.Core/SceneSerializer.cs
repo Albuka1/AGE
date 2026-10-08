@@ -80,10 +80,13 @@ public sealed class SceneSerializer : ISceneSerializer
         }
 
         // The whole scene is checked and read before the world is touched, so a scene that turns out to be broken leaves
-        // the world exactly as it was. An identifier of the scene has to be unique and unused, because a component that
-        // refers to an entity by one would otherwise reach the wrong entity.
+        // the world exactly as it was. An identifier of the scene has to be unique, because a component that refers to an
+        // entity by one would otherwise reach the wrong entity. An entity that already holds an identifier of the scene
+        // is recorded here and moved aside later: moving it while the scene is still being checked would change a world
+        // that a broken scene has to leave alone.
         var staged = new List<StagedEntity>(scene.Entities.Count);
         var identifiers = new HashSet<int>();
+        var displaced = new List<Entity>();
 
         foreach (SceneEntity? saved in scene.Entities)
         {
@@ -107,9 +110,7 @@ public sealed class SceneSerializer : ISceneSerializer
 
                 if (world.TryEntityOf(saved.Id, out Entity existing))
                 {
-                    // The identifiers of the scene win, so an entity that already holds one of them moves aside. A
-                    // reference that a component of this world already holds to it does not follow the move.
-                    world.AssignSceneId(existing);
+                    displaced.Add(existing);
                 }
             }
 
@@ -136,6 +137,23 @@ public sealed class SceneSerializer : ISceneSerializer
             }
 
             staged.Add(new StagedEntity(saved.Id, components));
+        }
+
+        // The scene is sound, so the world changes from here on. Every identifier the scene uses is reserved before the
+        // first entity is created, and then an entity that already holds one of them moves aside, which gives it an
+        // identifier above all of them: a fresh identifier that landed on one the scene is about to map would either
+        // throw in the middle of the load or leave two entities behind the same number. A reference that a component of
+        // this world already holds to a displaced entity does not follow the move.
+        // The scene is sound, so the world changes from here on. Every identifier the scene uses is reserved before the
+        // first entity is created, and then an entity that already holds one of them moves aside, which gives it an
+        // identifier above all of them: a fresh identifier that landed on one the scene is about to map would either
+        // throw in the middle of the load or leave two entities behind the same number. A reference that a component of
+        // this world already holds to a displaced entity does not follow the move.
+        world.ReserveSceneIds(identifiers);
+
+        foreach (Entity existing in displaced)
+        {
+            world.AssignSceneId(existing);
         }
 
         foreach (StagedEntity stagedEntity in staged)

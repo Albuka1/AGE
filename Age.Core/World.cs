@@ -405,9 +405,12 @@ public sealed class World
 
         for (int id = 0; id < store.Capacity; id++)
         {
-            EnsureUnchanged(
-                store.Version == version,
-                $"A component of type {typeof(T).Name} was added to or removed from an entity while the world was being enumerated. Collect the entities into a list first, or use RequestSet and RequestRemove, which defer the change to the end of the step.");
+            // The message is built only when the check fails: an interpolated string that is passed eagerly would be
+            // built for every slot of the store, and walking the storage of a component type is a hot path.
+            if (store.Version != version)
+            {
+                throw new InvalidOperationException($"A component of type {typeof(T).Name} was added to or removed from an entity while the world was being enumerated. Collect the entities into a list first, or use RequestSet and RequestRemove, which defer the change to the end of the step.");
+            }
 
             if (store.IsPresent(id))
             {
@@ -567,8 +570,9 @@ public sealed class World
     /// <remarks>
     /// A world hands one out when an entity becomes alive, and the scene serializer calls it for an entity that already
     /// holds an identifier which a scene it is reading also uses: the identifiers of the scene win, and the entity that
-    /// was in the way moves to a fresh one. A component that referred to that entity by its old number does not follow
-    /// it, which is why a scene is best loaded into a world of its own.
+    /// was in the way moves to a fresh one. The serializer calls this after it checked the whole scene and reserved the
+    /// identifiers of that scene, so the fresh identifier is above every one of them. A component that referred to the
+    /// entity by its old number does not follow it, which is why a scene is best loaded into a world of its own.
     /// </remarks>
     internal void AssignSceneId(Entity entity)
     {
@@ -582,6 +586,28 @@ public sealed class World
         int sceneId = _nextSceneId++;
         _sceneIds[entity.Id] = sceneId;
         _bySceneId[sceneId] = entity;
+    }
+
+    /// <summary>Keeps the identifiers of the next entities above every identifier that a scene is about to map.</summary>
+    /// <param name="sceneIds">The identifiers the scene uses.</param>
+    /// <remarks>
+    /// The scene serializer calls this once the whole scene was checked and before it touches the world. Without it, an
+    /// entity that the serializer creates while it applies the scene takes a fresh identifier, that identifier can land
+    /// on one the scene is about to map, and the map of identifiers would either throw in the middle of a load or hold
+    /// two entities behind the same number.
+    /// </remarks>
+    internal void ReserveSceneIds(IEnumerable<int> sceneIds)
+    {
+        ArgumentNullException.ThrowIfNull(sceneIds);
+
+        int highest = _nextSceneId - 1;
+
+        foreach (int sceneId in sceneIds)
+        {
+            highest = Math.Max(highest, sceneId);
+        }
+
+        _nextSceneId = highest + 1;
     }
 
     /// <summary>Throws when an enumeration that is walking the world notices that the world changed underneath it.</summary>

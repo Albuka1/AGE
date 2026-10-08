@@ -333,6 +333,62 @@ public sealed class SceneSerializerTests
         world.SceneIdOf(entities[0]).Should().NotBe(world.SceneIdOf(entities[1]));
     }
 
+    [Fact]
+    public void SceneSerializer_LoadASceneThatTurnsOutBroken_LeavesTheIdentifiersOfTheWorldAlone()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        const string Json = """
+            {
+              "Entities": [
+                { "Id": 1, "Components": {} },
+                { "Id": 1, "Components": {} }
+              ]
+            }
+            """;
+        var world = new World();
+        Entity existing = world.CreateEntity();
+        int identifier = world.SceneIdOf(existing);
+
+        Action act = () => serializer.Load(world, Json);
+
+        act.Should().Throw<InvalidDataException>().WithMessage("*identifier 1*");
+        world.SceneIdOf(existing).Should().Be(identifier, "the world is not touched until the whole scene is checked");
+        world.Enumerate().Should().ContainSingle("nothing of a broken scene was applied");
+        world.TryEntityOf(identifier, out Entity known).Should().BeTrue();
+        known.Should().Be(existing);
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadASceneWhoseIdentifierTheNextEntityWouldTake_KeepsThemApart()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        const string Json = """
+            {
+              "Entities": [
+                { "Id": 3, "Components": {} },
+                { "Id": 1, "Components": {} }
+              ]
+            }
+            """;
+        var world = new World();
+
+        // Two entities of the world, so the identifier this world would hand out next is the one the scene uses for its
+        // first entity: before the world reserved what the scene names, the entity that was in the way took that number
+        // and the load threw in the middle of it, after the world had already changed.
+        Entity first = world.CreateEntity();
+        Entity second = world.CreateEntity();
+
+        serializer.Load(world, Json);
+
+        world.IsAlive(first).Should().BeTrue();
+        world.IsAlive(second).Should().BeTrue();
+        world.SceneIdOf(first).Should().BeGreaterThan(3, "an entity that was in the way moves above every identifier of the scene");
+        world.TryEntityOf(3, out Entity namedThree).Should().BeTrue();
+        namedThree.Should().NotBe(first).And.NotBe(second);
+        world.TryEntityOf(1, out Entity namedOne).Should().BeTrue();
+        namedOne.Should().NotBe(first).And.NotBe(namedThree);
+    }
+
     private static SceneSerializer CreateSerializer()
     {
         using ServiceProvider provider = CreateProvider();
