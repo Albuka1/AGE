@@ -13,6 +13,8 @@ namespace Age.Core;
 [JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true)]
 [JsonSerializable(typeof(SceneData))]
 [JsonSerializable(typeof(TransformComponent))]
+[JsonSerializable(typeof(TimerComponent))]
+[JsonSerializable(typeof(TweenComponent))]
 internal sealed partial class AgeJsonContext : JsonSerializerContext
 {
 }

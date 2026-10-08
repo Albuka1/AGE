@@ -10,5 +10,7 @@ internal sealed class CoreComponentRegistrations : IComponentRegistrations
     {
         ArgumentNullException.ThrowIfNull(registry);
         registry.Register("Transform", AgeJsonContext.Default.TransformComponent);
+        registry.Register("Timer", AgeJsonContext.Default.TimerComponent);
+        registry.Register("Tween", AgeJsonContext.Default.TweenComponent);
     }
 }

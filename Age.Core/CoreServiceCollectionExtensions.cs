@@ -16,13 +16,16 @@ public static class CoreServiceCollectionExtensions
     /// Every assembly adds its own <see cref="IComponentRegistrations"/> when its services are registered, so the
     /// registry holds every component whatever the order of the calls. Register a game's own implementation to make
     /// its components part of a scene. The fixed step is one sixtieth of a second; register a <see cref="FixedTimestep"/>
-    /// of your own after this call to change it, because the last registration wins.
+    /// of your own after this call to change it, because the last registration wins. The <see cref="TimerSystem"/> and
+    /// the <see cref="TweenSystem"/> are services like any other, so a game adds them to its pipeline by resolving them.
     /// </remarks>
     public static IServiceCollection AddAgeCore(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton<SystemPipeline>();
         services.AddSingleton<SpriteSorter>();
+        services.AddSingleton<TimerSystem>();
+        services.AddSingleton<TweenSystem>();
         services.AddSingleton(new FixedTimestep(FixedTimestep.DefaultStep));
         services.AddSingleton<IComponentRegistrations, CoreComponentRegistrations>();
         services.AddSingleton<ComponentRegistry>(CreateComponentRegistry);

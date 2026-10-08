@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrong one, so a scene that refers to something it does not hold cannot be mistaken for a working one.
 - `SceneEntity.Prototype`, which a scene writes and reads but which nothing turns into an entity yet: it is where an
   entity stops repeating the components of its kind and starts referring to them.
+- `TimerComponent` and the `TimerSystem` that advances it. A timer counts down on the time of the simulation, keeps the
+  leftover of the step that ran past its end, repeats on request, and stands still while it is paused, which is how a game
+  cancels one. A timer that runs out announces it through `TimerElapsedEvent` and stops instead of removing itself, so
+  the entity keeps the record of what happened and the game decides what to do with it.
+- `TweenComponent` and the `TweenSystem` that advances it. A tween moves a value from one number to another over a
+  duration, with an easing, and announces the value it has reached through `TweenUpdatedEvent` on every step it moves,
+  which is what lets the game write that value where it belongs while the component itself holds nothing but numbers: a
+  delegate in a component could neither be saved nor described without reflection. `Value` and `Progress` are readable at
+  any time as well, so a game that only reads the value does not have to subscribe. A tween that does not loop reports
+  its end once and then stops, and a looping one starts over.
+- An event that carries its own entity, such as a timer or a tween, is raised without naming an entity to the bus, so the
+  first parameter of a handler is the default entity for those. Read the entity out of the event itself; the world names
+  one to the handler only for the events that come without one, such as a creation or a component that was added.
 - The event bus: `World.Events` delivers events to the code that subscribed to them. An event is a value, raising one
   queues it, and `EventBus.Dispatch` hands the queue out. `World.Update` and `World.UpdateFrame` dispatch it at the
   boundaries of the step, next to `World.ApplyPending`, so a handler never runs in the middle of a system that is

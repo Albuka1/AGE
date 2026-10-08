@@ -19,8 +19,7 @@ What remains are the content features the engine does not have yet, and then the
   text fitting and clipping underneath them.
 - Positional audio: voices whose position can change, a listener that follows the camera, and the falloff between them.
 - Text in a scene, and UI labels that can pick a font instead of the built-in bitmap one.
-- Hierarchy and entity references that survive a save.
-- Timers and tweens.
+- Hierarchy.
 - User-defined shaders and materials.
 - OBB collision and multiple contacts.
 

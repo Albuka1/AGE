@@ -25,6 +25,11 @@ SystemPipeline pipeline = provider.GetRequiredService<SystemPipeline>();
 CollisionSystem collisions = provider.GetRequiredService<CollisionSystem>();
 pipeline.Add(collisions);
 
+// The systems that own the time of the game: a timer counts down and announces its end, a tween computes a value and
+// announces it. Both are services of the container, like the collision system, and both run once per step.
+pipeline.Add(provider.GetRequiredService<TimerSystem>());
+pipeline.Add(provider.GetRequiredService<TweenSystem>());
+
 // The interface is a frame system, not a step system: the pointer is a state of the frame, and it keeps working while
 // the simulation is paused, which is the whole point of a pause menu.
 pipeline.AddFrame(provider.GetRequiredService<UIUpdateSystem>());
@@ -94,12 +99,25 @@ if (File.Exists(scenePath))
 }
 
 // A bus belongs to a world, so every world this game makes needs its subscriptions again: the collision system
-// announces each overlapping pair it found, and the UI announces a press on a button. Both save this game from looking
-// for the same thing every step, and both run at the boundary of the step.
+// announces each overlapping pair it found, the UI announces a press on a button, and a timer announces that it ran
+// out. All of them save this game from looking for the same thing every step, and all of them run at the boundary of the
+// step, which is where the world hands them over.
 void SubscribeEvents(World subscribed)
 {
     subscribed.Events.Subscribe<CollisionEvent>((_, collision) => TintByCollision(subscribed, collision.First, collision.Second));
     subscribed.Events.Subscribe<ButtonPressedEvent>((_, _) => sounds.Play(click));
+    subscribed.Events.Subscribe<TimerElapsedEvent>((_, timer) => subscribed.RequestDestroy(timer.Entity));
+
+    // The entity of an event is the one the event carries, because the world raises these without naming one to the
+    // handler. A tween computes a value and announces it; where that value belongs is the business of the game, which
+    // is what keeps the tween free of a delegate that a scene could neither save nor describe without reflection.
+    subscribed.Events.Subscribe<TweenUpdatedEvent>((_, tween) =>
+    {
+        if (subscribed.IsAlive(tween.Entity) && subscribed.Has<TransformComponent>(tween.Entity))
+        {
+            subscribed.GetRef<TransformComponent>(tween.Entity).Rotation = tween.Value;
+        }
+    });
 }
 
 SubscribeEvents(world);
@@ -107,15 +125,20 @@ SubscribeEvents(world);
 const float MoveSpeed = 240f;
 const float SpawnLifetime = 2f;
 
-// Sprites that `E` puts on screen and that are destroyed a couple of seconds later, so the slot of a destroyed entity
-// is handed out again for the next one. The string of the HUD remembers which entity that was, with its generation.
-var spawned = new List<(Entity Entity, float Age)>();
+// The second sprite turns with a tween of three seconds that starts over when it reaches the end. Nothing in this game
+// advances it: the tween system does, on the time of every step, and the subscription above writes the value into the
+// transform of the entity it belongs to.
+world.Set(second, TweenComponent.Between(0f, MathF.Tau, 3f, looping: true));
+
+// Sprites that `E` puts on screen. A timer of two seconds on each one destroys it, so the slot of a destroyed entity is
+// handed out again for the next one and this game keeps no book of its own. The string of the HUD remembers which entity
+// was spawned last, with its generation.
 Entity lastSpawned = default;
 string version = typeof(World).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
 // One sprite is already on its way when the game starts, so the HUD has something to report and the slot logic runs
 // before the first key press.
-lastSpawned = Spawn(world, spawned);
+lastSpawned = Spawn(world);
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
@@ -132,8 +155,6 @@ gameLoop.Run(
         }
 
         MoveFirstSprite(world, first, input, step);
-        SpinSprite(world, second, step);
-        AgeSpawned(world, spawned, step.Delta, SpawnLifetime);
         world.Update(step, pipeline);
 
         // A contact is announced by `CollisionEvent`, but a pair that came apart raises nothing: the collision component
@@ -182,7 +203,7 @@ gameLoop.Run(
 
         if (input.IsKeyPressed(Key.E))
         {
-            lastSpawned = Spawn(world, spawned);
+            lastSpawned = Spawn(world);
         }
 
         if (input.IsKeyPressed(Key.Escape))
@@ -283,52 +304,17 @@ static Entity MoveTarget(World world, TextureHandle texture)
     return entity;
 }
 
-// Spins the second sprite: the renderer reads the rotation of a transform and turns the quad around its centre.
-static void SpinSprite(World world, Entity entity, GameTime time)
-{
-    if (!world.IsAlive(entity) || !world.Has<TransformComponent>(entity))
-    {
-        return;
-    }
-
-    ref TransformComponent transform = ref world.GetRef<TransformComponent>(entity);
-    transform.Rotation += (float)(time.Delta * 1.4d);
-}
-
-// Ages the spawned sprites and destroys the ones that lived long enough.
-static void AgeSpawned(World world, List<(Entity Entity, float Age)> spawned, double delta, float lifetime)
-{
-    for (int index = spawned.Count - 1; index >= 0; index--)
-    {
-        (Entity entity, float age) = spawned[index];
-
-        if (!world.IsAlive(entity))
-        {
-            spawned.RemoveAt(index);
-            continue;
-        }
-
-        age += (float)delta;
-        if (age >= lifetime)
-        {
-            world.RequestDestroy(entity);
-            spawned.RemoveAt(index);
-            continue;
-        }
-
-        spawned[index] = (entity, age);
-    }
-}
-
-// Puts a short-lived sprite on screen. The slot it uses was handed out before, so the identifier of the entity that
-// used it comes back with a new generation.
-static Entity Spawn(World world, List<(Entity Entity, float Age)> spawned)
+// Puts a short-lived sprite on screen, with a timer that destroys it when the time is up. This game does not count the
+// seconds of a spawned sprite and does not keep a list of them: the timer system advances every timer of the world, and
+// the subscription above destroys the entity of the one that ran out. The slot it used was handed out before, so the
+// identifier of the entity that used it comes back with a new generation.
+static Entity Spawn(World world)
 {
     Entity entity = world.CreateEntity();
 
-    world.Set(entity, new TransformComponent { Position = new Vector2(200f + ((spawned.Count * 37f) % 800f), 560f), Scale = new Vector2(1f, 1f) });
+    world.Set(entity, new TransformComponent { Position = new Vector2(200f + ((entity.Id * 37f) % 800f), 560f), Scale = new Vector2(1f, 1f) });
     world.Set(entity, new SpriteComponent { Size = new Vector2(32f, 32f), Color = Color.Blue, ZOrder = 2 });
-    spawned.Add((entity, 0f));
+    world.Set(entity, TimerComponent.For(SpawnLifetime));
 
     return entity;
 }
