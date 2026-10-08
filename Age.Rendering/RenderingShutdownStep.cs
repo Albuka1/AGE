@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Age.Core;
 
 namespace Age.Rendering;
@@ -34,11 +35,32 @@ internal sealed class RenderingShutdownStep : IGameShutdownStep
     public int Order => 500;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Every release is attempted even when one of them fails, because a shutdown that stopped at the first failure would
+    /// leak the device objects of everything behind it. The first failure is thrown once all of them ran, which is the
+    /// point at which the caller learns that the frame was not left clean.
+    /// </remarks>
     public void Shutdown()
     {
-        _splash.Dispose();
-        _fonts.UnloadAll();
-        _textures.UnloadAll();
-        _renderer.Dispose();
+        ExceptionDispatchInfo? failure = null;
+
+        Attempt(() => _splash.Dispose());
+        Attempt(() => _fonts.UnloadAll());
+        Attempt(() => _textures.UnloadAll());
+        Attempt(() => _renderer.Dispose());
+
+        failure?.Throw();
+
+        void Attempt(Action release)
+        {
+            try
+            {
+                release();
+            }
+            catch (Exception exception)
+            {
+                failure ??= ExceptionDispatchInfo.Capture(exception);
+            }
+        }
     }
 }

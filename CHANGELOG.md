@@ -106,6 +106,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A repeating `TimerComponent` reported one run per step whatever the step consumed, so a step longer than the run left
+  the timer sinking a step further behind on every step and its remaining time drifting away from zero. It now reports
+  every run that the step consumed and carries the deficit into the run behind it, and a run of no length reports once per
+  step and stands at zero.
+- `RenderingShutdownStep` stopped at the first release that failed, which left the device objects behind it to leak: every
+  release is attempted, and the first failure is thrown once all of them ran.
 - A scene that turned out to be broken after part of it was checked no longer changes the world: `SceneSerializer.Load`
   records the entities that already hold an identifier of the scene and moves them aside after the whole scene was
   checked, instead of moving them while the check was still running. It also reserves every identifier of the scene before
