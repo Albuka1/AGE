@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IConsoleService` and `ConsoleService`: the commands a developer registers, the lines that were entered with their
+  history, and the lines that were written, which the engine draws and a game drives from a key of its own. Typing,
+  backspace, submitting and walking the history are the service, so a command is testable without a window, and it is
+  safe to write to from another thread. `help` and `clear` are always there, and a name is matched without regard to case.
+- `CVarService`: named settings with a type, a description and a default, which code, a configuration source and the
+  console all read and write with the invariant culture. Give the service a console and every setting becomes a command
+  of its own, next to a `cvars` listing, so a parameter can be looked at and changed without rebuilding the game.
+- `SystemTiming`, `SystemPipeline.StepTimings` and `SystemPipeline.FrameTimings`: what every system spent inside the last
+  step and the last frame, in milliseconds, which is what the developer overlay of a game prints.
+- `ConsoleLoggerProvider`, which writes log records into a console, so what the engine and a game report is visible in a
+  running build. `AddAgeCore` also registers `NullLogger<T>` as the logger of every service that asks for one, so a game
+  never has to wire logging and a logger is never null.
+- `SceneSerializer` reports what it did through an `ILogger<SceneSerializer>`: a scene that was refused leaves the reason
+  in the log before the exception reaches the caller, and one that was applied leaves the number of entities it brought.
 - `GameShutdown` and `IGameShutdownStep`: the engine releases what it holds in one call, in an order that every assembly
   declares next to the thing it releases, instead of leaving that order to the game. The splash and what it uploaded, the
   atlases and the textures of a frame, the samples of the sound device, the renderer, and the window that owns the context

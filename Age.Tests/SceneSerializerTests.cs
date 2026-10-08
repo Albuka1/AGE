@@ -5,6 +5,7 @@ using Age.Rendering;
 using Age.UI;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Age.Tests;
@@ -387,6 +388,48 @@ public sealed class SceneSerializerTests
         namedThree.Should().NotBe(first).And.NotBe(second);
         world.TryEntityOf(1, out Entity namedOne).Should().BeTrue();
         namedOne.Should().NotBe(first).And.NotBe(namedThree);
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadASceneThatIsRefused_LeavesARecordInTheLog()
+    {
+        var logger = new RecordingLogger<SceneSerializer>();
+        var serializer = new SceneSerializer(CreateRegistry(), logger);
+        const string Json = """{ "Entities": [ { "Components": { "Mystery": { "Value": 1 } } } ] }""";
+
+        Action act = () => serializer.Load(new World(), Json);
+
+        act.Should().Throw<InvalidDataException>();
+        logger.Records.Should().ContainSingle();
+        logger.Records[0].Level.Should().Be(LogLevel.Error);
+        logger.Records[0].Message.Should().Contain("Mystery", "a person reads the reason of the refusal in the log of the game");
+    }
+
+    [Fact]
+    public void SceneSerializer_LoadAScene_LeavesARecordOfWhatItApplied()
+    {
+        var logger = new RecordingLogger<SceneSerializer>();
+        var serializer = new SceneSerializer(CreateRegistry(), logger);
+        const string Json = """{ "Entities": [ { "Id": 1, "Components": {} }, { "Id": 2, "Components": {} } ] }""";
+
+        serializer.Load(new World(), Json);
+
+        logger.Records.Should().ContainSingle();
+        logger.Records[0].Level.Should().Be(LogLevel.Information);
+        logger.Records[0].Message.Should().Contain("2");
+    }
+
+    /// <summary>Keeps what was logged, which is how a test reads the record of a scene that was refused.</summary>
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Records { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Records.Add((logLevel, formatter(state, exception)));
     }
 
     private static SceneSerializer CreateSerializer()

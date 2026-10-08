@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace Age.Core;
 
@@ -13,14 +14,17 @@ namespace Age.Core;
 public sealed class SceneSerializer : ISceneSerializer
 {
     private readonly ComponentRegistry _components;
+    private readonly ILogger<SceneSerializer>? _logger;
 
     /// <summary>Initializes the serializer with the registry that names the components.</summary>
     /// <param name="components">The registry of the component types that a scene can hold.</param>
+    /// <param name="logger">The logger that reports a scene which was refused, or null to report nothing.</param>
     /// <exception cref="ArgumentNullException">The registry is null.</exception>
-    public SceneSerializer(ComponentRegistry components)
+    public SceneSerializer(ComponentRegistry components, ILogger<SceneSerializer>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(components);
         _components = components;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -52,11 +56,30 @@ public sealed class SceneSerializer : ISceneSerializer
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A scene that is refused leaves a record in the log before the exception reaches the caller, because a file that a
+    /// caller was handed is the one thing a person wants to find in the log of a build that failed to load it.
+    /// </remarks>
     public void Load(World world, string json)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
 
+        try
+        {
+            LoadCore(world, json);
+            _logger?.LogInformation("A scene was applied to a world, which now holds {Entities} entities.", world.Enumerate().Count());
+        }
+        catch (InvalidDataException exception)
+        {
+            _logger?.LogError(exception, "A scene was refused: {Reason}", exception.Message);
+            throw;
+        }
+    }
+
+    /// <summary>Reads a scene and applies it, which is what <see cref="Load"/> wraps in its log records.</summary>
+    private void LoadCore(World world, string json)
+    {
         SceneData scene;
         try
         {

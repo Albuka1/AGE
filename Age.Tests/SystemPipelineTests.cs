@@ -68,6 +68,38 @@ public sealed class SystemPipelineTests
         FluentActions.Invoking(() => new SystemPipeline().UpdateFrame(null!, new GameTime(0d, 0d)))
             .Should().Throw<ArgumentNullException>();
 
+    [Fact]
+    public void SystemPipeline_Update_RecordsTheTimeEveryStepSystemSpent()
+    {
+        var world = new World();
+        var order = new List<int>();
+        var pipeline = new SystemPipeline();
+        pipeline.Add(new RecordingSystem(1, order));
+        pipeline.Add(new RecordingSystem(2, order));
+
+        pipeline.Update(world, new GameTime(0d, 0d));
+
+        pipeline.StepTimings.Should().HaveCount(2);
+        pipeline.StepTimings.Should().OnlyContain(timing => timing.Name == nameof(RecordingSystem));
+        pipeline.StepTimings.Should().OnlyContain(timing => timing.Milliseconds >= 0d);
+    }
+
+    [Fact]
+    public void SystemPipeline_UpdateFrame_RecordsTheTimeEveryFrameSystemSpentAndLeavesTheStepTimings()
+    {
+        var world = new World();
+        var order = new List<int>();
+        var pipeline = new SystemPipeline();
+        pipeline.Add(new RecordingSystem(1, order));
+        pipeline.AddFrame(new RecordingFrameSystem(2, order));
+
+        pipeline.Update(world, new GameTime(0d, 0d));
+        pipeline.UpdateFrame(world, new GameTime(0d, 0d));
+
+        pipeline.FrameTimings.Should().ContainSingle().Which.Name.Should().Be(nameof(RecordingFrameSystem));
+        pipeline.StepTimings.Should().ContainSingle().Which.Name.Should().Be(nameof(RecordingSystem), "the frame does not disturb what the step recorded");
+    }
+
     private sealed class RecordingSystem : ISystem
     {
         private readonly int _id;
