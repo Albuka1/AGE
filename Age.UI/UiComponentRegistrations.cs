@@ -16,6 +16,7 @@ internal sealed class UiComponentRegistrations : IComponentRegistrations
     {
         ArgumentNullException.ThrowIfNull(registry);
         registry.Register("RectTransform", AgeUiJsonContext.Default.RectTransformComponent);
+        registry.Register("Canvas", AgeUiJsonContext.Default.CanvasComponent);
         registry.Register("Button", AgeUiJsonContext.Default.ButtonComponent);
         registry.Register("TextLabel", AgeUiJsonContext.Default.TextLabelComponent);
     }

@@ -5,6 +5,7 @@ namespace Age.UI;
 /// <summary>
 /// Makes a UI element react to pointer input.
 /// </summary>
+[Component("Button")]
 public struct ButtonComponent : IComponent
 {
     /// <summary>Gets or sets the color used when the button is idle.</summary>

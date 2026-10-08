@@ -10,6 +10,7 @@ namespace Age.UI;
 /// tests such as the ones in <see cref="UIUpdateSystem"/> use the same coordinates, so a pointer position can be
 /// compared with <see cref="Position"/> directly.
 /// </remarks>
+[Component("RectTransform")]
 public struct RectTransformComponent : IComponent
 {
     /// <summary>Gets or sets the position of the top-left corner of the element, in screen pixels.</summary>

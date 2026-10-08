@@ -32,6 +32,7 @@ public enum TweenEasing
 /// world.Set(sprite, TweenComponent.Between(0f, MathF.Tau, 3f, looping: true));
 /// </code>
 /// </example>
+[Component("Tween")]
 public struct TweenComponent : IComponent
 {
     /// <summary>Gets or sets the value the tween starts at.</summary>

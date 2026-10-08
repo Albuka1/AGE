@@ -22,6 +22,7 @@ namespace Age.Core;
 /// world.Events.Subscribe&lt;TimerElapsedEvent&gt;((entity, _) =&gt; world.RequestDestroy(entity));
 /// </code>
 /// </example>
+[Component("Timer")]
 public struct TimerComponent : IComponent
 {
     /// <summary>Gets or sets how long one run takes, in seconds. A duration of zero or less runs out on the next step.</summary>

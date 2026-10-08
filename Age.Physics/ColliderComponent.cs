@@ -10,6 +10,7 @@ namespace Age.Physics;
 /// the transform is ignored: collision detection is axis-aligned only, so a rotated sprite still collides with an upright
 /// box. Oriented boxes are on the roadmap.
 /// </remarks>
+[Component("Collider")]
 public struct ColliderComponent : IComponent
 {
     /// <summary>Gets or sets the size of the box, before the transform scale is applied.</summary>

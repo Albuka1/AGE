@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `[Component("Transform")]`: the one declaration that makes a component type part of a scene, and the name a scene file
+  uses for it. A test of the engine walks every public component of `Age.Core`, `Age.Physics`, `Age.UI` and
+  `Age.Rendering` and fails when one of them has no name, is not registered in the `ComponentRegistry`, or shares a name
+  with another component, so a forgotten registration is a failing test rather than a component that turns out to be
+  unsavable after a restart.
 - `ITextInputService`: the characters that were typed during the current frame, which is what a console or a text field
   reads. It is a separate interface from `IInputService` because it describes text rather than keys, and a service with no
   keyboard reports none rather than being absent. `NullInputService` answers it from its `Typed` property, so a test drives
@@ -108,6 +113,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Canvas`, `Collider` and `Collision` are components of a scene from now on: the canvas had no name and the physics
+  assembly had no serialization context at all, so a scene could hold neither a canvas nor a collider. `AddAgePhysics`
+  registers them, next to the system it already registered.
 - **Breaking:** `ResourcePool<T>` became `ResourcePool<TKey, T>`, so a resource is registered under a key of the
   caller's own type rather than under a string, and `Add(value)` and `Add(value, key)` are separate calls. A cache that is
   keyed by more than one value, such as the fonts of `FontService`, registers the pair of the path and the height instead

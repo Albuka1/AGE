@@ -3,6 +3,7 @@ namespace Age.Core;
 /// <summary>
 /// Stores the position, rotation and scale of an entity in world space.
 /// </summary>
+[Component("Transform")]
 public struct TransformComponent : IComponent
 {
     /// <summary>Gets or sets the position of the top-left corner in world coordinates.</summary>
