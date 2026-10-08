@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** every project now lives in a folder named after it at the repository root instead of
+  `src/` and `tests/`, and all build output is written to one shared `artifacts/` folder
+  (`artifacts/bin/<project>/`, `artifacts/obj/<project>/`) instead of a `bin`/`obj` pair next to each
+  project. Consumers must update project references and script paths: the paths are now
+  `Age.Core/Age.Core.csproj`, `Age.Tests/Age.Tests.csproj`, `Age.Sample/Age.Sample.csproj` and so on.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added

@@ -1,7 +1,20 @@
 {
   "metadata": [
     {
-      "src": [{ "src": "src", "files": ["**/*.csproj"] }],
+      "src": [
+        {
+          "src": ".",
+          "files": [
+            "Age.Assets/**/*.csproj",
+            "Age.Audio/**/*.csproj",
+            "Age.Core/**/*.csproj",
+            "Age.Input/**/*.csproj",
+            "Age.Physics/**/*.csproj",
+            "Age.Rendering/**/*.csproj",
+            "Age.UI/**/*.csproj"
+          ]
+        }
+      ],
       "dest": "api"
     }
   ],

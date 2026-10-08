@@ -1,38 +1,38 @@
 "Area: Core":
   - changed-files:
-      - any-glob-to-any-file: 'src/Age.Core/**'
+      - any-glob-to-any-file: 'Age.Core/**'
 
 "Area: Rendering":
   - changed-files:
-      - any-glob-to-any-file: 'src/Age.Rendering/**'
+      - any-glob-to-any-file: 'Age.Rendering/**'
 
 "Area: UI":
   - changed-files:
-      - any-glob-to-any-file: 'src/Age.UI/**'
+      - any-glob-to-any-file: 'Age.UI/**'
 
 "Area: Physics":
   - changed-files:
-      - any-glob-to-any-file: 'src/Age.Physics/**'
+      - any-glob-to-any-file: 'Age.Physics/**'
 
 "Area: Input":
   - changed-files:
-      - any-glob-to-any-file: 'src/Age.Input/**'
+      - any-glob-to-any-file: 'Age.Input/**'
 
 "Area: Audio":
   - changed-files:
-      - any-glob-to-any-file: 'src/Age.Audio/**'
+      - any-glob-to-any-file: 'Age.Audio/**'
 
 "Area: Assets":
   - changed-files:
-      - any-glob-to-any-file: 'src/Age.Assets/**'
+      - any-glob-to-any-file: 'Age.Assets/**'
 
 "Area: Sample":
   - changed-files:
-      - any-glob-to-any-file: 'samples/**'
+      - any-glob-to-any-file: 'Age.Sample/**'
 
 "Area: Tests":
   - changed-files:
-      - any-glob-to-any-file: 'tests/**'
+      - any-glob-to-any-file: 'Age.Tests/**'
 
 "Area: CI":
   - changed-files:

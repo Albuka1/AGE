@@ -59,6 +59,9 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 | `Age.Sample` | Console sample that wires everything together |
 | `Age.Tests` | Behavioural unit tests |
 
+Every project lives in a folder named after it at the repository root, and all build output is
+collected in a single `artifacts/` folder.
+
 ## Requirements
 
 - .NET SDK **10.0.100** or later
@@ -71,8 +74,8 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 git clone https://github.com/Albuka1/Age.git
 cd Age
 dotnet build Age.slnx -c Release
-dotnet test tests/Age.Tests/Age.Tests.csproj -c Release
-dotnet run --project samples/Age.Sample/Age.Sample.csproj
+dotnet test --project Age.Tests/Age.Tests.csproj -c Release
+dotnet run --project Age.Sample/Age.Sample.csproj
 ```
 
 See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour, or the
