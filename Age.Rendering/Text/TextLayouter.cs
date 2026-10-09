@@ -64,12 +64,13 @@ public static class TextLayouter
         FontMetrics metrics = measurer.Metrics;
         float spacing = MathF.Max(style.LineSpacing, 0f);
 
-        // A line takes the height of the font and the spacing after it, so the lines that fit are the ones whose bottom
-        // stays inside the box. A box of no height is as tall as the text, so nothing is dropped.
+        // A line takes the height of the font and the spacing after it, so the lines that fit are the ones whose bottom stays
+        // inside the box. A box of no height is as tall as the text, and a style that lets its lines overflow the box keeps
+        // every one of them, so nothing is dropped in either case.
         float step = metrics.LineHeight + spacing;
         int fits = lines.Count;
 
-        if (height > 0f)
+        if (height > 0f && style.Overflow != TextOverflow.Visible)
         {
             fits = Math.Clamp((int)MathF.Floor((height - metrics.LineHeight) / step) + 1, 0, lines.Count);
         }

@@ -126,6 +126,17 @@ public sealed class TextLayouterTests
         layout.Size.X.Should().Be(30f, "the size of a text is the width of its widest line");
     }
 
+    [Fact]
+    public void TextLayouter_TextThatMayOverflowTheBox_KeepsEveryLine()
+    {
+        TextLayout visible = TextLayouter.Layout("one\ntwo\nthree", new Monospace(), new TextStyle(), new Vector2(0f, 20f));
+        TextLayout clipped = TextLayouter.Layout("one\ntwo\nthree", new Monospace(), new TextStyle { Overflow = TextOverflow.Clip }, new Vector2(0f, 20f));
+
+        visible.Lines.Select(line => line.Text).Should().Equal("one", "two", "three");
+        visible.Size.Y.Should().Be(30f);
+        clipped.Lines.Select(line => line.Text).Should().Equal("one", "two");
+    }
+
     private sealed class Monospace : ITextMeasurer
     {
         public FontMetrics Metrics => new(8f, 10f);
