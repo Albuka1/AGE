@@ -8,7 +8,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # Every job below stands on its own: it checks the repository out, restores and builds what it needs, and waits for no
+  # other job. That is what makes a job that failed re-runnable on its own from the Actions page, instead of running the
+  # whole list again and hoping the same thing fails: "Re-run failed jobs" re-runs exactly the jobs that are red.
+  #
+  # The price is a restore and a build per job, which is a few seconds each. Get it back by keeping a job to one question:
+  # the build job answers "does everything compile", the test job runs the tests, the lint job reads the content, and the
+  # format job checks the style.
   build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -17,6 +25,38 @@ jobs:
           dotnet-version: 10.0.100
       - run: dotnet restore Age.slnx
       - run: dotnet build Age.slnx --no-restore -c Release
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.100
+      - run: dotnet restore Age.Tests/Age.Tests.csproj
+      - run: dotnet build Age.Tests/Age.Tests.csproj --no-restore -c Release
       - run: dotnet test --project Age.Tests/Age.Tests.csproj --no-build -c Release
+
+  lint:
+    name: Content lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.100
+      - run: dotnet restore Age.Content.Lint/Age.Content.Lint.csproj
+      - run: dotnet build Age.Content.Lint/Age.Content.Lint.csproj --no-restore -c Release
       - run: dotnet run --project Age.Content.Lint/Age.Content.Lint.csproj -c Release --no-build -- Resources Prototypes
-      - run: dotnet format Age.slnx --verify-no-changes
+
+  format:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.100
+      - run: dotnet restore Age.slnx
+      - run: dotnet format Age.slnx --verify-no-changes --no-restore
