@@ -17,6 +17,33 @@ internal static class TrueTypeFontBake
     /// <summary>The characters of the printable ASCII range, which is the range that the built-in bitmap font covers.</summary>
     public const string AsciiCharacters = """ !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~""";
 
+    /// <summary>Returns the characters of one range, which is what a bake covers.</summary>
+    /// <param name="first">The first character of the range.</param>
+    /// <param name="last">The last character of the range, which is not before the first one.</param>
+    /// <returns>The characters from the first to the last, in ascending order.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The last character is before the first one.</exception>
+    /// <remarks>
+    /// A game that writes a language with a script of its own asks for the range that holds it, such as the space to the end of
+    /// the Cyrillic block: the characters in between that the font has no glyph for take no room in the atlas, so one range may
+    /// span the letters of two scripts.
+    /// </remarks>
+    public static char[] Characters(char first, char last)
+    {
+        if (last < first)
+        {
+            throw new ArgumentOutOfRangeException(nameof(last), last, "The last character of the range to bake cannot be before the first one.");
+        }
+
+        var characters = new char[last - first + 1];
+
+        for (var index = 0; index < characters.Length; index++)
+        {
+            characters[index] = (char)(first + index);
+        }
+
+        return characters;
+    }
+
     /// <summary>Bakes the glyphs of the given characters at a pixel height.</summary>
     /// <param name="font">The bytes of the font file.</param>
     /// <param name="pixelHeight">The height of a line, in pixels. Must be greater than zero.</param>

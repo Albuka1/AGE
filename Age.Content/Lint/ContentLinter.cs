@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Age.Assets;
+using Age.Content.Locale;
 using Age.Content.Prototypes;
 using Age.Content.Sheets;
 using Age.Core;
@@ -221,6 +223,174 @@ public sealed class ContentLinter
     private static bool IsDocument(string file) =>
         file.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Reads every document of every language and reports what is wrong with the strings of a game.</summary>
+    /// <param name="folder">The folder that holds the languages, one folder each, relative to the game root, such as <c>Locale</c>.</param>
+    /// <returns>What was read and what is wrong with it.</returns>
+    /// <exception cref="ArgumentException">The folder is null, empty or whitespace.</exception>
+    /// <remarks>
+    /// What a build of a game can refuse that a frame cannot: a document that does not describe strings, a key that two
+    /// documents of one language both write, a text that refers to a key the language does not hold, a translation that holds
+    /// a key the base language does not, and a name or a description that a prototype points at and no string answers. The base
+    /// language is what every other language falls back to, so a folder that holds no such language is a problem of the content
+    /// rather than an empty report.
+    /// </remarks>
+    public LintReport LintLocales(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+
+        var problems = new List<LintProblem>();
+        var languages = new Dictionary<string, Dictionary<string, LocaleString>>(StringComparer.Ordinal);
+
+        IEnumerable<string> files;
+
+        try
+        {
+            files = _assets.Enumerate(folder);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // A game whose content says nothing yet has no folder of languages, which is what a game with no sheets looks like.
+            return new LintReport(0, []);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
+        {
+            return new LintReport(0, [new LintProblem(folder, 0, exception.Message)]);
+        }
+
+        foreach (string file in files)
+        {
+            if (!IsDocument(file))
+            {
+                continue;
+            }
+
+            // What a document says about its language is the first segment under the folder that holds the languages, and its
+            // path is read relative to that folder rather than from the root of the game: a build that hands in a folder of its
+            // own, as a folder of a mod does, names the languages of it the same way.
+            string relative = file.StartsWith(folder + "/", StringComparison.Ordinal) ? file[(folder.Length + 1)..] : file;
+            string[] segments = relative.Split('/');
+
+            // A document of a language lives in the folder of that language under the folder of the languages, so a document
+            // that is written anywhere else is a mistake of where it lives rather than a language of its own.
+            if (segments.Length < 2)
+            {
+                problems.Add(new LintProblem(file, 0, "a document of a game lives in the folder of its language under the folder of the languages, such as Locale/en/Entities/creatures.yml"));
+                continue;
+            }
+
+            string language = segments[0];
+
+            if (!languages.TryGetValue(language, out Dictionary<string, LocaleString>? strings))
+            {
+                strings = new Dictionary<string, LocaleString>(StringComparer.Ordinal);
+                languages[language] = strings;
+            }
+
+            try
+            {
+                foreach ((string key, LocaleString value) in LocaleReader.Read(_assets.Load<string>(file), file))
+                {
+                    if (strings.TryGetValue(key, out LocaleString? first))
+                    {
+                        problems.Add(new LintProblem(file, value.Line, $"the key '{key}' is already written by {first.File}, and a language says one thing per key"));
+                        continue;
+                    }
+
+                    strings[key] = value;
+                }
+            }
+            catch (LocaleException exception)
+            {
+                problems.Add(new LintProblem(exception.File, exception.Line, exception.Message));
+            }
+            catch (IOException exception)
+            {
+                problems.Add(new LintProblem(file, 0, exception.Message));
+            }
+        }
+
+        return Strings(languages, problems);
+    }
+
+    /// <summary>Checks what the languages of a game say about each other, which is what a build can refuse.</summary>
+    private LintReport Strings(Dictionary<string, Dictionary<string, LocaleString>> languages, List<LintProblem> problems)
+    {
+        var count = languages.Sum(language => language.Value.Count);
+
+        if (!languages.TryGetValue(LocaleService.Base, out Dictionary<string, LocaleString>? baseStrings))
+        {
+            problems.Add(new LintProblem(
+                LocaleService.Base,
+                0,
+                $"the strings of a game hold the language '{LocaleService.Base}', which every other language falls back to, and this game holds {string.Join(", ", languages.Keys.Order(StringComparer.Ordinal))}"));
+
+            return new LintReport(count, problems);
+        }
+
+        // The rule of what a key holds is the one the service answers with, and the language it starts in does not matter to
+        // this pass: every question of it names the language it asks about, and a build reads the same content wherever it runs.
+        var locale = new LocaleService(_assets, null, CultureInfo.InvariantCulture);
+
+        foreach ((string language, Dictionary<string, LocaleString> strings) in languages)
+        {
+            foreach ((string key, LocaleString value) in strings)
+            {
+                if (!string.Equals(language, LocaleService.Base, StringComparison.Ordinal) && !baseStrings.ContainsKey(key))
+                {
+                    problems.Add(new LintProblem(value.File, value.Line, $"the string '{key}' is one that '{LocaleService.Base}' does not hold, so nothing of the game asks for it"));
+                }
+
+                foreach (string reference in References(value))
+                {
+                    if (!locale.Has(reference, language))
+                    {
+                        problems.Add(new LintProblem(value.File, value.Line, $"the string '{key}' of '{language}' says what '{reference}' says, and no string of that language answers"));
+                    }
+                }
+            }
+        }
+
+        foreach (Prototype prototype in _prototypes.Prototypes)
+        {
+            // The kind is what knows how an entity names itself, so the rule of a name lives in one place rather than in two.
+            if (!_prototypes.TryGet(prototype.Id, out IPrototype? built) || built is not EntityPrototype entity)
+            {
+                continue;
+            }
+
+            foreach (string key in new[] { entity.NameKey, entity.DescKey })
+            {
+                // The rule of what a key holds lives in the service of the strings, so a name and a description written as
+                // attributes of a key are answered here the way the game answers them.
+                if (!locale.Has(key, LocaleService.Base))
+                {
+                    problems.Add(new LintProblem(
+                        entity.Data.File,
+                        entity.Data.Line,
+                        $"the entity '{entity.Id}' is named by the string '{key}', and '{LocaleService.Base}' holds no string under that key"));
+                }
+            }
+        }
+
+        return new LintReport(count, problems);
+    }
+
+    /// <summary>Returns the keys that the texts of a string refer to, which are what its language has to answer as well.</summary>
+    private static IEnumerable<string> References(LocaleString value)
+    {
+        var references = new List<string>();
+
+        foreach (string? text in new[] { value.Text }.Concat(value.Attributes.Values).Concat(value.Forms.Values))
+        {
+            if (text is not null && LocaleReference.TryKey(text) is string reference)
+            {
+                references.Add(reference);
+            }
+        }
+
+        return references;
+    }
+
     /// <summary>Checks one component of a prototype: what a document may write, and what it names.</summary>
     /// <param name="component">The component to check.</param>
     /// <param name="components">The components of the document the component belongs to, which a member of it may point at.</param>
@@ -248,6 +418,8 @@ public sealed class ContentLinter
                 continue;
             }
 
+            CheckNestedResources(component, member, MemberType(member), field.Value, problems);
+
             if (member.GetCustomAttribute<ResourcePathAttribute>() is null)
             {
                 continue;
@@ -268,6 +440,114 @@ public sealed class ContentLinter
 
         CheckState(component, type, components, problems);
     }
+
+    /// <summary>Checks the resource paths that a value holds inside the members of a struct, such as the stack of fonts of a style.</summary>
+    /// <param name="component">The component that the value belongs to.</param>
+    /// <param name="member">The member of the type that holds the value, which is what a problem names.</param>
+    /// <param name="type">The type of the value: the type of the member, or the type of the elements of a list of them.</param>
+    /// <param name="value">The value of that member in the document.</param>
+    /// <param name="problems">The problems that are collected.</param>
+    /// <param name="depth">How deep the walk already is, which bounds the types that hold one another.</param>
+    /// <remarks>
+    /// A path that a document writes inside a struct is checked the same way as one at the top of a component, so a font of a
+    /// stack is refused by a build rather than reaching a frame. The type of the value is carried along rather than read from
+    /// the member again, because the elements of a list are walked under the type of the member that holds the list, and a
+    /// name that a list does not have would end the walk in silence. Only a type that holds a path somewhere is walked, which
+    /// keeps the walk out of the types that are numbers, boxes and colors.
+    /// </remarks>
+    private void CheckNestedResources(PrototypeComponent component, MemberInfo member, Type type, JsonElement value, List<LintProblem> problems, int depth = 0)
+    {
+        if (depth > 2)
+        {
+            return;
+        }
+
+        if (value.ValueKind == JsonValueKind.Array)
+        {
+            if (type.GetElementType() is not Type element)
+            {
+                return;
+            }
+
+            foreach (JsonElement item in value.EnumerateArray())
+            {
+                CheckNestedResources(component, member, element, item, problems, depth + 1);
+            }
+
+            return;
+        }
+
+        if (value.ValueKind != JsonValueKind.Object || !HoldsResourcePath(type))
+        {
+            return;
+        }
+
+        foreach (JsonProperty field in value.EnumerateObject())
+        {
+            if (Member(type, field.Name) is not MemberInfo nested)
+            {
+                continue;
+            }
+
+            if (nested.GetCustomAttribute<ResourcePathAttribute>() is null)
+            {
+                CheckNestedResources(component, nested, MemberType(nested), field.Value, problems, depth + 1);
+
+                continue;
+            }
+
+            if (field.Value.ValueKind != JsonValueKind.String)
+            {
+                problems.Add(new LintProblem(
+                    component.File,
+                    component.Line,
+                    $"the field '{nested.Name}' of '{member.Name}' of the component '{component.Name}' holds the path of a resource, and this value is {field.Value.ValueKind}"));
+
+                continue;
+            }
+
+            CheckResource(component, nested, field.Value.GetString()!, problems);
+        }
+    }
+
+    /// <summary>Returns a value indicating whether a type holds a member that names the path of a resource.</summary>
+    /// <param name="type">The type to look through.</param>
+    /// <param name="depth">How deep the walk already is.</param>
+    /// <returns><see langword="true"/> when a member of the type, or of a type that a member holds, names the path of a resource.</returns>
+    /// <remarks>A type outside the assemblies of the engine is not walked: what a game hands to the engine is not a document of the engine's own content.</remarks>
+    private bool HoldsResourcePath(Type type, int depth = 0)
+    {
+        if (depth > 2 || type.IsPrimitive || type.IsEnum || type == typeof(string))
+        {
+            return false;
+        }
+
+        if (type.IsArray)
+        {
+            return type.GetElementType() is Type element && HoldsResourcePath(element, depth + 1);
+        }
+
+        if (type.Namespace is not string space || !space.StartsWith("Age.", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (MemberInfo member in Members(type))
+        {
+            if (member.GetCustomAttribute<ResourcePathAttribute>() is not null || HoldsResourcePath(MemberType(member), depth + 1))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Returns the type of a member of a component.</summary>
+    /// <param name="member">The member to read the type of.</param>
+    /// <returns>The type of the value of the member.</returns>
+    private static Type MemberType(MemberInfo member) =>
+        member is FieldInfo field ? field.FieldType : ((PropertyInfo)member).PropertyType;
 
     /// <summary>Checks that a state a component names is one the sheet it names declares, which is what a game would find out at the first frame instead.</summary>
     /// <remarks>

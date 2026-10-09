@@ -23,7 +23,7 @@ public sealed class SceneSerializerTests
         Entity panel = source.CreateEntity();
         source.Set(panel, new RectTransformComponent { Position = new Vector2(100f, 100f), Size = new Vector2(200f, 50f), ZOrder = 1, Visible = true });
         source.Set(panel, new ButtonComponent { BaseColor = Color.Blue, Interactable = true });
-        source.Set(panel, new TextLabelComponent { Text = "Hello AGE", Color = Color.White });
+        source.Set(panel, new TextComponent { Text = "Hello AGE", Style = new TextStyle { Color = Color.White } });
 
         string json = serializer.Save(source);
         var loaded = new World();
@@ -44,8 +44,8 @@ public sealed class SceneSerializerTests
         loaded.Get<RectTransformComponent>(panels[0]).Visible.Should().BeTrue();
         loaded.Get<ButtonComponent>(panels[0]).BaseColor.Should().Be(Color.Blue);
         loaded.Get<ButtonComponent>(panels[0]).Interactable.Should().BeTrue();
-        loaded.Get<TextLabelComponent>(panels[0]).Text.Should().Be("Hello AGE");
-        loaded.Get<TextLabelComponent>(panels[0]).Color.Should().Be(Color.White);
+        loaded.Get<TextComponent>(panels[0]).Text.Should().Be("Hello AGE");
+        loaded.Get<TextComponent>(panels[0]).Style.Color.Should().Be(Color.White);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class SceneSerializerTests
     {
         ComponentRegistry registry = CreateRegistry();
 
-        registry.Names.Should().Contain(["Transform", "Sprite", "RectTransform", "Button", "TextLabel"]);
+        registry.Names.Should().Contain(["Transform", "Sprite", "RectTransform", "Button", "Text"]);
         registry.TryGetType("Sprite", out Type? sprite).Should().BeTrue();
         sprite.Should().Be(typeof(SpriteComponent));
         registry.TryGetType("Mystery", out _).Should().BeFalse();

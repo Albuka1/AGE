@@ -12,7 +12,6 @@ namespace Age.UI;
 [JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(RectTransformComponent))]
 [JsonSerializable(typeof(ButtonComponent))]
-[JsonSerializable(typeof(TextLabelComponent))]
 [JsonSerializable(typeof(CanvasComponent))]
 internal sealed partial class AgeUiJsonContext : JsonSerializerContext
 {

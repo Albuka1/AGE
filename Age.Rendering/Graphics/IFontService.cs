@@ -27,16 +27,29 @@ public interface IFontService
     /// <summary>Gets the number of fonts that are currently loaded.</summary>
     int Count { get; }
 
-    /// <summary>Returns the font at the given path, baking it on the first call for that height.</summary>
+    /// <summary>Returns the font at the given path, baking it on the first call for that height and that range of characters.</summary>
     /// <param name="relativePath">The path of the font file, relative to the game root.</param>
     /// <param name="pixelHeight">The height of a line, in pixels.</param>
+    /// <param name="first">The first character of the range to bake, which is the space when a caller does not say.</param>
+    /// <param name="last">The last character of the range to bake, which is the tilde when a caller does not say: the printable ASCII range.</param>
     /// <returns>The handle of the baked font.</returns>
-    /// <remarks>The bake covers the printable ASCII range, which is the range that the built-in bitmap font covers.</remarks>
+    /// <remarks>
+    /// <para>
+    /// The bake covers one range of characters, and a character outside it is drawn as a space, so a line keeps its layout.
+    /// The range is a pair of characters rather than a list of them, because an atlas finds the glyph of a character by
+    /// arithmetic: a game that writes a language with a script of its own asks for the range that holds that script, such as
+    /// the space to the end of the Cyrillic block for the Latin and Cyrillic letters of the font this repository ships.
+    /// </para>
+    /// <para>
+    /// A wide range costs little: a character that the font has no glyph for takes no room in the atlas, so a range that spans
+    /// the letters of two scripts holds the glyphs of both and nothing else.
+    /// </para>
+    /// </remarks>
     /// <exception cref="ArgumentException">The path is null, empty or whitespace, or the file does not hold a font that can be read.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelHeight"/> is zero, negative or not a finite number, or a glyph of the font does not fit in an atlas at that size.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The height is zero, negative or not a finite number, the last character is before the first one, or a glyph of the font does not fit in an atlas at that size.</exception>
     /// <exception cref="FileNotFoundException">No file exists at that path.</exception>
     /// <exception cref="InvalidOperationException">The renderer has not been attached to a window.</exception>
-    FontHandle Load(string relativePath, float pixelHeight);
+    FontHandle Load(string relativePath, float pixelHeight, char first = ' ', char last = '~');
 
     /// <summary>Determines whether the handle still refers to a font that this service loaded.</summary>
     /// <param name="font">The handle to check.</param>
@@ -65,7 +78,22 @@ public interface IFontService
     /// <param name="text">The text of the line. A character outside the range of the font counts as a space.</param>
     /// <returns>The width that the text advances and the height of a line, in pixels.</returns>
     /// <exception cref="InvalidOperationException">The handle is not a live font of this service.</exception>
+    /// <remarks>
+    /// The width is the sum of the advances of the characters, so a caller that lays out text measures the words and the
+    /// lines it builds from them. A line feed is a character like any other here: a caller that breaks a text into lines
+    /// does so itself, because where a line ends is a decision about a box rather than about a string.
+    /// </remarks>
     Vector2 Measure(FontHandle font, ReadOnlySpan<char> text);
+
+    /// <summary>Returns the metrics that place a line of the font: its ascent and the distance between two baselines.</summary>
+    /// <param name="font">The font to read the metrics of.</param>
+    /// <returns>The metrics of the font, in pixels.</returns>
+    /// <exception cref="InvalidOperationException">The handle is not a live font of this service.</exception>
+    /// <remarks>
+    /// <see cref="Measure"/> answers the height of a line as well, so a caller that only draws one line needs this call
+    /// rarely; one that stacks lines, aligns them in a box or centers a glyph needs the baseline that a line starts at.
+    /// </remarks>
+    FontMetrics Metrics(FontHandle font);
 
     /// <summary>Draws one line of text with the top-left corner of the line at the given position.</summary>
     /// <param name="font">The font to draw with.</param>

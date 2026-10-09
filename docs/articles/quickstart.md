@@ -362,16 +362,79 @@ fonts.Draw(font, "Hello AGE", new Vector2(32f, 32f), Color.White);
 ```
 
 `IFontService` reads the file through `IAssetLoader`, bakes its glyphs into one atlas with `StbTrueTypeSharp` and
-uploads that atlas as a texture, so text is tinted and drawn like any other sprite. A font is cached by its path and its
-height, so the same file at the same size returns the same atlas. The bake covers the printable ASCII range, and a
-character outside it is drawn as a space, which keeps the rest of the line where it was. `Measure` reports what a line
+uploads that atlas as a texture, so text is tinted and drawn like any other sprite. A font is cached by its path, its
+height and the range of characters it was baked for, so the same file at the same size returns the same atlas. The bake
+covers the printable ASCII range by default, and a caller names the range it needs with the first and the last character
+of it — the space to the end of the Cyrillic block is what a language with another script needs — while a character
+outside the range of an atlas is drawn as a space, which keeps the rest of the line where it was. A wide range costs
+little, because a character the font has no glyph for takes no room in the atlas. `Measure` reports what a line
 advances and how tall it is, which is what places the text of a menu. Draw between `BeginFrame` and `EndFrame`, from the
 render callback of the loop or from a render pass. The sample ships `Resources/Fonts/Cousine-Regular.ttf` under the SIL
 Open Font License 1.1 for exactly this call, and its asset root is the shared `Resources` folder, so the paths it
 passes are relative to that folder.
 
-The built-in 8x8 bitmap font is still there for a game that ships no font: `IRenderer.DrawText` draws with it, which is
-what the UI pass uses.
+The built-in 8x8 bitmap font is still there for a game that ships no font: a text that names no font, or whose font cannot be
+baked, is drawn with it, and it is measured through the same seam as any other font, so it can be wrapped and aligned like
+one. It covers the printable ASCII range only, which is why the engine ships a font of its own and draws every text that names
+none with it: `TextDefaults.Fonts` is that stack, `TextDefaults.FontPath` names the file (the SIL Open Font License, as the
+other fonts of the repository), and the console of the developer overlay, the numbers of a frame and any line a game holds
+without an entity are drawn with it through `TextRenderer.Draw(string, …)`, advanced by `TextRenderer.LineHeight`.
+
+## Play in another language
+
+```csharp
+ILocaleService locale = provider.GetRequiredService<ILocaleService>();
+locale.Language = "ru";
+
+string name = locale.Get("ent-Goblin");                          // гоблин
+string items = locale.Get("ui-entities", ("count", 3));          // 3 сущности
+
+// A line of the world names a key rather than a string, so it says what the language of the game says, and the stack of
+// fonts is what covers the script of that language.
+Entity label = world.CreateEntity();
+world.Set(label, new TransformComponent { Position = new Vector2(300f, 180f) });
+world.Set(label, new TextComponent
+{
+    Key = "ent-Goblin",
+    Style = new TextStyle
+    {
+        Fonts = [new FontStyle { Path = "Fonts/Cousine-Regular.ttf", PixelHeight = 24f, FirstCharacter = ' ', LastCharacter = '\u04FF' }],
+        Color = Color.White,
+    },
+    ZOrder = 10,
+});
+```
+
+`ILocaleService` answers a game with the string of a key in the language it plays in, and that language starts as the one the
+system is set to, when the game ships it, so a player who never chose one reads their own rather than English:
+`SystemLanguage` says which one that is and `Language` is what changes it. The strings are content:
+`Resources/Locale/<language>/…` holds documents of keys in the same subset of YAML as the rest of the content, so a new
+language is a folder rather than a change in code. A key that the language does not hold falls back to the base language
+(`en`) key by key, so a translation that is not finished shows English rather than keys, and a key that neither holds is
+answered with the key itself, counted in `Missing` and written once in the log rather than taking a frame down. A text
+that writes a count picks the form its language selects — English has `one` and `other`, Russian has `one`, `few`, `many`
+and `other` — and a prototype names its strings with the fields `name` and `desc`, which hold keys such as `ent-Goblin`
+rather than texts, so a spawned goblin is named without a document writing the name again.
+
+`Age.Content.Lint` reads every language of a build and refuses a key that two documents write, a reference that its
+language does not answer, a translation that holds a key the base language does not, and a name or a description that a
+prototype points at and no string answers, so a language is checked before a build ships rather than by a player.
+
+A `TextComponent` says what a line of the world or a label of the interface says, and where the line stands is what tells the
+two apart: an entity with a `TransformComponent` has its line at the transform, and one with a `RectTransformComponent` has
+its label in that rectangle, which is also the box the text is laid out into. `Key` names the string of the game with
+`Count` written into it as the count of its plural form, or `Text` holds a string of the game's own. `Style` says which
+fonts may draw the text and how its lines fit the box: wrapping at a space or anywhere, alignment across and down the box, an
+ellipsis where the text does not fit, and a stack of fonts, of which the first that covers a character draws it, which is
+what mixes the letters of two scripts in one line. What the renderer resolved — `MeasuredSize` and `Font` — is written back
+for a game to read, which is what a panel that follows its title or a button as wide as its word needs. The pass of the text
+runs between the pass of the world and the pass of the UI:
+
+```csharp
+renderPipeline.Add(renderSystem);
+renderPipeline.Add(provider.GetRequiredService<TextRenderSystem>());
+renderPipeline.Add(uiRenderSystem);
+```
 
 ## Load and play a sound
 

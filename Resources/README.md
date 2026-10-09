@@ -26,6 +26,12 @@ A path is written the same way everywhere: in the engine, in a document of conte
 | `Audio/Effects` | `click.wav`, the short sound effect a press plays | `Age.Sample` |
 | `Audio/Samples` | `sample.ogg` and `sample.mp3`, two seconds of two real recordings that the decoders read, with a `README.md` that says where they come from | `Age.Tests` |
 | `Fonts` | `Cousine-Regular.ttf`, the TrueType font the text tests bake and the sample draws with, with its `OFL.txt` license and its own `README.md` | `Age.Sample`, `Age.Tests` |
+| `Locale/en/Entities` | `creatures.yml`, the names and the descriptions of the creatures in the base language | `Age.Content`, `Age.Tests` |
+| `Locale/en/Items` | `items.yml`, the names and the descriptions of the items in the base language | `Age.Content`, `Age.Content.Lint`, `Age.Tests` |
+| `Locale/en/Ui` | `window.yml`, the strings of the window in the base language, including one that is written by count | `Age.Content`, `Age.Tests` |
+| `Locale/ru/Entities` | `creatures.yml`, the same keys in Russian | `Age.Tests` |
+| `Locale/ru/Items` | `items.yml`, the same keys in Russian | `Age.Tests` |
+| `Locale/ru/Ui` | `window.yml`, the same keys in Russian, with the three forms its counts are written in | `Age.Tests` |
 | `Prototypes/Entities` | `base.yml`, which declares `CreatureBase`, and `goblin.yml`, which declares `Goblin` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Prototypes/Items` | `base.yml`, which declares `ItemBase`, and `sword.yml`, which declares `Sword` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Entities` | `goblin.tga`, the frames of the goblin in a grid of four cells by two, and `goblin.yml`, the document that says where each state lies on it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
@@ -43,7 +49,6 @@ A section is created with its first file; until then this table says where it wi
 
 | Section | Will hold | Comes with |
 | --- | --- | --- |
-| `Locale` | The strings of the game and of the interface, one folder per language | F2 |
 | `Maps` | A map as a file of its own, when a map is authored rather than saved during a run | A map a person authors |
 | `Ui` | Layout documents of the interface | B6 |
 | `Shaders` | Shader sources, when a pass needs one of its own | — |

@@ -78,7 +78,7 @@ ITextureService textures = provider.GetRequiredService<ITextureService>();
 const string TilePath = "Textures/Tiles/tiles.bmp";
 
 IFontService fonts = provider.GetRequiredService<IFontService>();
-FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f);
+FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04FF');
 
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
 SoundHandle click = sounds.Load("Audio/Effects/click.wav");
@@ -103,12 +103,24 @@ world.Set(second, new ColliderComponent { Size = new Vector2(64f, 64f) });
 Entity panel = world.CreateEntity();
 world.Set(panel, new RectTransformComponent { Position = new Vector2(100f, 100f), Size = new Vector2(200f, 50f), ZOrder = 0, Visible = true });
 world.Set(panel, new ButtonComponent { BaseColor = Color.Blue, Interactable = true });
-world.Set(panel, new TextLabelComponent { Text = "Hello AGE", Color = Color.White });
+world.Set(panel, new TextComponent
+{
+    // A label of the interface names a key and a count rather than a string, so a button says what the language says, and
+    // its alignment is what centers the text in the box of the element.
+    Key = "ui-entities",
+    Count = 3,
+    Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
+});
 
 RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
+TextRenderSystem textRenderSystem = provider.GetRequiredService<TextRenderSystem>();
 UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
 RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
 renderPipeline.Add(renderSystem);
+
+// The text of a world is a pass of its own, between the world and the interface: a line stands where the entity that carries
+// it stands, so it belongs to the world, and it is drawn over the sprites and under the UI.
+renderPipeline.Add(textRenderSystem);
 renderPipeline.Add(uiRenderSystem);
 
 // The developer overlay draws over everything else: the numbers of the frame and the console of the engine. Its keys are
@@ -169,6 +181,36 @@ CVarService cvars = provider.GetRequiredService<CVarService>();
 
 cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen lives, in seconds.");
 
+// The language the strings are read in is a setting rather than a way the game was built: the command 'loc' changes it while
+// the game runs, and everything that asks the locale service for a key answers in the new language from then on. The language
+// starts as the one the system is set to, when the game ships that language, and as the base language otherwise.
+Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
+cvars.Register("locale", locale.Language, "The language the strings of the game are read in, such as en or ru.");
+locale.Language = cvars.Get<string>("locale");
+
+// A line of text in the world, in the language the game plays in. The name of a prototype is a key rather than a text, so
+// what a player reads is content: this line says the same thing as `locale.Get("ent-Goblin")` answers, and the `loc` command
+// switches the language of a running game.
+Entity label = world.CreateEntity();
+world.Set(label, new TransformComponent { Position = new Vector2(300f, 180f), Scale = new Vector2(1f, 1f) });
+world.Set(label, new TextComponent
+{
+    // The line names a key rather than a string, so it says what the language of the game says: the command `loc ru` turns
+    // it into Russian without this game writing the name again.
+    Key = "ent-Goblin",
+    Style = new TextStyle
+    {
+        Fonts =
+        [
+            // The font is baked from the space to the end of the Cyrillic block, which is what a language with a script of
+            // its own needs: a character outside the range of a font is drawn as a space.
+            new FontStyle { Path = "Fonts/Cousine-Regular.ttf", PixelHeight = 24f, FirstCharacter = ' ', LastCharacter = '\u04FF' },
+        ],
+        Color = Color.White,
+    },
+    ZOrder = 10,
+});
+
 // The second sprite turns with a tween of three seconds that starts over when it reaches the end. Nothing in this game
 // advances it: the tween system does, on the time of every step, and the subscription above writes the value into the
 // transform of the entity it belongs to.
@@ -191,6 +233,17 @@ console.Register("stats", "Reports what the world holds, what it is missing and 
 
 // A goblin of the content: the world receives exactly the components that the document declares, and this game names none
 // of them. Where it stands is the one thing a spawn takes from the caller, because a map is what decides that.
+console.Register("loc", "Reports the language the strings are read in, and switches to the one this names.", arguments =>
+{
+    if (arguments.Count > 0)
+    {
+        locale.Language = arguments[0];
+    }
+
+    console.Write($"language {locale.Language}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve");
+    console.Write($"goblin: {locale.Get("ent-Goblin")} / {locale.Get("ent-Goblin.desc")}");
+    console.Write($"items: {locale.Get("ui-entities", ("count", 1))}, {locale.Get("ui-entities", ("count", 4))}");
+});
 console.Register("goblin", "Puts a goblin of the content in the world, at 320 by 240.", _ => spawner.Spawn(world, "Goblin", new Vector2(320f, 240f)));
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
@@ -286,6 +339,11 @@ gameLoop.Run(
 
         fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
         fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
+
+        // A count of things is a string of the content rather than a number this game writes: Russian writes three forms of it
+        // where English writes two, so the line says what the language says. `loc ru` changes it while the game runs.
+        fonts.Draw(font, locale.Get("ui-entities", ("count", world.Enumerate().Count())), new Vector2(24f, 88f), Color.White);
+        fonts.Draw(font, $"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Vector2(24f, 120f), new Color(255, 220, 120));
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open.

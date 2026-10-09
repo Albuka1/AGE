@@ -1,0 +1,6 @@
+# The same keys in Russian.
+ent-ItemBase: предмет
+ent-ItemBase.desc: То, что можно носить.
+
+ent-Sword: меч
+ent-Sword.desc: Клинок с рукоятью. Из-за таких обычно и начинается драка.

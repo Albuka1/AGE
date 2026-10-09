@@ -169,6 +169,8 @@ public sealed class PrototypeManager : IPrototypeManager
         string? id = null;
         string? kind = null;
         string? parent = null;
+        string? nameKey = null;
+        string? descKey = null;
         var components = new List<PrototypeComponent>();
 
         foreach (YamlEntry entry in mapping.Entries)
@@ -187,12 +189,23 @@ public sealed class PrototypeManager : IPrototypeManager
                     parent = Word(name, entry);
                     break;
 
+                // A name and a description are keys of a language rather than texts, so what a document writes here is where
+                // to look for the words: a game draws the string of the key, and an entity whose key is nowhere is drawn as
+                // its identifier rather than as nothing.
+                case "name":
+                    nameKey = Word(name, entry);
+                    break;
+
+                case "desc":
+                    descKey = Word(name, entry);
+                    break;
+
                 case "components":
                     ReadComponents(name, entry, components);
                     break;
 
                 default:
-                    throw new PrototypeException($"{name}: '{entry.Name}' is not a field of a prototype, and a prototype holds id, type, parent and components", name, entry.Line);
+                    throw new PrototypeException($"{name}: '{entry.Name}' is not a field of a prototype, and a prototype holds id, type, name, desc, parent and components", name, entry.Line);
             }
         }
 
@@ -206,7 +219,7 @@ public sealed class PrototypeManager : IPrototypeManager
             throw new PrototypeException($"{name}: the identifier '{id}' was already declared in {declared.File}", name, mapping.Line);
         }
 
-        var prototype = new Prototype(id, kind ?? "prototype", parent, name, mapping.Line, components);
+        var prototype = new Prototype(id, kind ?? "prototype", parent, nameKey, descKey, name, mapping.Line, components);
         _declared[id] = prototype;
         _order.Add(prototype);
     }
@@ -315,6 +328,8 @@ public sealed class PrototypeManager : IPrototypeManager
         }
 
         IReadOnlyList<PrototypeComponent> components = declared.Components;
+        string? nameKey = declared.NameKey;
+        string? descKey = declared.DescKey;
 
         if (declared.Parent is string parentId)
         {
@@ -323,12 +338,18 @@ public sealed class PrototypeManager : IPrototypeManager
                 throw new PrototypeException($"{declared.File}: the prototype '{declared.Id}' inherits from '{parentId}', and no document of the content declares it", declared.File, declared.Line);
             }
 
-            components = Merge(Resolve(parent, chain).Components, declared.Components);
+            Prototype inherited = Resolve(parent, chain);
+            components = Merge(inherited.Components, declared.Components);
+
+            // What names a thing is inherited the way a component is: a document that writes none takes the word of the kind
+            // it inherits, so a name is written once where the kind is declared rather than once per thing.
+            nameKey ??= inherited.NameKey;
+            descKey ??= inherited.DescKey;
         }
 
         Validate(declared, components);
 
-        var prototype = new Prototype(declared.Id, declared.Kind, declared.Parent, declared.File, declared.Line, components);
+        var prototype = new Prototype(declared.Id, declared.Kind, declared.Parent, nameKey, descKey, declared.File, declared.Line, components);
         _resolved[declared.Id] = prototype;
         return prototype;
     }

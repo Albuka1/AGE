@@ -18,14 +18,18 @@ public sealed class Prototype : IPrototype
     /// <param name="id">The identifier the document declared.</param>
     /// <param name="kind">The kind of data, which is what the <c>type</c> field of a document says.</param>
     /// <param name="parent">The identifier of the prototype this one inherits from, or null when it inherits from none.</param>
+    /// <param name="nameKey">The key of the string that names this prototype, or null when the document did not write one.</param>
+    /// <param name="descKey">The key of the string that describes this prototype, or null when the document did not write one.</param>
     /// <param name="file">The file the prototype was read from, which an error mentions.</param>
     /// <param name="line">The line of the file, counting from one.</param>
     /// <param name="components">The components and their values, in the order the documents declared them.</param>
-    public Prototype(string id, string kind, string? parent, string file, int line, IReadOnlyList<PrototypeComponent> components)
+    public Prototype(string id, string kind, string? parent, string? nameKey, string? descKey, string file, int line, IReadOnlyList<PrototypeComponent> components)
     {
         Id = id;
         Kind = kind;
         Parent = parent;
+        NameKey = nameKey;
+        DescKey = descKey;
         File = file;
         Line = line;
         Components = components;
@@ -39,6 +43,18 @@ public sealed class Prototype : IPrototype
 
     /// <summary>Gets the identifier of the prototype this one inherits from, or null when it inherits from none.</summary>
     public string? Parent { get; }
+
+    /// <summary>
+    /// Gets the key of the string that names this prototype, or null when neither the document nor its parent wrote one.
+    /// </summary>
+    /// <remarks>
+    /// A name is a key rather than a text, because the text of a name belongs to a language: what a document writes is where
+    /// to look for it, and a game that has no string under that key draws the identifier instead of nothing at all.
+    /// </remarks>
+    public string? NameKey { get; }
+
+    /// <summary>Gets the key of the string that describes this prototype, or null when neither the document nor its parent wrote one.</summary>
+    public string? DescKey { get; }
 
     /// <summary>Gets the file the prototype was read from.</summary>
     public string File { get; }

@@ -7,10 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A text that names no font is drawn with the font of the engine, so a game shows a word of its content without loading
+  anything, and the console, the numbers of a frame and the lines a game holds without an entity are drawn with it as well:
+  `TextDefaults` is the stack of the engine, which covers the Latin and Cyrillic letters and the punctuation a translation uses
+  besides them, `TextRenderer.LineHeight` is what a caller that stacks lines advances by, and `TextRenderer.Draw` draws a text
+  that no entity carries and reports the room it takes. The built-in bitmap font stays as what a game without a font of its own
+  gets, which is the printable ASCII range.
+- A game starts in the language the system is set to: `ILocaleService.SystemLanguage` is the culture of the operating system
+  when the game ships a language of that name, which is the whole name of it such as `pt-BR` first and the two letters such as
+  `pt` after that, and the base language otherwise. `Language` starts as it, so a player who never chose a language reads
+  their own rather than English, and a game that sets `Language` still says what it wants, which is what the setting `locale`
+  of the sample does.
+- The text of a world is a component and a pass of its own: `TextComponent` draws one line where the entity that carries it
+  stands, with a font that content names by path and bakes for the range of characters that the line needs, and
+  `TextRenderSystem` draws the lines in ascending `ZOrder` between the pass of the world and the pass of the UI. The bake of
+  a font takes the first and the last character of the range to cover — the space to the tilde is the default, and the space
+  to the end of the Cyrillic block is what a language with another script needs — and a font is cached by its path, its
+  height and its range. A line whose font cannot be baked is drawn with the built-in font of the renderer and reported once
+  per path, and a build refuses a font of a stack that no file answers, because the linter reads the paths inside a style as
+  well as the ones a component writes at its top, so a mistake in the content of a game is visible and cheap rather than
+  fatal.
+
+### Changed
+
+- **Breaking:** the text of a world and the text of an interface are one component, and `TextLabelComponent` is gone. A label
+  is a `TextComponent` on an entity that has a `RectTransformComponent`, and its text is laid out into the box of that
+  rectangle, where a line of an entity with a `TransformComponent` stands at the transform. The component names a `Key` of the
+  strings of the game with the `Count` its plural form is written by, or holds a `Text` of its own, and its `Style` says which
+  fonts may draw it, in which order, how tall a line of each of them is and which block of characters each is baked for, and
+  how its lines fit the box: wrapping at a space or anywhere, alignment across and down it, an ellipsis where the text does not
+  fit, an extra distance between two lines and the characters that mark a shortened one. A line that mixes the scripts of two
+  languages is drawn in one run per font, a font that cannot be baked is dropped from the stack so the characters it covers
+  fall to the font below it, and the `MeasuredSize` and `Font` that were resolved are written back for a game to read, which
+  is what a panel that follows its title or a button as wide as its word needs. The text is laid out again when the language
+  of the game changes and not on every frame, and the built-in bitmap font is measured through the same seam as any other
+  font, so text with no font of its own can be wrapped and aligned like one.
+
+### Fixed
+
+- A language whose documents cannot be read is no longer kept as an empty one, so a caller that fixed the content reads it
+  again instead of living with the half of a language. A language that is asked for and that the game does not hold says so
+  once, with the languages the game does have, and its folder is not walked, so the same missing folder is not reported
+  twice. `Age.Content.Lint` refuses a locale document that is written outside the folder of a language rather than taking its
+  file name for one, and the comments about the Russian plural forms say what the rule does: everything that is not one or
+  few takes `many`, and `other` belongs to a count that is not whole, which a rule of whole numbers never sees.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
 
+- The strings of a game are content: `Resources/Locale/<language>/…` holds documents of keys and the strings they say, in the
+  same subset of YAML as the rest of the content, and `ILocaleService` answers a game with the string of a key in the language
+  it plays in, falling back to the base language (`en`) key by key, so a translation that is not finished shows English rather
+  than keys. A key that holds a dot says what the key before the dot says besides its text — `desc` is a description, and `one`,
+  `few` and `many` are the forms a language writes for a count — and a text written as `"{ other-key }"` is what that key says
+  rather than a copy of it, which is how a string is inherited rather than repeated. A key that is not there is answered with
+  the key itself, counted in `Missing` and written once in the log, `PluralRules` selects the form for a count in the languages
+  the engine ships, and `Resources/Locale/en` with `Resources/Locale/ru` are what a game copies to add a language of its own.
+  A prototype names its strings with the fields `name` and `desc`, which hold keys rather than texts and are inherited with the
+  rest of the prototype, so an entity of `Goblin` is named by `ent-Goblin` and described by `ent-Goblin.desc` without a document
+  writing either; a name is written once where a kind is declared, and `ent-GoblinHeavy` that is a `Goblin` says so by writing
+  nothing at all. `Age.Content.Lint` reads every language of a build: a key that two documents write, a reference that its
+  language does not answer, a translation that holds a key the base language does not, and a name or a description that a
+  prototype points at and no string answers are all mistakes of the content rather than something a player finds. The sample
+  reads its language from the setting `locale` and the command `loc` reports what the strings say and switches the language
+  while the game runs.
 - A release is cut by one script and checked by the workflow that publishes it: `tools/release.ps1` bumps the version, closes
   the unreleased section of this file into a dated one, builds and tests what it is about to release, and only then commits and
   tags, while the Release workflow refuses a tag that does not name the version the build reports and a version that this file

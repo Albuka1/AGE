@@ -27,6 +27,12 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<ISpriteSheetService, SpriteSheetService>();
         services.AddSingleton<SpriteAnimationSystem>();
         services.AddSingleton<IFontService, FontService>();
+        services.AddSingleton(provider => new TextRenderer(
+            provider.GetRequiredService<IRenderer>(),
+            provider.GetService<IFontService>(),
+            provider.GetService<ITextSource>(),
+            provider.GetService<Microsoft.Extensions.Logging.ILogger<TextRenderer>>(),
+            TextDefaults.Fonts));
         services.AddSingleton<SplashScreen>();
         services.AddSingleton<DevOverlay>();
         services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();
@@ -34,6 +40,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
         services.AddSingleton<RenderPipeline>();
         services.AddSingleton<RenderSystem>();
+        services.AddSingleton<TextRenderSystem>();
         services.AddSingleton<UIRenderSystem>();
         services.AddSingleton<IGameLoop, SilkGameLoop>();
         return services;

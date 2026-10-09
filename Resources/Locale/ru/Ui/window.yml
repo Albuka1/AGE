@@ -1,0 +1,8 @@
+# Russian writes a count in three forms rather than two: 'one' for 1 and 21, 'few' for 2 to 4, and 'many' for the rest, which
+# is zero, 5 to 20 and the tens that end in zero. A form that the language does not write falls back to 'other', which is why
+# this file writes it as well, and a count that is not whole is what 'other' is for: the engine asks about whole numbers of
+# things, so no such count reaches the rule that picks these forms.
+ui-entities.one: "{count} сущность"
+ui-entities.few: "{count} сущности"
+ui-entities.many: "{count} сущностей"
+ui-entities.other: "{count} сущности"
