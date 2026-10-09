@@ -1,3 +1,4 @@
+using System.Globalization;
 using Age.Assets;
 using Age.Content.Locale;
 using FluentAssertions;
@@ -140,7 +141,7 @@ public sealed class LocaleTests : IDisposable
     {
         var assets = new NullAssetLoader();
         assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
-        var locale = new LocaleService(assets);
+        var locale = new LocaleService(assets, null, CultureInfo.InvariantCulture);
 
         locale.Languages.Should().BeEquivalentTo("en", "ru");
         locale.Get("ent-Goblin").Should().Be("goblin");
@@ -158,7 +159,13 @@ public sealed class LocaleTests : IDisposable
     }
 
     /// <summary>Builds a service over a game root of its own, which the test writes the documents of a language into.</summary>
-    private LocaleService Service(params (string Path, string Text)[] documents)
+    private LocaleService Service(params (string Path, string Text)[] documents) => Build(CultureInfo.InvariantCulture, documents);
+
+    /// <summary>Builds a service with the culture that decides what it plays in, over a game root of its own.</summary>
+    private LocaleService Service(CultureInfo culture, params (string Path, string Text)[] documents) => Build(culture, documents);
+
+    /// <summary>Writes the documents of a language into a game root of its own and builds a service over it.</summary>
+    private LocaleService Build(CultureInfo culture, (string Path, string Text)[] documents)
     {
         foreach ((string path, string text) in documents)
         {
@@ -170,6 +177,36 @@ public sealed class LocaleTests : IDisposable
         var assets = new NullAssetLoader();
         assets.Initialize(_root);
 
-        return new LocaleService(assets);
+        return new LocaleService(assets, null, culture);
+    }
+
+    [Fact]
+    public void Locale_StartsInTheLanguageOfTheSystemThatTheGameShips()
+    {
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+
+        var russian = new LocaleService(assets, null, CultureInfo.GetCultureInfo("ru-RU"));
+        var german = new LocaleService(assets, null, CultureInfo.GetCultureInfo("de-DE"));
+
+        russian.SystemLanguage.Should().Be("ru");
+        russian.Language.Should().Be("ru", "the game ships the language the system is set to");
+        russian.Get("ent-Goblin").Should().Be("гоблин");
+
+        german.SystemLanguage.Should().Be("en", "the game ships no German, so the base language answers");
+        german.Language.Should().Be("en");
+        german.Get("ent-Goblin").Should().Be("goblin");
+    }
+
+    [Fact]
+    public void Locale_LanguageTheGameShipsUnderItsWholeName_IsFound()
+    {
+        LocaleService locale = Service(
+            CultureInfo.GetCultureInfo("pt-BR"),
+            ("en/Entities/creatures.yml", "ent-Goblin: goblin\n"),
+            ("pt-BR/Entities/creatures.yml", "ent-Goblin: goblinzinho\n"));
+
+        locale.SystemLanguage.Should().Be("pt-BR", "the whole name of the culture is what a game names the folder of one translation");
+        locale.Get("ent-Goblin").Should().Be("goblinzinho");
     }
 }

@@ -34,6 +34,14 @@ public interface ILocaleService
     /// <summary>Gets the language that every other language falls back to, which is <c>en</c> and is always there.</summary>
     string BaseLanguage { get; }
 
+    /// <summary>Gets the language that the system is set to, which is what a game plays in when it ships it.</summary>
+    /// <remarks>
+    /// The language of the operating system decides what a game starts in, so a player who never chose a language reads their
+    /// own rather than English. A game that does not ship that language plays in <see cref="BaseLanguage"/>, and a game is
+    /// still free to set <see cref="Language"/> to what it wants, which is what a setting of the game does.
+    /// </remarks>
+    string SystemLanguage { get; }
+
     /// <summary>Gets the languages the game ships, which are the folders under <c>Locale</c>, in the order of their names.</summary>
     IEnumerable<string> Languages { get; }
 

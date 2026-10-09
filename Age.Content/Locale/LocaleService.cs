@@ -24,6 +24,7 @@ public sealed class LocaleService : ILocaleService
 
     private readonly IAssetLoader _assets;
     private readonly ILogger<LocaleService>? _logger;
+    private readonly CultureInfo? _culture;
     private readonly Dictionary<string, LocaleLanguage> _languages = new(StringComparer.Ordinal);
     private readonly List<string> _missing = [];
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
@@ -32,20 +33,50 @@ public sealed class LocaleService : ILocaleService
     /// <summary>Initializes the service with the files of the game.</summary>
     /// <param name="assets">The loader that reads the documents.</param>
     /// <param name="logger">The logger that reports what is missing, or null to report nothing.</param>
+    /// <param name="culture">The culture that decides what the game plays in, or null for the one the system is set to.</param>
     /// <exception cref="ArgumentNullException">The loader is null.</exception>
-    public LocaleService(IAssetLoader assets, ILogger<LocaleService>? logger = null)
+    /// <remarks>
+    /// The language that is being played starts as <see cref="SystemLanguage"/>, which is the language the system is set to
+    /// when the game ships it and the base language otherwise, so a game shows its own language without anyone choosing one.
+    /// </remarks>
+    public LocaleService(IAssetLoader assets, ILogger<LocaleService>? logger = null, CultureInfo? culture = null)
     {
         ArgumentNullException.ThrowIfNull(assets);
         _assets = assets;
         _logger = logger;
+        _culture = culture;
 
         // The base language is read at once rather than at the first frame: a game that ships a document which cannot be read
         // hears about it while it is starting, and a test that reads the strings of the engine does not have to ask first.
         Load(Base);
+
+        // The system decides what a game plays in, and only when the game ships it: a game that ships English and Russian
+        // starts in Russian on a machine that is set to Russian, and in English anywhere else.
+        _language = SystemLanguage;
+        Load(_language);
     }
 
     /// <inheritdoc />
     public string BaseLanguage => Base;
+
+    /// <inheritdoc />
+    public string SystemLanguage
+    {
+        get
+        {
+            CultureInfo culture = _culture ?? CultureInfo.CurrentUICulture;
+
+            // The name of a culture is the whole of it, such as 'pt-BR', which is what a game that ships one translation of a
+            // language names the folder of it; the two letters are what a game that ships every region of it names the folder.
+            return Shipped(culture.Name) ?? Shipped(culture.TwoLetterISOLanguageName) ?? Base;
+        }
+    }
+
+    /// <summary>Returns the language of the game with the given name, or null when the game ships no language of that name.</summary>
+    /// <param name="name">The name of a language, such as <c>ru</c> or <c>pt-BR</c>.</param>
+    /// <returns>The folder of the language the way the game writes it, or null when the game holds no such language.</returns>
+    private string? Shipped(string name) =>
+        Languages.FirstOrDefault(language => string.Equals(language, name, StringComparison.OrdinalIgnoreCase));
 
     /// <inheritdoc />
     /// <exception cref="ArgumentException">The language is null, empty or whitespace.</exception>

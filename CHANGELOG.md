@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A game starts in the language the system is set to: `ILocaleService.SystemLanguage` is the culture of the operating system
+  when the game ships a language of that name, which is the whole name of it such as `pt-BR` first and the two letters such as
+  `pt` after that, and the base language otherwise. `Language` starts as it, so a player who never chose a language reads
+  their own rather than English, and a game that sets `Language` still says what it wants, which is what the setting `locale`
+  of the sample does.
 - The text of a world is a component and a pass of its own: `TextComponent` draws one line where the entity that carries it
   stands, with a font that content names by path and bakes for the range of characters that the line needs, and
   `TextRenderSystem` draws the lines in ascending `ZOrder` between the pass of the world and the pass of the UI. The bake of

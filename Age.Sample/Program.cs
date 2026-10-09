@@ -182,9 +182,10 @@ CVarService cvars = provider.GetRequiredService<CVarService>();
 cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen lives, in seconds.");
 
 // The language the strings are read in is a setting rather than a way the game was built: the command 'loc' changes it while
-// the game runs, and everything that asks the locale service for a key answers in the new language from then on.
-cvars.Register("locale", "en", "The language the strings of the game are read in, such as en or ru.");
+// the game runs, and everything that asks the locale service for a key answers in the new language from then on. The language
+// starts as the one the system is set to, when the game ships that language, and as the base language otherwise.
 Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
+cvars.Register("locale", locale.Language, "The language the strings of the game are read in, such as en or ru.");
 locale.Language = cvars.Get<string>("locale");
 
 // A line of text in the world, in the language the game plays in. The name of a prototype is a key rather than a text, so

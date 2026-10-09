@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -263,17 +264,21 @@ public sealed class ContentLinter
                 continue;
             }
 
-            string[] segments = file.Split('/');
+            // What a document says about its language is the first segment under the folder that holds the languages, and its
+            // path is read relative to that folder rather than from the root of the game: a build that hands in a folder of its
+            // own, as a folder of a mod does, names the languages of it the same way.
+            string relative = file.StartsWith(folder + "/", StringComparison.Ordinal) ? file[(folder.Length + 1)..] : file;
+            string[] segments = relative.Split('/');
 
             // A document of a language lives in the folder of that language under the folder of the languages, so a document
             // that is written anywhere else is a mistake of where it lives rather than a language of its own.
-            if (segments.Length < 3)
+            if (segments.Length < 2)
             {
                 problems.Add(new LintProblem(file, 0, "a document of a game lives in the folder of its language under the folder of the languages, such as Locale/en/Entities/creatures.yml"));
                 continue;
             }
 
-            string language = segments[1];
+            string language = segments[0];
 
             if (!languages.TryGetValue(language, out Dictionary<string, LocaleString>? strings))
             {
@@ -322,7 +327,9 @@ public sealed class ContentLinter
             return new LintReport(count, problems);
         }
 
-        var locale = new LocaleService(_assets);
+        // The rule of what a key holds is the one the service answers with, and the language it starts in does not matter to
+        // this pass: every question of it names the language it asks about, and a build reads the same content wherever it runs.
+        var locale = new LocaleService(_assets, null, CultureInfo.InvariantCulture);
 
         foreach ((string language, Dictionary<string, LocaleString> strings) in languages)
         {

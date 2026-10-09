@@ -402,7 +402,9 @@ world.Set(label, new TextComponent
 });
 ```
 
-`ILocaleService` answers a game with the string of a key in the language it plays in, and the strings are content:
+`ILocaleService` answers a game with the string of a key in the language it plays in, and that language starts as the one the
+system is set to, when the game ships it, so a player who never chose one reads their own rather than English:
+`SystemLanguage` says which one that is and `Language` is what changes it. The strings are content:
 `Resources/Locale/<language>/…` holds documents of keys in the same subset of YAML as the rest of the content, so a new
 language is a folder rather than a change in code. A key that the language does not hold falls back to the base language
 (`en`) key by key, so a translation that is not finished shows English rather than keys, and a key that neither holds is
