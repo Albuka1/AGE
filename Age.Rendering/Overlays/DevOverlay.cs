@@ -48,6 +48,8 @@ public sealed class DevOverlay : IRenderPass
     private readonly IRenderer _renderer;
     private readonly ITextureService? _textures;
     private readonly ISpriteSheetService? _sheets;
+    private readonly TextRenderer? _textRenderer;
+    private readonly float _line;
 
     private double _seconds;
     private double _framesPerSecond;
@@ -64,8 +66,9 @@ public sealed class DevOverlay : IRenderPass
     /// <param name="renderer">The renderer that the overlay draws with.</param>
     /// <param name="textures">The texture service, whose images that are not there are reported, or null to report none.</param>
     /// <param name="sheets">The sheet service, whose sheets and states that did not resolve are reported, or null to report none.</param>
+    /// <param name="textRenderer">The renderer of the text of the overlay, which draws it with the fonts of the engine, or null to draw it with the built-in font.</param>
     /// <exception cref="ArgumentNullException">One of the arguments is null.</exception>
-    public DevOverlay(IConsoleService console, IInputService input, ITextInputService text, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer, ITextureService? textures = null, ISpriteSheetService? sheets = null)
+    public DevOverlay(IConsoleService console, IInputService input, ITextInputService text, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer, ITextureService? textures = null, ISpriteSheetService? sheets = null, TextRenderer? textRenderer = null)
     {
         ArgumentNullException.ThrowIfNull(console);
         ArgumentNullException.ThrowIfNull(input);
@@ -78,6 +81,11 @@ public sealed class DevOverlay : IRenderPass
         _input = input;
         _textures = textures;
         _sheets = sheets;
+        _textRenderer = textRenderer;
+
+        // The lines of the overlay are stacked at the height of a line of the font it draws with, so a font of the engine that
+        // is taller than the bitmap one does not make the lines of the console overlap.
+        _line = textRenderer?.LineHeight ?? BitmapFontMetrics.GlyphHeight;
         _text = text;
         _pipeline = pipeline;
         _timestep = timestep;
@@ -222,10 +230,29 @@ public sealed class DevOverlay : IRenderPass
         _renderer.EndFrame();
     }
 
+    /// <summary>Draws a line of the overlay with the fonts of the engine, or with the built-in font when it has none.</summary>
+    /// <param name="text">The characters of the line.</param>
+    /// <param name="position">The top-left corner of the line.</param>
+    /// <param name="color">The color of the glyphs.</param>
+    /// <remarks>
+    /// The font of the engine is what makes a line of a game readable in the console and in the numbers of a frame: the built-in
+    /// font covers the printable ASCII range and draws everything else as a space, which is what a game that ships no font gets.
+    /// </remarks>
+    private void Line(string text, Vector2 position, Color color)
+    {
+        if (_textRenderer is null)
+        {
+            _renderer.DrawText(text, position, color);
+            return;
+        }
+
+        _textRenderer.Draw(text, position, new TextStyle { Color = color });
+    }
+
     /// <summary>Draws the visible lines of the console and the line that is being typed, and returns the line below them.</summary>
     private float DrawConsole(Vector2 viewport, float y)
     {
-        float line = BitmapFontMetrics.GlyphHeight + 2f;
+        float line = _line + 2f;
         IReadOnlyList<string> output = _console.Output;
         int shown = Math.Min(output.Count, ConsoleLines);
 
@@ -235,10 +262,10 @@ public sealed class DevOverlay : IRenderPass
         {
             string text = output[output.Count - shown + index];
             Color colour = text.StartsWith("error:", StringComparison.Ordinal) ? ErrorColour : TextColour;
-            _renderer.DrawText(text, new Vector2(8f, 8f + (index * line)), colour);
+            Line(text, new Vector2(8f, 8f + (index * line)), colour);
         }
 
-        _renderer.DrawText($"> {_console.Input}_", new Vector2(8f, 8f + (shown * line)), TextColour);
+        Line($"> {_console.Input}_", new Vector2(8f, 8f + (shown * line)), TextColour);
 
         return 8f + ((shown + 2f) * line);
     }
@@ -246,13 +273,10 @@ public sealed class DevOverlay : IRenderPass
     /// <summary>Draws the numbers of the frame and of every system behind them.</summary>
     private void DrawStats(World world, float y)
     {
-        float line = BitmapFontMetrics.GlyphHeight + 2f;
+        float line = _line + 2f;
         string clock = _timestep.Paused ? "paused" : $"{_timestep.TimeScale:0.##}x";
 
-        _renderer.DrawText(
-            $"FPS {_framesPerSecond:0.0}  entities {world.Enumerate().Count()}  tick {_timestep.Tick}  {clock}",
-            new Vector2(8f, y),
-            TextColour);
+        Line($"FPS {_framesPerSecond:0.0}  entities {world.Enumerate().Count()}  tick {_timestep.Tick}  {clock}", new Vector2(8f, y), TextColour);
 
         y += line;
 
@@ -260,7 +284,7 @@ public sealed class DevOverlay : IRenderPass
         // that could not be resolved, in the order the game asked for them.
         if (_textures?.MissingCount > 0)
         {
-            _renderer.DrawText($"{_textures.MissingCount} missing images: {string.Join(", ", _textures.Missing)}", new Vector2(8f, y), ErrorColour);
+            Line($"{_textures.MissingCount} missing images: {string.Join(", ", _textures.Missing)}", new Vector2(8f, y), ErrorColour);
             y += line;
         }
 
@@ -273,24 +297,24 @@ public sealed class DevOverlay : IRenderPass
 
             if (unresolved.Length > 0)
             {
-                _renderer.DrawText($"{_sheets.Missing.Count()} sheets that did not resolve: {unresolved}", new Vector2(8f, y), ErrorColour);
+                Line($"{_sheets.Missing.Count()} sheets that did not resolve: {unresolved}", new Vector2(8f, y), ErrorColour);
                 y += line;
             }
         }
 
         y = DrawTimings(_pipeline.StepTimings, "step", y);
         y = DrawTimings(_pipeline.FrameTimings, "frame", y);
-        _renderer.DrawText($"{StatsKey} numbers  {ConsoleKey} console", new Vector2(8f, y), HintColour);
+        Line($"{StatsKey} numbers  {ConsoleKey} console", new Vector2(8f, y), HintColour);
     }
 
     /// <summary>Draws one line per system of a stage and returns the line below the last one.</summary>
     private float DrawTimings(IReadOnlyList<SystemTiming> timings, string stage, float y)
     {
-        float line = BitmapFontMetrics.GlyphHeight + 2f;
+        float line = _line + 2f;
 
         foreach (SystemTiming timing in timings)
         {
-            _renderer.DrawText($"{stage}  {timing.Name}  {timing.Milliseconds:0.00} ms", new Vector2(8f, y), HintColour);
+            Line($"{stage}  {timing.Name}  {timing.Milliseconds:0.00} ms", new Vector2(8f, y), HintColour);
             y += line;
         }
 

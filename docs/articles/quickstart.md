@@ -375,7 +375,10 @@ passes are relative to that folder.
 
 The built-in 8x8 bitmap font is still there for a game that ships no font: a text that names no font, or whose font cannot be
 baked, is drawn with it, and it is measured through the same seam as any other font, so it can be wrapped and aligned like
-one.
+one. It covers the printable ASCII range only, which is why the engine ships a font of its own and draws every text that names
+none with it: `TextDefaults.Fonts` is that stack, `TextDefaults.FontPath` names the file (the SIL Open Font License, as the
+other fonts of the repository), and the console of the developer overlay, the numbers of a frame and any line a game holds
+without an entity are drawn with it through `TextRenderer.Draw(string, …)`, advanced by `TextRenderer.LineHeight`.
 
 ## Play in another language
 

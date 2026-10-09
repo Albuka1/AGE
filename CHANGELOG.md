@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A text that names no font is drawn with the font of the engine, so a game shows a word of its content without loading
+  anything, and the console, the numbers of a frame and the lines a game holds without an entity are drawn with it as well:
+  `TextDefaults` is the stack of the engine, which covers the Latin and Cyrillic letters and the punctuation a translation uses
+  besides them, `TextRenderer.LineHeight` is what a caller that stacks lines advances by, and `TextRenderer.Draw` draws a text
+  that no entity carries and reports the room it takes. The built-in bitmap font stays as what a game without a font of its own
+  gets, which is the printable ASCII range.
 - A game starts in the language the system is set to: `ILocaleService.SystemLanguage` is the culture of the operating system
   when the game ships a language of that name, which is the whole name of it such as `pt-BR` first and the two letters such as
   `pt` after that, and the base language otherwise. `Language` starts as it, so a player who never chose a language reads

@@ -51,6 +51,7 @@ public sealed class TextRenderer
     private readonly ILogger<TextRenderer>? _logger;
     private readonly FontStyle[] _defaults;
     private readonly Dictionary<Entity, LaidOut> _remembered = new();
+    private readonly Dictionary<string, Cached> _lines = new(StringComparer.Ordinal);
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
 
     /// <summary>Initializes the renderer of text.</summary>
@@ -100,6 +101,51 @@ public sealed class TextRenderer
         }
     }
 
+    /// <summary>Gets the height of a line of the fonts that this renderer draws with.</summary>
+    /// <remarks>
+    /// A caller that stacks lines of its own, such as a console or a list of numbers, advances by this. Reading it bakes the
+    /// fonts that the defaults name, which the service then answers from its cache.
+    /// </remarks>
+    public float LineHeight => Measurer(new TextStyle()).Measurer.Metrics.LineHeight;
+
+    /// <summary>Draws a text that no entity carries, such as a line of a console or of the numbers of a frame.</summary>
+    /// <param name="text">The text to draw. A leave of null or an empty text draws nothing and takes no room.</param>
+    /// <param name="position">The top-left corner of the box that the text is laid out into.</param>
+    /// <param name="style">How the text is written, which says which fonts draw it and in which colour.</param>
+    /// <param name="box">The width and the height of the box, where a side of zero means as large as the text.</param>
+    /// <returns>The size that the text takes, which is what a caller that stacks lines advances by.</returns>
+    /// <remarks>
+    /// A game holds strings that no entity carries: a console, the numbers of a frame, a line it built itself. The text is
+    /// laid out once for as long as it, its style, its box and the language of the game do not change, so a caller that draws
+    /// the same line on every frame measures it once, and the box is what a caller that has one wraps the text into.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// float line = text.LineHeight;
+    ///
+    /// for (int index = 0; index &lt; lines.Count; index++)
+    /// {
+    ///     text.Draw(lines[index], new Vector2(8f, 8f + (index * line)), new TextStyle { Color = Color.White });
+    /// }
+    /// </code>
+    /// </example>
+    public Vector2 Draw(string? text, Vector2 position, in TextStyle style, Vector2 box = default)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return Vector2.Zero;
+        }
+
+        Cached cached = Laid(text, box, style);
+
+        foreach (TextLine line in cached.Layout.Lines)
+        {
+            DrawLine(cached.Measurer, line, position + line.Position, style.Color);
+        }
+
+        return cached.Layout.Size;
+    }
+
     /// <summary>Returns the layout of the text of an entity, laying it out when something about it changed.</summary>
     /// <param name="entity">The entity that carries the text.</param>
     /// <param name="box">The box the text is laid out into.</param>
@@ -136,6 +182,32 @@ public sealed class TextRenderer
             TextLayouter.Layout(resolved, measurer, text.Style, box));
 
         _remembered[entity] = laid;
+        return laid;
+    }
+
+    /// <summary>Returns the layout of a text that no entity carries, laying it out when something about it changed.</summary>
+    /// <param name="text">The text to lay out, which is what the layout is remembered under.</param>
+    /// <param name="box">The box the text is laid out into.</param>
+    /// <param name="style">The style the text is laid out with.</param>
+    /// <returns>The layout and everything that was resolved to build it.</returns>
+    private Cached Laid(string text, Vector2 box, in TextStyle style)
+    {
+        string language = _text.Language;
+
+        if (_lines.TryGetValue(text, out Cached? cached) && cached.Matches(box, style, language))
+        {
+            return cached;
+        }
+
+        if (_lines.Count >= MaximumRemembered)
+        {
+            _lines.Clear();
+        }
+
+        (ITextMeasurer measurer, _) = Measurer(style);
+        var laid = new Cached(box, style, language, text, measurer, TextLayouter.Layout(text, measurer, style, box));
+
+        _lines[text] = laid;
         return laid;
     }
 
@@ -264,6 +336,30 @@ public sealed class TextRenderer
     /// <returns><see langword="true"/> when the two hold the same fonts in the same order.</returns>
     private static bool SameFonts(FontStyle[]? left, FontStyle[]? right) =>
         ReferenceEquals(left, right) || (left is not null && right is not null && left.AsSpan().SequenceEqual(right));
+
+    /// <summary>A text that no entity carries, as it was laid out.</summary>
+    /// <param name="Box">The box the text was laid out into.</param>
+    /// <param name="Style">The style the text was laid out with.</param>
+    /// <param name="Language">The language of the game when the text was laid out.</param>
+    /// <param name="Resolved">The characters that were laid out.</param>
+    /// <param name="Measurer">The measurement of the fonts of the text.</param>
+    /// <param name="Layout">The lines of the text and their places.</param>
+    private sealed record Cached(
+        Vector2 Box,
+        TextStyle Style,
+        string Language,
+        string Resolved,
+        ITextMeasurer Measurer,
+        TextLayout Layout)
+    {
+        /// <summary>Returns a value indicating whether the layout that was remembered fits the text as it is now.</summary>
+        /// <param name="box">The box the text is laid out into now.</param>
+        /// <param name="style">The style of the text as it is now.</param>
+        /// <param name="language">The language of the game now, which is what a text of a key says in.</param>
+        /// <returns><see langword="true"/> when the layout that was remembered fits the text as it is now.</returns>
+        public bool Matches(Vector2 box, in TextStyle style, string language) =>
+            string.Equals(Language, language, StringComparison.Ordinal) && Box == box && SameStyle(Style, style);
+    }
 
     /// <summary>The text of an entity as it was laid out, with everything that was resolved for it.</summary>
     private sealed record LaidOut(
