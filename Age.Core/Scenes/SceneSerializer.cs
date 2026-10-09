@@ -62,7 +62,8 @@ public sealed class SceneSerializer : ISceneSerializer
 
             // What the entity owes to its prototype is not written a second time: the prototype is named and the scene
             // keeps only what differs from it. An entity that lost a component that its prototype declares is written in
-            // full instead, because a scene has no way to say "without the component of the prototype".
+            // full instead, because a scene has no way to say "without the component of the prototype", and so is one whose
+            // prototype this build does not hold: a reference that nothing resolves is a scene that cannot be read back.
             if (PrototypeOf(world, entity, saved.Components) is string prototypeId)
             {
                 saved.Prototype = prototypeId;
@@ -82,8 +83,9 @@ public sealed class SceneSerializer : ISceneSerializer
     /// <remarks>
     /// The values of a prototype are read through the contract of the component before they are compared, so the fields
     /// that its document leaves out count as the values the component starts with and the order of the fields does not
-    /// matter. A prototype that a scene names but this build does not know is still written, because the scene keeps what
-    /// the world knows even when the content of the game is missing.
+    /// matter. A prototype that this build does not hold is not named at all: a reference that nothing resolves is a scene
+    /// that the reading refuses, and a file this build writes has to be a file this build reads, so the entity is written
+    /// with every component it holds instead.
     /// </remarks>
     private string? PrototypeOf(World world, Entity entity, Dictionary<string, JsonElement> components)
     {
@@ -94,7 +96,7 @@ public sealed class SceneSerializer : ISceneSerializer
 
         if (_prototypes.ComponentsOf(prototypeId) is not IReadOnlyDictionary<string, JsonElement> declared)
         {
-            return prototypeId;
+            return null;
         }
 
         foreach ((string name, JsonElement values) in declared)

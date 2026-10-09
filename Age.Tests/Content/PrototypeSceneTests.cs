@@ -210,6 +210,41 @@ public sealed class PrototypeSceneTests
         loaded.Get<SpriteAnimationComponent>(restored[1]).State.Should().Be("walk", "and what its prototype says about playing comes with it");
     }
 
+    [Fact]
+    public void PrototypeScene_APrototypeThatThisBuildDoesNotHold_IsNotNamedAndTheEntityIsWrittenInFull()
+    {
+        using ServiceProvider provider = Create();
+        SpawnService spawner = provider.GetRequiredService<SpawnService>();
+        var world = new World();
+        Entity goblin = spawner.Spawn(world, "Goblin");
+
+        // A build whose content no longer declares the kind of an entity — a prototype that was renamed, or content of a mod
+        // that was taken out — writes the entity with every component it holds rather than a reference that nothing can
+        // resolve: a scene that this build writes has to be one that this build reads. The source below is a real one over a
+        // manager that read no content, which is what a build without that kind has.
+        ComponentRegistry components = provider.GetRequiredService<ComponentRegistry>();
+        var withoutTheKind = new SceneSerializer(components, prototypes: new SpawnService(new PrototypeManager(components), components));
+        string json = withoutTheKind.Save(world);
+
+        using (JsonDocument document = JsonDocument.Parse(json))
+        {
+            JsonElement entity = document.RootElement.GetProperty("Entities")[0];
+
+            entity.GetProperty("Prototype").ValueKind.Should().Be(JsonValueKind.Null, "a prototype that the content does not hold is not written");
+            entity.GetProperty("Components").EnumerateObject().Select(property => property.Name)
+                .Should().Contain("Sprite").And.Contain("Transform", "the entity is written in full instead");
+        }
+
+        var loaded = new World();
+        withoutTheKind.Load(loaded, json);
+
+        Entity restored = loaded.Enumerate().Single();
+
+        loaded.Get<SpriteComponent>(restored).SheetPath.Should().Be("Textures/Entities/goblin.yml");
+        loaded.Get<ColliderComponent>(restored).Size.Should().Be(new Vector2(24f, 24f), "what the prototype declared comes back with the entity itself");
+        loaded.PrototypeOf(restored).Should().BeNull("and nothing names the kind it came from, so the file is read by a build without that kind");
+    }
+
     /// <summary>Builds a provider whose content is the one the engine ships, read as entities.</summary>
     private static ServiceProvider Create()
     {

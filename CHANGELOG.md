@@ -76,8 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content is loaded is refused rather than loaded empty. A component that matches its prototype in every field is left
   out, which is measured through the contract of the component: the fields that a document leaves out count as the values
   the component starts with, whatever the order of the fields. An entity that lost a component of its prototype is written
-  in full, because a scene has no way to say that. The format is version two now, and a scene of version one reads as it
-  did.
+  in full, because a scene has no way to say that, and so is an entity whose prototype this build does not hold: a scene
+  that a build writes is a scene that build reads, rather than a reference that nothing can resolve. The format is version
+  two now, and a scene of version one reads as it did.
 - `EntityPrototype` and `SpawnService`: content that becomes entities, which is what makes a map, an enemy or an item a
   document rather than a class. A document whose `type` is `entity` declares what a thing is made of, and
   `Spawn(world, "Goblin", position)` creates an entity and attaches exactly those components, with the values the
