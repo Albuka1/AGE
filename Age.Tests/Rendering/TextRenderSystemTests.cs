@@ -1,7 +1,7 @@
 using Age.Core;
 using Age.Rendering;
+using Age.UI;
 using FluentAssertions;
-using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Age.Tests;
@@ -9,124 +9,87 @@ namespace Age.Tests;
 public sealed class TextRenderSystemTests
 {
     [Fact]
-    public void TextRenderSystem_DrawsTheLinesInAscendingZOrder()
+    public void TextRenderSystem_DrawsTheLinesOfAWorldInAscendingZOrder()
     {
         var world = new World();
         var renderer = new RecordingRenderer();
-        var fonts = new FakeFontService();
-        var system = new TextRenderSystem(renderer, new SpriteSorter(), fonts);
+        var system = new TextRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer));
         CreateLine(world, "second", zOrder: 2);
         CreateLine(world, "first", zOrder: 0);
         CreateLine(world, "third", zOrder: 1);
 
         system.Render(world, Camera());
 
-        fonts.Drawn.Should().Equal("first", "third", "second");
-        renderer.BuiltIn.Should().BeEmpty();
-        renderer.Frames.Should().Be(1);
+        renderer.BuiltIn.Should().Equal("first", "third", "second");
     }
 
     [Fact]
-    public void TextRenderSystem_BakesTheFontOfALineForTheRangeItNames()
-    {
-        var world = new World();
-        var fonts = new FakeFontService();
-        var system = new TextRenderSystem(new RecordingRenderer(), new SpriteSorter(), fonts);
-        Entity line = CreateLine(world, "Привет", zOrder: 0, last: '\u04FF');
-
-        system.Render(world, Camera());
-
-        fonts.Requests.Should().ContainSingle().Which.Should().Be(("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04FF'));
-        world.Get<TextComponent>(line).Font.Atlas.Should().Be(7, "the handle that was baked is written back for a game to read");
-    }
-
-    [Fact]
-    public void TextRenderSystem_LineThatLeavesTheRangeAtZero_IsBakedForThePrintableAsciiRange()
-    {
-        var world = new World();
-        var fonts = new FakeFontService();
-        var system = new TextRenderSystem(new RecordingRenderer(), new SpriteSorter(), fonts);
-        CreateLine(world, "Hello", zOrder: 0);
-
-        system.Render(world, Camera());
-
-        fonts.Requests.Should().ContainSingle().Which.Should().Be(("Fonts/Cousine-Regular.ttf", 24f, ' ', '~'));
-    }
-
-    [Fact]
-    public void TextRenderSystem_LineWithoutAFontPath_IsDrawnWithTheBuiltInFont()
+    public void TextRenderSystem_TextThatNamesAKey_IsDrawnAsWhatTheStringsSay()
     {
         var world = new World();
         var renderer = new RecordingRenderer();
-        var fonts = new FakeFontService();
-        var system = new TextRenderSystem(renderer, new SpriteSorter(), fonts);
-        CreateLine(world, "Hello AGE", zOrder: 0, fontPath: null);
+        var system = new TextRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer, null, new FakeTextSource()));
+        Entity entity = CreateLine(world, string.Empty, zOrder: 0, key: "ent-Goblin");
+
+        system.Render(world, Camera());
+
+        renderer.BuiltIn.Should().Equal("a goblin");
+        world.Get<TextComponent>(entity).MeasuredSize.Should().Be(new Vector2(8f * "a goblin".Length, 8f), "the built-in font measures one cell per character");
+    }
+
+    [Fact]
+    public void TextRenderSystem_TextWithARectangle_IsLeftToThePassOfTheInterface()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var system = new TextRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer));
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new TransformComponent());
+        world.Set(entity, new RectTransformComponent { Size = new Vector2(100f, 20f), Visible = true });
+        world.Set(entity, new TextComponent { Text = "Hello AGE" });
+
+        system.Render(world, Camera());
+
+        renderer.BuiltIn.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TextRenderSystem_TextThatSaysNothing_IsNotDrawn()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var system = new TextRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer));
+        Entity empty = world.CreateEntity();
+        world.Set(empty, new TransformComponent());
+        world.Set(empty, new TextComponent());
+        CreateLine(world, "one", zOrder: 1);
+
+        system.Render(world, Camera());
+
+        renderer.BuiltIn.Should().Equal("one");
+    }
+
+    [Fact]
+    public void TextRenderSystem_TextOfAFontThatCannotBeBaked_FallsBackToTheBuiltInFont()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var fonts = new FailingFontService();
+        var style = new TextStyle { Fonts = [new FontStyle { Path = "Fonts/Missing.ttf", PixelHeight = 24f }] };
+        var system = new TextRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer, fonts));
+        CreateLine(world, "Hello AGE", zOrder: 0, style: style);
 
         system.Render(world, Camera());
 
         renderer.BuiltIn.Should().Equal("Hello AGE");
-        fonts.Drawn.Should().BeEmpty();
-        fonts.Requests.Should().BeEmpty();
+        fonts.Requests.Should().ContainSingle().Which.Should().Be("Fonts/Missing.ttf");
     }
 
-    [Theory]
-    [InlineData(typeof(FileNotFoundException))]
-    [InlineData(typeof(UnauthorizedAccessException))]
-    [InlineData(typeof(NotSupportedException))]
-    [InlineData(typeof(ArgumentException))]
-    [InlineData(typeof(InvalidOperationException))]
-    public void TextRenderSystem_FontThatCannotBeBaked_FallsBackToTheBuiltInFontAndIsReportedOnce(Type failure)
-    {
-        var world = new World();
-        var renderer = new RecordingRenderer();
-        var fonts = new FakeFontService { Failure = (Exception)Activator.CreateInstance(failure, "the font cannot be read")! };
-        var logger = new RecordingLogger();
-        var system = new TextRenderSystem(renderer, new SpriteSorter(), fonts, logger);
-        CreateLine(world, "Hello AGE", zOrder: 0);
-
-        system.Render(world, Camera());
-        system.Render(world, Camera());
-
-        renderer.BuiltIn.Should().Equal("Hello AGE", "Hello AGE");
-        fonts.Drawn.Should().BeEmpty();
-        logger.Entries.Should().ContainSingle("one line per font rather than one per frame");
-        logger.Entries[0].Should().Contain("Fonts/Cousine-Regular.ttf");
-        logger.Entries[0].Should().Contain("the font cannot be read");
-    }
-
-    [Fact]
-    public void TextRenderSystem_LineThatSaysNothingOrHasNoPlace_IsNotDrawn()
-    {
-        var world = new World();
-        var renderer = new RecordingRenderer();
-        var fonts = new FakeFontService();
-        var system = new TextRenderSystem(renderer, new SpriteSorter(), fonts);
-        Entity empty = CreateLine(world, string.Empty, zOrder: 0);
-        CreateLine(world, "no height", zOrder: 0, height: 0f);
-        Entity nowhere = world.CreateEntity();
-        world.Set(nowhere, new TextComponent { Text = "no transform", FontPath = "Fonts/Cousine-Regular.ttf", PixelHeight = 24f });
-
-        system.Render(world, Camera());
-
-        fonts.Drawn.Should().BeEmpty();
-        renderer.BuiltIn.Should().BeEmpty();
-        renderer.Frames.Should().Be(1, "the frame is opened and closed even when nothing is drawn");
-        world.IsAlive(empty).Should().BeTrue();
-    }
-
-    private static Entity CreateLine(World world, string text, int zOrder, float height = 24f, char last = '\0', string? fontPath = "Fonts/Cousine-Regular.ttf")
+    private static Entity CreateLine(World world, string text, int zOrder, string? key = null, TextStyle style = default)
     {
         Entity entity = world.CreateEntity();
-        world.Set(entity, new TransformComponent { Position = new Vector2(zOrder * 16f, 32f) });
-        world.Set(entity, new TextComponent
-        {
-            Text = text,
-            FontPath = fontPath,
-            PixelHeight = height,
-            LastCharacter = last,
-            Color = Color.White,
-            ZOrder = zOrder,
-        });
+        world.Set(entity, new TransformComponent { Position = new Vector2(0f, zOrder * 16f) });
+        world.Set(entity, new TextComponent { Text = text, Key = key, Style = style, ZOrder = zOrder });
 
         return entity;
     }
@@ -138,95 +101,65 @@ public sealed class TextRenderSystemTests
         ViewportSize = new Vector2(1280f, 720f),
     };
 
-    private sealed class FakeFontService : IFontService
+    private sealed class FakeTextSource : ITextSource
     {
-        public List<(string Path, float Height, char First, char Last)> Requests { get; } = [];
+        public string Language => "en";
 
-        public List<string> Drawn { get; } = [];
+        public string Resolve(string key, params (string Name, object? Value)[] arguments) => "a goblin";
+    }
 
-        public Exception? Failure { get; init; }
+    private sealed class FailingFontService : IFontService
+    {
+        public List<string> Requests { get; } = [];
 
         public int Count => 0;
 
         public FontHandle Load(string relativePath, float pixelHeight, char first = ' ', char last = '~')
         {
-            Requests.Add((relativePath, pixelHeight, first, last));
+            Requests.Add(relativePath);
 
-            return Failure is null ? new FontHandle(default, 7) : throw Failure;
+            throw new FileNotFoundException("There is no file at that path.");
         }
 
-        public bool IsAlive(FontHandle font) => font.Atlas == 7;
+        public bool IsAlive(FontHandle font) => false;
 
         public bool Unload(FontHandle font) => false;
 
-        public void UnloadAll()
-        {
-        }
+        public void UnloadAll() { }
 
         public Vector2 Measure(FontHandle font, ReadOnlySpan<char> text) => Vector2.Zero;
 
         public FontMetrics Metrics(FontHandle font) => default;
 
-        public void Draw(FontHandle font, ReadOnlySpan<char> text, Vector2 position, Color color) => Drawn.Add(new string(text));
+        public void Draw(FontHandle font, ReadOnlySpan<char> text, Vector2 position, Color color) { }
     }
 
     private sealed class RecordingRenderer : IRenderer
     {
         public List<string> BuiltIn { get; } = [];
 
-        public int Frames { get; private set; }
-
         public Vector2 ViewportSize => new(1280f, 720f);
 
-        public void Attach(IWindowService window)
-        {
-        }
+        public void Attach(IWindowService window) { }
 
-        public void SetCamera(Camera2D camera)
-        {
-        }
+        public void SetCamera(Camera2D camera) { }
 
-        public void BeginFrame(bool clear)
-        {
-        }
+        public void BeginFrame(bool clear) { }
 
-        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
-        {
-        }
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f) { }
 
-        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f)
-        {
-        }
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f) { }
 
-        public void DrawRectangle(Rect rect, Color color)
-        {
-        }
+        public void DrawRectangle(Rect rect, Color color) { }
 
         public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color) => BuiltIn.Add(new string(text));
 
-        public void EndFrame() => Frames++;
+        public void EndFrame() { }
 
         public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => new(1);
 
-        public void ReleaseTexture(TextureHandle texture)
-        {
-        }
+        public void ReleaseTexture(TextureHandle texture) { }
 
-        public void Dispose()
-        {
-        }
-    }
-
-    private sealed class RecordingLogger : ILogger<TextRenderSystem>
-    {
-        public List<string> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Entries.Add(formatter(state, exception));
+        public void Dispose() { }
     }
 }

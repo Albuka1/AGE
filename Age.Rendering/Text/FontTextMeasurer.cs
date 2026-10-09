@@ -33,4 +33,8 @@ public sealed class FontTextMeasurer : ITextMeasurer
 
     /// <inheritdoc />
     public Vector2 Measure(ReadOnlySpan<char> text) => _fonts.Measure(_font, text);
+
+    /// <inheritdoc />
+    /// <remarks>One font measures and draws the whole text, and a character outside its range is drawn as its space.</remarks>
+    public FontHandle? Font(char value) => _font;
 }

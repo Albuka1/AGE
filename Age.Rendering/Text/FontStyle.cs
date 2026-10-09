@@ -17,7 +17,7 @@ namespace Age.Rendering;
 /// name the same font share one atlas however many entities carry them.
 /// </para>
 /// </remarks>
-public struct FontStyle
+public struct FontStyle : IEquatable<FontStyle>
 {
     /// <summary>Gets or sets the path of the font file, relative to the game root.</summary>
     /// <remarks>A font that is not there, or whose file cannot be read, is reported once and leaves the characters it covers to the font below it in the stack, or to the built-in font.</remarks>
@@ -43,4 +43,31 @@ public struct FontStyle
     /// <param name="value">The character to test.</param>
     /// <returns><see langword="true"/> when a bake of this font holds a glyph for the character.</returns>
     public readonly bool Covers(char value) => value >= First && value <= Last;
+
+    /// <summary>Determines whether another font is the same font of a stack.</summary>
+    /// <param name="other">The font to compare with.</param>
+    /// <returns><see langword="true"/> when the two name the same file, the same height and the same range.</returns>
+    public readonly bool Equals(FontStyle other) =>
+        string.Equals(Path, other.Path, StringComparison.Ordinal) &&
+        PixelHeight.Equals(other.PixelHeight) &&
+        FirstCharacter == other.FirstCharacter &&
+        LastCharacter == other.LastCharacter;
+
+    /// <inheritdoc />
+    public override readonly bool Equals(object? obj) => obj is FontStyle other && Equals(other);
+
+    /// <inheritdoc />
+    public override readonly int GetHashCode() => HashCode.Combine(Path, PixelHeight, FirstCharacter, LastCharacter);
+
+    /// <summary>Determines whether two fonts are the same font of a stack.</summary>
+    /// <param name="left">The first font.</param>
+    /// <param name="right">The second font.</param>
+    /// <returns><see langword="true"/> when the two are equal.</returns>
+    public static bool operator ==(FontStyle left, FontStyle right) => left.Equals(right);
+
+    /// <summary>Determines whether two fonts are different fonts of a stack.</summary>
+    /// <param name="left">The first font.</param>
+    /// <param name="right">The second font.</param>
+    /// <returns><see langword="true"/> when the two are not equal.</returns>
+    public static bool operator !=(FontStyle left, FontStyle right) => !left.Equals(right);
 }

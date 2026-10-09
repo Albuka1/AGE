@@ -65,16 +65,19 @@ public sealed class StackedTextMeasurer : ITextMeasurer
         foreach (char character in text)
         {
             one[0] = character;
-            width += _fonts.Measure(Font(character), one).X;
+            width += _fonts.Measure(FontOf(character), one).X;
         }
 
         return new Vector2(width, Metrics.LineHeight);
     }
 
+    /// <inheritdoc />
+    public FontHandle? Font(char value) => FontOf(value);
+
     /// <summary>Returns the font of the stack that covers a character, or the first one when no font does.</summary>
     /// <param name="value">The character to cover.</param>
     /// <returns>The handle of the font that draws the character.</returns>
-    private FontHandle Font(char value)
+    private FontHandle FontOf(char value)
     {
         foreach ((FontStyle style, FontHandle font) in _stack)
         {

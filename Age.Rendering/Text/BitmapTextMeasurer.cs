@@ -29,4 +29,8 @@ public sealed class BitmapTextMeasurer : ITextMeasurer
     /// <inheritdoc />
     public Vector2 Measure(ReadOnlySpan<char> text) =>
         new(text.Length * BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight);
+
+    /// <inheritdoc />
+    /// <remarks>The built-in font draws every character that this measurer is asked about, so no font handle is named.</remarks>
+    public FontHandle? Font(char value) => null;
 }

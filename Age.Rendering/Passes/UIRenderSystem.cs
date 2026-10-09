@@ -1,6 +1,5 @@
 using Age.Core;
 using Age.UI;
-using Microsoft.Extensions.Logging;
 
 namespace Age.Rendering;
 
@@ -10,35 +9,33 @@ namespace Age.Rendering;
 /// </summary>
 /// <remarks>
 /// Elements come from every entity that has a <see cref="RectTransformComponent"/> together with a
-/// <see cref="ButtonComponent"/> or a <see cref="TextLabelComponent"/>. They are sorted by <see cref="RectTransformComponent.ZOrder"/>
-/// with a stable sort, so elements that share a ZOrder keep their entity order. When an element carries both components,
-/// its rectangle is drawn first and its label on top of it. A label that names a font is drawn with it, baked for the range
-/// of characters the label covers, which is what a language whose script the built-in font does not cover needs. Add this
-/// pass after the pass of the world, because the system installs a screen-space camera of its own and ignores the camera it
-/// is handed: the UI does not move with the world camera.
+/// <see cref="ButtonComponent"/> or a <see cref="TextComponent"/>. They are sorted by
+/// <see cref="RectTransformComponent.ZOrder"/> with a stable sort, so elements that share a ZOrder keep their entity order.
+/// When an element carries a button and a text, its rectangle is drawn first and its text on top of it, laid out into the
+/// box of the rectangle, which is the size the element has and not the size the text needs: the alignment of the style is
+/// what centers a label in a button. Add this pass after the pass of the world, because the system installs a screen-space
+/// camera of its own and ignores the camera it is handed: the UI does not move with the world camera.
 /// </remarks>
 public sealed class UIRenderSystem : IRenderPass
 {
     private readonly IRenderer _renderer;
     private readonly SpriteSorter _sorter;
-    private readonly IFontService? _fonts;
-    private readonly ILogger<UIRenderSystem>? _logger;
+    private readonly TextRenderer _text;
     private readonly List<UiItem> _items = new();
-    private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
 
-    /// <summary>Initializes the system with a renderer and a sorter.</summary>
-    /// <param name="renderer">The renderer that draws the elements and owns the built-in font.</param>
+    /// <summary>Initializes the system with a renderer, a sorter and the renderer of text.</summary>
+    /// <param name="renderer">The renderer that draws the elements.</param>
     /// <param name="sorter">The sorter that puts the elements in the order of their <see cref="RectTransformComponent.ZOrder"/>.</param>
-    /// <param name="fonts">The service that bakes the font a label names, or null to draw every label with the built-in font.</param>
-    /// <param name="logger">The log of the game, or null to report nothing.</param>
-    public UIRenderSystem(IRenderer renderer, SpriteSorter sorter, IFontService? fonts = null, ILogger<UIRenderSystem>? logger = null)
+    /// <param name="text">The renderer of text, which resolves, lays out and draws every label of the interface.</param>
+    /// <exception cref="ArgumentNullException">One of the arguments is null.</exception>
+    public UIRenderSystem(IRenderer renderer, SpriteSorter sorter, TextRenderer text)
     {
         ArgumentNullException.ThrowIfNull(renderer);
         ArgumentNullException.ThrowIfNull(sorter);
+        ArgumentNullException.ThrowIfNull(text);
         _renderer = renderer;
         _sorter = sorter;
-        _fonts = fonts;
-        _logger = logger;
+        _text = text;
     }
 
     /// <inheritdoc />
@@ -70,80 +67,25 @@ public sealed class UIRenderSystem : IRenderPass
 
             if (item.HasLabel)
             {
-                TextLabelComponent label = world.Get<TextLabelComponent>(item.Entity);
-                string line = label.Text ?? string.Empty;
+                TextComponent label = world.Get<TextComponent>(item.Entity);
+                Vector2 box = label.Box == Vector2.Zero ? rect.Size : label.Box;
 
-                if (TryFont(label, out FontHandle font))
-                {
-                    _fonts!.Draw(font, line, rect.Position, label.Color);
-                }
-                else
-                {
-                    _renderer.DrawText(line, rect.Position, label.Color);
-                }
+                _text.Draw(world, item.Entity, rect.Position, box, label);
             }
         }
 
         _renderer.EndFrame();
     }
 
-    /// <summary>Returns the font to draw a label with, baking the one that the label names.</summary>
-    /// <param name="label">The label that is being drawn.</param>
-    /// <param name="font">Receives the handle of the font.</param>
-    /// <returns><see langword="true"/> when the label has a font of its own, <see langword="false"/> when it is drawn with the built-in one.</returns>
-    /// <remarks>
-    /// The service caches a font by its path, its height and its range, so a label that is drawn again asks for what was already
-    /// baked. A label without a font, without a height, or with a font that cannot be baked is drawn with the built-in font,
-    /// which is what a game that ships no font needs; a font that fails is reported once per path rather than every frame.
-    /// </remarks>
-    private bool TryFont(in TextLabelComponent label, out FontHandle font)
-    {
-        font = default;
-
-        if (_fonts is null || label.FontPath is not string path || label.PixelHeight <= 0f)
-        {
-            return false;
-        }
-
-        (char first, char last) = Range(label);
-
-        try
-        {
-            font = _fonts.Load(path, label.PixelHeight, first, last);
-            return true;
-        }
-        catch (Exception exception) when (exception is ArgumentException or IOException or InvalidOperationException or UnauthorizedAccessException or NotSupportedException)
-        {
-            Report(path, exception);
-            return false;
-        }
-    }
-
-    /// <summary>Returns the range of characters that the font of a label is baked for, which is the printable ASCII one by default.</summary>
-    /// <param name="label">The label whose range is read.</param>
-    /// <returns>The first and the last character of the range, with a leave of zero answered by the defaults.</returns>
-    private static (char First, char Last) Range(in TextLabelComponent label) =>
-        (label.FirstCharacter == '\0' ? ' ' : label.FirstCharacter, label.LastCharacter == '\0' ? '~' : label.LastCharacter);
-
-    /// <summary>Reports a label whose font cannot be baked, once per path.</summary>
-    /// <param name="path">The path of the font that was asked for.</param>
-    /// <param name="exception">What stopped the bake.</param>
-    /// <remarks>One line per path rather than one per frame: the same font of the same game fails in the same way however often it is drawn.</remarks>
-    private void Report(string path, Exception exception)
-    {
-        if (_logger is not null && _reported.Add(path))
-        {
-            _logger.LogError("The font '{Path}' of a label of the interface cannot be baked, so the label is drawn with the built-in font: {Reason}", path, exception.Message);
-        }
-    }
-
+    /// <summary>Collects the elements of a world that are visible, in ascending entity order.</summary>
+    /// <param name="world">The world to read the elements from.</param>
     private void CollectItems(World world)
     {
         _items.Clear();
 
         foreach (Entity entity in world.Enumerate<RectTransformComponent>())
         {
-            if (!world.Has<ButtonComponent>(entity) && !world.Has<TextLabelComponent>(entity))
+            if (!world.Has<ButtonComponent>(entity) && !world.Has<TextComponent>(entity))
             {
                 continue;
             }
@@ -158,7 +100,7 @@ public sealed class UIRenderSystem : IRenderPass
                 entity,
                 rect.ZOrder,
                 world.Has<ButtonComponent>(entity),
-                world.Has<TextLabelComponent>(entity)));
+                world.Has<TextComponent>(entity)));
         }
     }
 

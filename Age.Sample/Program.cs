@@ -103,7 +103,14 @@ world.Set(second, new ColliderComponent { Size = new Vector2(64f, 64f) });
 Entity panel = world.CreateEntity();
 world.Set(panel, new RectTransformComponent { Position = new Vector2(100f, 100f), Size = new Vector2(200f, 50f), ZOrder = 0, Visible = true });
 world.Set(panel, new ButtonComponent { BaseColor = Color.Blue, Interactable = true });
-world.Set(panel, new TextLabelComponent { Text = "Hello AGE", Color = Color.White });
+world.Set(panel, new TextComponent
+{
+    // A label of the interface names a key and a count rather than a string, so a button says what the language says, and
+    // its alignment is what centers the text in the box of the element.
+    Key = "ui-entities",
+    Count = 3,
+    Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
+});
 
 RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
 TextRenderSystem textRenderSystem = provider.GetRequiredService<TextRenderSystem>();
@@ -187,15 +194,19 @@ Entity label = world.CreateEntity();
 world.Set(label, new TransformComponent { Position = new Vector2(300f, 180f), Scale = new Vector2(1f, 1f) });
 world.Set(label, new TextComponent
 {
-    Text = locale.Get("ent-Goblin"),
-    FontPath = "Fonts/Cousine-Regular.ttf",
-    PixelHeight = 24f,
-
-    // The font is baked from the space to the end of the Cyrillic block, which is what a language with a script of its own
-    // needs: a character outside the range of a font is drawn as a space. The range of the printable ASCII one is the default.
-    FirstCharacter = ' ',
-    LastCharacter = '\u04FF',
-    Color = Color.White,
+    // The line names a key rather than a string, so it says what the language of the game says: the command `loc ru` turns
+    // it into Russian without this game writing the name again.
+    Key = "ent-Goblin",
+    Style = new TextStyle
+    {
+        Fonts =
+        [
+            // The font is baked from the space to the end of the Cyrillic block, which is what a language with a script of
+            // its own needs: a character outside the range of a font is drawn as a space.
+            new FontStyle { Path = "Fonts/Cousine-Regular.ttf", PixelHeight = 24f, FirstCharacter = ' ', LastCharacter = '\u04FF' },
+        ],
+        Color = Color.White,
+    },
     ZOrder = 10,
 });
 
@@ -307,10 +318,6 @@ gameLoop.Run(
         {
             gameLoop.Stop();
         }
-
-        // The line of the world follows the language: the key is asked for again on every frame, so the setting that `loc`
-        // writes is what the next frame draws. A game with many lines would ask once per language and remember the answer.
-        world.GetRef<TextComponent>(label).Text = $"{locale.Get("ent-Goblin")} - {locale.Get("ent-Goblin.desc")}";
 
         // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
         // agree, including after the window was resized.

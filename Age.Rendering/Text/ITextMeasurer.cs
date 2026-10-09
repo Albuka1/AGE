@@ -26,4 +26,14 @@ public interface ITextMeasurer
     /// <param name="text">The characters to measure.</param>
     /// <returns>The width that the characters advance and the height of a line, in pixels.</returns>
     Vector2 Measure(ReadOnlySpan<char> text);
+
+    /// <summary>Returns the font that draws a character of the text.</summary>
+    /// <param name="value">The character to look up.</param>
+    /// <returns>The handle of the font that draws the character, or null when the built-in bitmap font draws it.</returns>
+    /// <remarks>
+    /// A caller that draws a line asks this for every character of it, so a line that mixes the scripts of two languages is
+    /// drawn with the font of each of them. The advance of the character comes from <see cref="Measure"/> either way, so
+    /// what is drawn and what was measured agree.
+    /// </remarks>
+    FontHandle? Font(char value);
 }

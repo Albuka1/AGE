@@ -4,32 +4,33 @@ using Age.Core;
 namespace Age.Rendering;
 
 /// <summary>
-/// Draws one line of text in the world with the font that <see cref="FontPath"/> names.
+/// Draws a text where its entity stands, or in the box of its rectangle when it is a label of the interface.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A game asks the locale service for the string of a key and puts the answer here, so what a player reads is content rather
-/// than code and a new language is a folder of documents. A line is placed by the transform of its entity, which puts it in
-/// the world next to the sprites, and ordered by <see cref="ZOrder"/> among the other lines.
+/// One component serves a line of a world and a label of an interface, because the difference between them is only where the
+/// text stands: an entity with a <see cref="TransformComponent"/> has its line at the position of the transform, and one
+/// with a rectangle of the interface has its label in that rectangle, which is also the box the text is laid out into. That
+/// is what keeps a key of the strings of a game, a stack of fonts, a box that cuts a text off and a font that cannot be
+/// baked behaving the same in both places.
 /// </para>
 /// <para>
-/// The font is baked for the range from <see cref="FirstCharacter"/> to <see cref="LastCharacter"/>, which is what a language
-/// with a script of its own needs: a game that writes Russian asks for the space to the end of the Cyrillic block, because a
-/// character outside the range of a font is drawn as a space. A leave of zero means the printable ASCII range, which is the
-/// range that the built-in font of the renderer covers.
+/// The string is content in either case: <see cref="Key"/> names what the text says in the language that is being played,
+/// with <see cref="Count"/> written into it as the count of its plural form, and <see cref="Text"/> is what a game that has
+/// no key for its line writes. A key wins over a text, so a line that gains a key says what the language says.
+/// </para>
+/// <para>
+/// What the renderer resolves is written back for a game to read: <see cref="Font"/> is the font that draws the line, and
+/// <see cref="MeasuredSize"/> is the size the text takes, which is what a panel that follows its title or a button that is
+/// as wide as its word asks for.
 /// </para>
 /// </remarks>
 /// <example>
 /// <code>
-/// world.Set(label, new TransformComponent { Position = new Vector2(400f, 260f) });
 /// world.Set(label, new TextComponent
 /// {
-///     Text = locale.Get(goblin.NameKey),
-///     FontPath = "Fonts/Cousine-Regular.ttf",
-///     PixelHeight = 24f,
-///     FirstCharacter = ' ',
-///     LastCharacter = '\u04FF',
-///     Color = Color.White,
+///     Key = "ent-Goblin",
+///     Style = new TextStyle { Fonts = [font], Align = TextAlign.Center, Overflow = TextOverflow.Ellipsis },
 ///     ZOrder = 10,
 /// });
 /// </code>
@@ -37,41 +38,45 @@ namespace Age.Rendering;
 [Component("Text")]
 public struct TextComponent : IComponent
 {
-    /// <summary>Gets or sets the text of the line.</summary>
+    /// <summary>Gets or sets what the text says, which is drawn when the text names no key.</summary>
     public string? Text;
 
-    /// <summary>Gets or sets the path of the font file, relative to the game root.</summary>
+    /// <summary>Gets or sets the key of the strings of a game, which wins over <see cref="Text"/>.</summary>
     /// <remarks>
-    /// The field content writes, because a handle belongs to the graphics device and a device is not saved.
-    /// <c>Age.Content.Lint</c> checks the path against the files of a build, so a font that is not there fails a build
-    /// rather than reaching a frame, and a font that cannot be baked at run time is reported once and drawn with the
-    /// built-in font of the renderer.
+    /// A key is answered in the language that is being played, so a line that switches language says the new one as soon as
+    /// the language of the game does, without a game writing the text of it again.
     /// </remarks>
-    [ResourcePath]
-    public string? FontPath;
+    public string? Key;
 
-    /// <summary>Gets or sets the height of a line, in pixels. A line of a height of zero or less is not drawn.</summary>
-    public float PixelHeight;
+    /// <summary>Gets or sets the count that the key is written by, which is the argument named <c>count</c> of its text.</summary>
+    /// <remarks>A text that writes its string by count has no text of its own, so a key of that kind is drawn as a count of things.</remarks>
+    public int Count;
 
-    /// <summary>Gets or sets the color of the glyphs.</summary>
-    public Color Color;
+    /// <summary>Gets or sets the box that the text is laid out into, where zero means as large as the text.</summary>
+    /// <remarks>
+    /// A label of the interface of an entity without a rectangle is laid out into this box, and a client may set it to limit
+    /// a line of a world that is wider than it should be. A box of no width has no edge to break a line at, and one of no
+    /// height has no bottom to cut a line off.
+    /// </remarks>
+    public Vector2 Box;
+
+    /// <summary>Gets or sets how the text is written: its fonts, its color and how its lines fit a box.</summary>
+    public TextStyle Style;
 
     /// <summary>Gets or sets the draw order. Larger values draw on top.</summary>
     public int ZOrder;
 
-    /// <summary>Gets or sets the first character of the range that the font is baked for. Zero means the space.</summary>
-    public char FirstCharacter;
-
-    /// <summary>Gets or sets the last character of the range that the font is baked for. Zero means the tilde, which is the printable ASCII range.</summary>
-    /// <remarks>Such as <c>'\u04FF'</c> for the end of the Cyrillic block, which is what the font of this repository covers.</remarks>
-    public char LastCharacter;
-
-    /// <summary>Gets the font that was baked for this line.</summary>
+    /// <summary>Gets the font that draws the text.</summary>
     /// <remarks>
-    /// This is the handle of a font that the service loaded, so it is state of a run rather than data of content and is not
-    /// part of what a scene or a prototype carries: the render system writes it after it bakes the font, and a game reads it
-    /// rather than sets it.
+    /// The renderer writes it after it bakes the stack, and a game reads it rather than sets it: the handle of a device
+    /// texture is state of a run, so it is not part of what a scene or a prototype carries.
     /// </remarks>
     [JsonIgnore]
     public FontHandle Font;
+
+    /// <summary>Gets the size that the text takes, in pixels, which the renderer writes.</summary>
+    /// <remarks>The size is what a box that follows its text needs: a panel that grows to its title, a button as wide as the word on it.</remarks>
+    [JsonIgnore]
+    public Vector2 MeasuredSize;
 }
+

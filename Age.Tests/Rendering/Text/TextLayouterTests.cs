@@ -131,5 +131,7 @@ public sealed class TextLayouterTests
         public FontMetrics Metrics => new(8f, 10f);
 
         public Vector2 Measure(ReadOnlySpan<char> text) => new(text.Length * 6f, 10f);
+
+        public FontHandle? Font(char value) => null;
     }
 }
