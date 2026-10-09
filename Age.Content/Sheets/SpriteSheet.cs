@@ -24,14 +24,22 @@ namespace Age.Content.Sheets;
 /// <param name="Rows">The number of rows of the grid.</param>
 /// <param name="States">The states of the sheet by name, in the order the document declared them.</param>
 /// <param name="File">The sidecar the sheet was read from, which an error mentions.</param>
+/// <param name="License">The licence that the art of the sheet comes with, or null when the document does not say.</param>
+/// <param name="Copyright">Who the art of the sheet belongs to, or null when the document does not say.</param>
 public sealed record SpriteSheet(
     string Image,
     Vector2 Cell,
     int Columns,
     int Rows,
     IReadOnlyDictionary<string, SpriteSheetState> States,
-    string File)
+    string File,
+    string? License,
+    string? Copyright)
 {
+    /// <summary>The version of the format of a sheet that this build reads, which a document declares in its <c>version</c> field.</summary>
+    /// <remarks>A document of a version this build does not know is refused rather than read as if it were this one, so a change to the format is a message instead of a frame that draws the wrong cell.</remarks>
+    public const int CurrentVersion = 1;
+
     /// <summary>Gets the number of states that the sheet declares.</summary>
     public int Count => States.Count;
 

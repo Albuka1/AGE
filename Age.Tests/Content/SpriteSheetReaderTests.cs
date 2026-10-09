@@ -17,6 +17,8 @@ public sealed class SpriteSheetReaderTests
         sheet.Columns.Should().Be(4);
         sheet.Rows.Should().Be(3);
         sheet.Count.Should().Be(3);
+        sheet.License.Should().Be("MIT");
+        sheet.Copyright.Should().Be("AGE, drawn for this repository");
 
         sheet.TryGetState("idle", out SpriteSheetState? idle).Should().BeTrue();
         idle!.Row.Should().Be(0);
@@ -52,6 +54,7 @@ public sealed class SpriteSheetReaderTests
     public void SpriteSheetReader_AStateOutsideTheGrid_IsReported()
     {
         const string Outside = """
+            version: 1
             image: art.bmp
             cell:
               X: 8
@@ -73,6 +76,7 @@ public sealed class SpriteSheetReaderTests
     public void SpriteSheetReader_AStateWithMoreFramesThanItsRow_IsReported()
     {
         const string Wide = """
+            version: 1
             image: art.bmp
             cell:
               X: 8
@@ -94,6 +98,7 @@ public sealed class SpriteSheetReaderTests
     public void SpriteSheetReader_AFieldAStateDoesNotHave_IsReported()
     {
         const string Unknown = """
+            version: 1
             image: art.bmp
             cell:
               X: 8
@@ -123,14 +128,46 @@ public sealed class SpriteSheetReaderTests
     [Fact]
     public void SpriteSheetReader_ADocumentThatNamesNothing_IsReported()
     {
-        Action read = () => SpriteSheetReader.Read("columns: 2\n", "empty.yml");
+        Action read = () => SpriteSheetReader.Read("version: 1\ncolumns: 2\n", "empty.yml");
 
         read.Should().Throw<SpriteSheetException>().WithMessage("*names the image*empty.yml*");
     }
 
+    [Fact]
+    public void SpriteSheetReader_ADocumentWithoutAVersion_IsReported()
+    {
+        Action read = () => SpriteSheetReader.Read(Document.Replace("version: 1\n", string.Empty, StringComparison.Ordinal), "no-version.yml");
+
+        read.Should().Throw<SpriteSheetException>().WithMessage("*says which version*no-version.yml*");
+    }
+
+    [Fact]
+    public void SpriteSheetReader_ADocumentOfAnotherVersion_IsReported()
+    {
+        Action read = () => SpriteSheetReader.Read(Document.Replace("version: 1", "version: 2", StringComparison.Ordinal), "future.yml");
+
+        read.Should().Throw<SpriteSheetException>().WithMessage("*version 2*reads version 1*");
+    }
+
+    [Fact]
+    public void SpriteSheetReader_ADocumentWithoutALicence_IsReadWithoutOne()
+    {
+        string document = Document
+            .Replace("license: MIT\n", string.Empty, StringComparison.Ordinal)
+            .Replace("copyright: AGE, drawn for this repository\n", string.Empty, StringComparison.Ordinal);
+
+        SpriteSheet sheet = SpriteSheetReader.Read(document, "bare.yml");
+
+        sheet.License.Should().BeNull("what art belongs to is a rule of a build rather than of the format, and the linter is what checks it");
+        sheet.Copyright.Should().BeNull();
+    }
+
     /// <summary>A document of a sheet, which the tests of the reader and of the services share.</summary>
     internal const string Document =
-        "image: Textures/Entities/goblin.bmp\n"
+        "version: 1\n"
+        + "license: MIT\n"
+        + "copyright: AGE, drawn for this repository\n"
+        + "image: Textures/Entities/goblin.bmp\n"
         + "cell:\n"
         + "  X: 16\n"
         + "  Y: 16\n"

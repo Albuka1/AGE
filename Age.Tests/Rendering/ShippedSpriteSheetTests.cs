@@ -23,6 +23,8 @@ public sealed class ShippedSpriteSheetTests
 
         sheet.Cell.Should().Be(new Vector2(16f, 16f));
         sheet.States.Keys.Should().Equal("idle", "walk", "attack");
+        sheet.License.Should().Be("MIT", "the document of a sheet says where its art comes from");
+        sheet.Copyright.Should().Be("AGE, drawn for this repository");
         image.Width.Should().Be(64, "the grid of the sheet is four cells of sixteen pixels across");
         image.Height.Should().Be(32, "and two rows of sixteen pixels down");
         image.Pixels.Length.Should().Be(64 * 32 * 4);

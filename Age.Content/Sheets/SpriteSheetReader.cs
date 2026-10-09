@@ -13,6 +13,9 @@ namespace Age.Content.Sheets;
 /// </para>
 /// <example>
 /// <code>
+/// version: 1
+/// license: MIT
+/// copyright: AGE, drawn for this repository
 /// image: Textures/Entities/goblin.bmp
 /// cell:
 ///   X: 16
@@ -32,9 +35,12 @@ namespace Age.Content.Sheets;
 /// </code>
 /// </example>
 /// <para>
-/// Every field is required except <c>delay</c>, which is a tenth of a second, and <c>loop</c>, which is true. A field that
-/// the document does not declare and a value that does not fit are refused with the file and the line, so a sheet that is
-/// wrong is a message at the start of a game rather than a frame that draws the wrong part of an image.
+/// <c>version</c> is required, and a document of a version this build does not read is refused. <c>license</c> and
+/// <c>copyright</c> are what a game says about art that is not its own: the reader leaves them alone, and
+/// <c>Age.Content.Lint</c> is what requires them of every sheet of a build. Every other field is required except
+/// <c>delay</c>, which is a tenth of a second, and <c>loop</c>, which is true. A field that the document does not declare
+/// and a value that does not fit are refused with the file and the line, so a sheet that is wrong is a message at the start
+/// of a game rather than a frame that draws the wrong part of an image.
 /// </para>
 /// </remarks>
 public static class SpriteSheetReader
@@ -73,12 +79,19 @@ public static class SpriteSheetReader
         Vector2? cell = null;
         int? columns = null;
         int? rows = null;
+        int? version = null;
+        string? license = null;
+        string? copyright = null;
         YamlEntry? states = null;
 
         foreach (YamlEntry entry in mapping.Entries)
         {
             switch (entry.Name)
             {
+                case "version":
+                    version = Positive(file, entry, "a version of the format");
+                    break;
+
                 case "image":
                     image = Word(file, entry);
                     break;
@@ -95,13 +108,34 @@ public static class SpriteSheetReader
                     rows = Positive(file, entry, "a count of rows");
                     break;
 
+                case "license":
+                    license = Word(file, entry);
+                    break;
+
+                case "copyright":
+                    copyright = Word(file, entry);
+                    break;
+
                 case "states":
                     states = entry;
                     break;
 
                 default:
-                    throw new SpriteSheetException($"{file}: '{entry.Name}' is not a field of a sprite sheet, and a sheet holds image, cell, columns, rows and states", file, entry.Line);
+                    throw new SpriteSheetException($"{file}: '{entry.Name}' is not a field of a sprite sheet, and a sheet holds version, image, cell, columns, rows, license, copyright and states", file, entry.Line);
             }
+        }
+
+        if (version is not int declared)
+        {
+            throw new SpriteSheetException($"{file}: a sprite sheet says which version of the format it is written in with 'version', and this build reads version {SpriteSheet.CurrentVersion}", file, mapping.Line);
+        }
+
+        if (declared != SpriteSheet.CurrentVersion)
+        {
+            throw new SpriteSheetException(
+                $"{file}: the sheet is written in version {declared}, and this build reads version {SpriteSheet.CurrentVersion}. Update the engine, or write the sheet again.",
+                file,
+                mapping.Line);
         }
 
         if (image is null)
@@ -124,7 +158,7 @@ public static class SpriteSheetReader
             throw new SpriteSheetException($"{file}: a sprite sheet declares the states a game plays with 'states'", file, mapping.Line);
         }
 
-        return new SpriteSheet(image, size, width, height, ReadStates(file, statesEntry, width, height), file);
+        return new SpriteSheet(image, size, width, height, ReadStates(file, statesEntry, width, height), file, license, copyright);
     }
 
     /// <summary>Reads the states of a sheet, which are what a game plays.</summary>

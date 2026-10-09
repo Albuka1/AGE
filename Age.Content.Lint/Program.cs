@@ -18,12 +18,14 @@ using Microsoft.Extensions.DependencyInjection;
 // The tool registers the kinds the engine ships and the components of every assembly of the engine. A game whose content
 // has kinds of its own reads the same linter from its own host, because a kind is what the game registers:
 //
-//     var linter = new ContentLinter(prototypes, registry, assets);
+//     var linter = new ContentLinter(prototypes, registry, assets, images);
 //     LintReport report = linter.Lint("Prototypes");
+//     LintReport sheets = linter.LintSheets("Textures");   // the grid of a sheet against its image, its version and its licence
 //
-// Usage: dotnet run --project Age.Content.Lint -- [game root] [folder]
+// Usage: dotnet run --project Age.Content.Lint -- [game root] [prototypes folder] [textures folder]
 string root = args.Length > 0 ? args[0] : "Resources";
 string folder = args.Length > 1 ? args[1] : "Prototypes";
+string textures = args.Length > 2 ? args[2] : "Textures";
 
 using ServiceProvider provider = new ServiceCollection()
     .AddAgeCore()
@@ -42,19 +44,25 @@ prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
 IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
 assets.Initialize(root);
 
-var linter = new ContentLinter(prototypes, provider.GetRequiredService<ComponentRegistry>(), assets);
+var linter = new ContentLinter(prototypes, provider.GetRequiredService<ComponentRegistry>(), assets, provider.GetRequiredService<IImageLoader>());
 LintReport report = linter.Lint(folder);
+LintReport sheets = linter.LintSheets(textures);
 
 foreach (LintProblem problem in report.Problems)
 {
     Console.Error.WriteLine(problem);
 }
 
-if (!report.IsClean)
+foreach (LintProblem problem in sheets.Problems)
 {
-    Console.Error.WriteLine($"The content of '{root}/{folder}' holds {report.Problems.Count} mistakes.");
+    Console.Error.WriteLine(problem);
+}
+
+if (!report.IsClean || !sheets.IsClean)
+{
+    Console.Error.WriteLine($"The content of '{root}' holds {report.Problems.Count + sheets.Problems.Count} mistakes.");
     return 1;
 }
 
-Console.WriteLine($"The content of '{root}/{folder}' is sound: {report.Count} prototypes.");
+Console.WriteLine($"The content of '{root}' is sound: prototypes {report.Count}, sheets {sheets.Count}.");
 return 0;

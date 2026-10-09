@@ -9,7 +9,8 @@ namespace Age.Tests;
 public sealed class SpriteAnimationSystemTests : IDisposable
 {
     private const string Sheet =
-        "image: Textures/Entities/goblin.bmp\n"
+        "version: 1\n"
+        + "image: Textures/Entities/goblin.bmp\n"
         + "cell:\n"
         + "  X: 16\n"
         + "  Y: 16\n"

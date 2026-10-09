@@ -11,6 +11,10 @@ A path is written the same way everywhere: in the engine, in a document of conte
 - A section is the kind of asset (`Textures`, `Audio`, `Fonts`, `Prototypes`), a subsection is a group inside it, and a
   document of content names a resource with exactly that path — which is what `Age.Content.Lint` checks against the files
   of a build, so a path with a typo in it fails a build rather than a fight.
+- A sprite sheet is a document named like the image beside it, so `Textures/Entities/goblin.yml` is the sheet of
+  `Textures/Entities/goblin.tga`: it declares `version` (the format this build reads), `image`, `cell`, `columns`, `rows`,
+  `states`, and `license` with `copyright` for art that came from somewhere else. The linter checks all of it, including
+  that the grid a document declares is the size of the image it names.
 - A section appears with its first file, so nothing is committed as an empty promise.
 
 ## What is here
@@ -57,25 +61,10 @@ the project itself sits:
 - `Age.Content.Lint` reads the prototypes of this folder in CI, with the same loader a game uses: a document that names
   a file which this folder does not hold fails the build.
 
-A file that changes here changes for every consumer at once, so there is nothing to keep in step.
-
-The licenses of the files that need attribution travel next to them: `Fonts/OFL.txt` for the font, and
-[`Audio/Samples/README.md`](Audio/Samples/README.md) for the two recordings.
-
-## How a project uses it
-
-`Directory.Build.props` points `$(AgeResources)` at this folder, so a project reaches it without depending on where
-the project itself sits:
-
-- `Age.Rendering` embeds the branding images with `EmbeddedResource` and an explicit `LogicalName`, which is what
-  makes them addressable as `Age.Rendering.Resources.Textures.Icons.icon-20.png` and
-  `Age.Rendering.Resources.Textures.Logo.logo-320.png`.
-- `Age.Sample` and `Age.Tests` copy the folder next to their output under the same `Resources` name and hand that
-  path to `IAssetLoader.Initialize`, so the path a game loads is written relative to this folder:
-  `Fonts/Cousine-Regular.ttf`, `Textures/Tiles/tiles.bmp`, `Audio/Effects/click.wav`. The sample leaves
-  `Audio/Samples` out, because the decoder fixtures belong to the test project rather than to the game.
-
-A file that changes here changes for every consumer at once, so there is nothing to keep in step.
+A file that changes here changes for every consumer at once, so there is nothing to keep in step. The art of this
+repository is MIT, like the rest of it, and a file that came from somewhere else says where it came from in the document
+beside it: `license` and `copyright`, which `Age.Content.Lint` requires of every sheet, so a build can answer what it
+ships.
 
 The licenses of the files that need attribution travel next to them: `Fonts/OFL.txt` for the font, and
 [`Audio/Samples/README.md`](Audio/Samples/README.md) for the two recordings.

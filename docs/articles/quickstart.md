@@ -250,14 +250,17 @@ is not a prototype, a component that nothing registered, values that its contrac
 that the format of the component does not carry — which is how a field that belongs to a run rather
 than to content, such as the handle of a texture, is refused instead of being dropped — a parent that
 no file declares, a kind that nothing reads, a circle of inheritance, and a path that a
-`[ResourcePath]` field names, which is checked against the files of the build.
+`[ResourcePath]` field names, which is checked against the files of the build. The sheets of a build are read
+too: a sheet says which version of the format it is written in and where its art comes from with `license` and
+`copyright`, and the grid it declares is checked against the size of the image beside it.
 
 The tool knows the kinds and the components the engine ships. A game with kinds of its own reads the
 same check from its own host:
 
 ```csharp
-var linter = new ContentLinter(prototypes, provider.GetRequiredService<ComponentRegistry>(), assets);
+var linter = new ContentLinter(prototypes, provider.GetRequiredService<ComponentRegistry>(), assets, provider.GetRequiredService<IImageLoader>());
 LintReport report = linter.Lint("Prototypes");
+LintReport sheets = linter.LintSheets("Textures");   // the grid of a sheet against the image beside it, its version and its licence
 
 foreach (LintProblem problem in report.Problems)
 {
@@ -294,6 +297,9 @@ image twice returns the same texture. Release it with `Unload` when the level th
 The frames of a character live in an image and a document beside it, which says where each state lies on the grid:
 
 ```yaml
+version: 1
+license: MIT
+copyright: AGE, drawn for this repository
 image: Textures/Entities/goblin.tga
 cell:
   X: 16
@@ -335,7 +341,8 @@ world.Events.Subscribe<SpriteAnimationFinishedEvent>((entity, @event) =>
 No coordinate of an image is written in a game: the region of a frame is arithmetic over the grid that the document
 declares. A layer of a character is an entity of its own with a higher `ZOrder`, and a direction is a state of its own. A
 document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once, and
-`Age.Content.Lint` checks the paths a prototype names against the files a build ships.
+`Age.Content.Lint` checks the paths a prototype names against the files a build ships, that the grid of a sheet is the size
+of the image beside it, and that every sheet says which licence its art comes with and who it belongs to.
 
 ## Draw text
 

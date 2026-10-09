@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A sprite sheet says which version of the format it is written in with `version`, and a document of a version this build
+  does not read is refused with a message rather than read as if it were this one, so the format can move later without
+  silently drawing the wrong cell. The document may also say where its art comes from with `license` and `copyright`, and
+  `Age.Content.Lint` now reads the sheets of a build along with its prototypes: a sheet without a licence or a copyright, a
+  sheet whose declared grid is not the size of the image beside it, and a sheet of a version this build does not read all
+  fail a build, which catches art metadata going wrong before a frame is drawn crooked.
+
 - A sprite sheet is data: the document next to an image declares the grid (`cell`, `columns`, `rows`) and the states over it
   (the row a state lies on, the frames at the start of it, the length of a frame and whether it repeats), and
   `SpriteComponent.SheetPath` together with `State` and `Frame` picks one frame of it, so a game never writes a normalized
