@@ -14,6 +14,23 @@ jobs:
           dotnet-version: 10.0.100
       - run: dotnet build Age.slnx -c Release
       - run: dotnet test --project Age.Tests/Age.Tests.csproj --no-build -c Release
+      - name: Check that the tag names this build
+        # The version of every assembly comes from one property of Directory.Build.props, and a release is named by its tag:
+        # a tag that names another version ships a build that reports the wrong one, and the sample prints what its assembly
+        # says. The changelog has to hold the section of that version too, because a release without notes is one nobody can
+        # read. Both checks run here rather than in the release script, because a tag can be pushed by hand.
+        run: |
+          version=$(dotnet msbuild Age.Core/Age.Core.csproj -getProperty:Version -nologo)
+
+          if [ "v$version" != "${{ github.ref_name }}" ]; then
+            echo "::error::The tag is ${{ github.ref_name }} and Directory.Build.props says $version, so this build would report $version. Cut the release with tools/release.ps1, or tag v$version."
+            exit 1
+          fi
+
+          if ! grep -Fq "## [$version]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md holds no section '## [$version]'. Turn '## [Unreleased]' into '## [$version] - <date>' before tagging."
+            exit 1
+          fi
       - run: dotnet publish Age.Sample/Age.Sample.csproj -c Release -o publish
       - name: Pack the published sample
         run: |
@@ -26,6 +43,9 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           fail_on_unmatched_files: true
+          # A tag with a suffix such as v0.3.0-alpha.1 is a prerelease, which is what a version that is not ready for a
+          # player is: the workflow then marks the release as one rather than offering it as the latest.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             Age.Sample-${{ github.ref_name }}.zip
             publish/Resources/**
