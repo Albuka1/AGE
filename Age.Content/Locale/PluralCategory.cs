@@ -22,7 +22,7 @@ public enum PluralCategory
     /// <summary>A few items, which is what Russian writes for two to four.</summary>
     Few,
 
-    /// <summary>Many items, which is what Russian writes for five and above.</summary>
+    /// <summary>Many items, which is what Russian writes for zero, for five to twenty, and for the tens that end in zero.</summary>
     Many,
 
     /// <summary>Every other count, which is the form a language falls back to.</summary>

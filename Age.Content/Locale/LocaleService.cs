@@ -170,7 +170,24 @@ public sealed class LocaleService : ILocaleService
             return loaded;
         }
 
+        if (!Languages.Contains(language, StringComparer.Ordinal))
+        {
+            // A language the game does not have is answered by the base language, and a game that holds no strings at all is a
+            // game whose content says nothing yet rather than a mistake. Only a language that the game was asked for and does
+            // not hold is worth a line, and the folder is not walked here, so nothing says the same thing twice.
+            if (!string.Equals(language, Base, StringComparison.Ordinal))
+            {
+                Report(language, $"The game holds no strings for '{language}', so the strings of '{Base}' are the ones that answer. Its languages are {string.Join(", ", Languages)}.");
+            }
+
+            loaded = new LocaleLanguage(language, new Dictionary<string, LocaleString>(StringComparer.Ordinal));
+            _languages[language] = loaded;
+
+            return loaded;
+        }
+
         var strings = new Dictionary<string, LocaleString>(StringComparer.Ordinal);
+        var failed = false;
 
         try
         {
@@ -194,15 +211,23 @@ public sealed class LocaleService : ILocaleService
         }
         catch (DirectoryNotFoundException)
         {
-            // A game that ships no strings at all is a game whose content says nothing yet, which is not a mistake.
+            // The folder went away between the listing of the languages and the reading of it, which leaves an empty language
+            // that is kept: a game's content does not come and go while it runs.
         }
         catch (Exception exception) when (exception is LocaleException or IOException or InvalidOperationException or ArgumentException)
         {
+            // A language whose documents cannot be read is not kept: what is reported here is content that has to change, and a
+            // caller that asks again reads the documents again rather than living with the half of a language.
+            failed = true;
             Report(language, $"The strings of '{language}' cannot be read: {exception.Message}");
         }
 
         loaded = new LocaleLanguage(language, Resolve(language, strings));
-        _languages[language] = loaded;
+
+        if (!failed)
+        {
+            _languages[language] = loaded;
+        }
 
         return loaded;
     }

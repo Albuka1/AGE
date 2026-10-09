@@ -263,7 +263,17 @@ public sealed class ContentLinter
                 continue;
             }
 
-            string language = file.Split('/')[1];
+            string[] segments = file.Split('/');
+
+            // A document of a language lives in the folder of that language under the folder of the languages, so a document
+            // that is written anywhere else is a mistake of where it lives rather than a language of its own.
+            if (segments.Length < 3)
+            {
+                problems.Add(new LintProblem(file, 0, "a document of a game lives in the folder of its language under the folder of the languages, such as Locale/en/Entities/creatures.yml"));
+                continue;
+            }
+
+            string language = segments[1];
 
             if (!languages.TryGetValue(language, out Dictionary<string, LocaleString>? strings))
             {

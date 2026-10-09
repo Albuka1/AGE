@@ -28,11 +28,12 @@ public static class PluralRules
 
         return language switch
         {
-            // English: one for exactly one, other for everything else, which includes zero and the fractions.
+            // English: one for exactly one, other for everything else, which covers zero.
             "en" => count == 1 ? PluralCategory.One : PluralCategory.Other,
 
-            // Russian: one for 1, 21, 31 and the like, few for 2 to 4, many for 5 to 20 and for the tens that end in zero,
-            // and other for the counts that are not whole, which a caller passes as a negative number.
+            // Russian: one for 1, 21, 31 and the like, few for 2 to 4, and many for everything else, which covers zero, 5 to
+            // 20 and the tens that end in zero. The form 'other' is what a language writes for a count that is not whole, and
+            // no such count reaches this rule: a caller passes whole numbers of things.
             "ru" => Russian(count),
 
             _ => PluralCategory.Other,
@@ -87,8 +88,8 @@ public static class PluralRules
             return PluralCategory.Few;
         }
 
-        // Zero and 5 to 20 take the form of many, which is also what a count that is not whole takes: a caller that has one
-        // passes it as a negative number, and the language is the only thing that can decide what it writes.
+        // Everything that is not one or few takes the form of many, which covers zero, 5 to 20 and the tens that end in zero.
+        // The form of 'other' is what a language writes for a count that is not whole, and no such count reaches this rule.
         return PluralCategory.Many;
     }
 }
