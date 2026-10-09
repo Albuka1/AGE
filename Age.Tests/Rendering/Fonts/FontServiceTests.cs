@@ -48,6 +48,19 @@ public sealed class FontServiceTests : IDisposable
     }
 
     [Fact]
+    public void FontService_Metrics_PlaceALineOfTheFont()
+    {
+        FontHandle font = _fonts.Load(FontPath, 24f);
+
+        FontMetrics metrics = _fonts.Metrics(font);
+
+        metrics.Ascent.Should().BeGreaterThan(0f);
+        metrics.LineHeight.Should().BeGreaterThan(metrics.Ascent, "a line has room below its baseline");
+        metrics.Descent.Should().Be(metrics.LineHeight - metrics.Ascent);
+        metrics.LineHeight.Should().Be(_fonts.Measure(font, "AGE").Y, "the height of a measured line is the line height");
+    }
+
+    [Fact]
     public void FontService_Load_BakesTheRangeThatWasAskedFor()
     {
         // The default range is the printable ASCII one, and a game that writes a language with a script of its own asks for the

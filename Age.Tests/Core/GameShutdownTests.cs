@@ -139,6 +139,8 @@ public sealed class GameShutdownTests
 
         public Vector2 Measure(FontHandle font, ReadOnlySpan<char> text) => default;
 
+        public FontMetrics Metrics(FontHandle font) => default;
+
         public void Draw(FontHandle font, ReadOnlySpan<char> text, Vector2 position, Color color)
         {
         }

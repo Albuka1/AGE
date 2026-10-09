@@ -78,7 +78,22 @@ public interface IFontService
     /// <param name="text">The text of the line. A character outside the range of the font counts as a space.</param>
     /// <returns>The width that the text advances and the height of a line, in pixels.</returns>
     /// <exception cref="InvalidOperationException">The handle is not a live font of this service.</exception>
+    /// <remarks>
+    /// The width is the sum of the advances of the characters, so a caller that lays out text measures the words and the
+    /// lines it builds from them. A line feed is a character like any other here: a caller that breaks a text into lines
+    /// does so itself, because where a line ends is a decision about a box rather than about a string.
+    /// </remarks>
     Vector2 Measure(FontHandle font, ReadOnlySpan<char> text);
+
+    /// <summary>Returns the metrics that place a line of the font: its ascent and the distance between two baselines.</summary>
+    /// <param name="font">The font to read the metrics of.</param>
+    /// <returns>The metrics of the font, in pixels.</returns>
+    /// <exception cref="InvalidOperationException">The handle is not a live font of this service.</exception>
+    /// <remarks>
+    /// <see cref="Measure"/> answers the height of a line as well, so a caller that only draws one line needs this call
+    /// rarely; one that stacks lines, aligns them in a box or centers a glyph needs the baseline that a line starts at.
+    /// </remarks>
+    FontMetrics Metrics(FontHandle font);
 
     /// <summary>Draws one line of text with the top-left corner of the line at the given position.</summary>
     /// <param name="font">The font to draw with.</param>

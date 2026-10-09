@@ -144,6 +144,14 @@ public sealed class FontService : IFontService, IDisposable
     }
 
     /// <inheritdoc />
+    public FontMetrics Metrics(FontHandle font)
+    {
+        FontData data = Require(font);
+
+        return new FontMetrics(data.Atlas.Ascent, data.Atlas.LineHeight);
+    }
+
+    /// <inheritdoc />
     public void Draw(FontHandle font, ReadOnlySpan<char> text, Vector2 position, Color color)
     {
         FontData data = Require(font);

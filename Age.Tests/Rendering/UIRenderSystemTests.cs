@@ -107,6 +107,8 @@ public sealed class UIRenderSystemTests
 
         public Vector2 Measure(FontHandle font, ReadOnlySpan<char> text) => Vector2.Zero;
 
+        public FontMetrics Metrics(FontHandle font) => default;
+
         public void Draw(FontHandle font, ReadOnlySpan<char> text, Vector2 position, Color color) => Drawn.Add(new string(text));
     }
 
