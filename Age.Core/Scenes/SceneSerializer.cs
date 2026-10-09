@@ -99,6 +99,11 @@ public sealed class SceneSerializer : ISceneSerializer
             return null;
         }
 
+        // What the prototype already says is dropped only once all of it was read: an entity that lost a component of its
+        // prototype, or one whose component cannot be read, is written in full, and an entity that is written in full keeps
+        // every component it holds.
+        List<string>? matches = null;
+
         foreach ((string name, JsonElement values) in declared)
         {
             if (!components.TryGetValue(name, out JsonElement component) || !_components.TryGet(name, out ComponentRegistration? registration))
@@ -120,6 +125,14 @@ public sealed class SceneSerializer : ISceneSerializer
             }
 
             if (JsonElement.DeepEquals(component, expected))
+            {
+                (matches ??= []).Add(name);
+            }
+        }
+
+        if (matches is not null)
+        {
+            foreach (string name in matches)
             {
                 components.Remove(name);
             }
@@ -304,10 +317,10 @@ public sealed class SceneSerializer : ISceneSerializer
     /// of one of its components cannot be read.
     /// </exception>
     /// <remarks>
-    /// Every component that a prototype declares is read through the contract of the component here, which is the same check
-    /// that the writing of a scene makes before it compares an entity with its prototype: content that this build cannot read
-    /// is a scene that is refused rather than a load that stops with half of its entities in the world. The value is read
-    /// rather than compared, so what is refused here is exactly what the spawn that applies it would have refused.
+    /// Every component that a prototype declares is read through the contract of the component here, which is the same call
+    /// that the spawn which applies it makes: content that this build cannot read — a component that nothing registers, values
+    /// that its contract refuses, or a field that the format of the component does not carry — is a scene that is refused
+    /// rather than a load that stops with half of its entities in the world.
     /// </remarks>
     private void CheckPrototype(string prototypeId)
     {
@@ -333,7 +346,7 @@ public sealed class SceneSerializer : ISceneSerializer
 
             try
             {
-                registration.Normalize(values);
+                registration.Deserialize(values);
             }
             catch (JsonException exception)
             {

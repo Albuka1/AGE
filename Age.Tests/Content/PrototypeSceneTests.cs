@@ -273,6 +273,59 @@ public sealed class PrototypeSceneTests
         world.Enumerate().Should().ContainSingle().Which.Should().Be(existing, "a value that the contract refuses is not a world that was changed half way");
     }
 
+    [Fact]
+    public void PrototypeScene_APrototypeWhoseComponentHasAFieldTheFormatDoesNotCarry_IsRefusedAndLeavesTheWorldAsItWas()
+    {
+        using ServiceProvider provider = Create();
+        var world = new World();
+        Entity existing = world.CreateEntity();
+        var scenes = new SceneSerializer(provider.GetRequiredService<ComponentRegistry>(), prototypes: new UnknownField());
+
+        Action load = () => scenes.Load(world, Scene("Goblin"));
+
+        InvalidDataException refused = load.Should().Throw<InvalidDataException>().Which;
+
+        refused.Message.Should().Contain("'Collider'").And.Contain("'Goblin'").And.Contain("cannot be read");
+        refused.InnerException.Should().BeOfType<JsonException>("the refusal comes from the format of the component rather than from a value that a serializer cannot map")
+            .Which.Message.Should().Contain("is not one that the component 'Collider' carries");
+        world.Enumerate().Should().ContainSingle().Which.Should().Be(existing, "a field that the format does not carry is refused before the world is touched");
+    }
+
+    [Fact]
+    public void PrototypeScene_AnEntityThatLostAComponent_IsWrittenInFullAndKeepsWhatItStillHolds()
+    {
+        using ServiceProvider provider = Create();
+        SpawnService spawner = provider.GetRequiredService<SpawnService>();
+        ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+        var world = new World();
+        Entity goblin = spawner.Spawn(world, "Goblin");
+
+        // A goblin that lost a component of its kind is written in full, because a scene has no way to say "without the
+        // component of the prototype": every component it still holds goes into the file, including the ones that its
+        // prototype declares as well.
+        world.Remove<SpriteComponent>(goblin);
+
+        string json = scenes.Save(world);
+
+        using (JsonDocument document = JsonDocument.Parse(json))
+        {
+            JsonElement entity = document.RootElement.GetProperty("Entities")[0];
+            List<string> written = [.. entity.GetProperty("Components").EnumerateObject().Select(property => property.Name)];
+
+            entity.GetProperty("Prototype").ValueKind.Should().Be(JsonValueKind.Null);
+            written.Should().Contain("Transform").And.Contain("Collider").And.Contain("SpriteAnimation").And.NotContain("Sprite");
+        }
+
+        var loaded = new World();
+        scenes.Load(loaded, json);
+
+        Entity restored = loaded.Enumerate().Single();
+
+        loaded.Has<SpriteComponent>(restored).Should().BeFalse("the component that the entity lost stays lost");
+        loaded.Get<ColliderComponent>(restored).Size.Should().Be(new Vector2(24f, 24f), "what the prototype declared comes back with the entity itself");
+        loaded.Get<SpriteAnimationComponent>(restored).State.Should().Be("walk");
+    }
+
     /// <summary>Returns a scene of one entity that names a prototype and carries no component of its own.</summary>
     private static string Scene(string prototypeId) => $$"""
         {
@@ -299,6 +352,15 @@ public sealed class PrototypeSceneTests
 
         public IReadOnlyDictionary<string, JsonElement>? ComponentsOf(string prototypeId) =>
             new Dictionary<string, JsonElement>(StringComparer.Ordinal) { ["Transform"] = JsonDocument.Parse("""{ "Position": "nowhere" }""").RootElement.Clone() };
+    }
+
+    /// <summary>A source whose prototype declares a component with a field that the format of the component does not carry.</summary>
+    private sealed class UnknownField : IPrototypeSource
+    {
+        public Entity Spawn(World world, string prototypeId) => throw new NotSupportedException("a scene with such a prototype never reaches the spawn");
+
+        public IReadOnlyDictionary<string, JsonElement>? ComponentsOf(string prototypeId) =>
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal) { ["Collider"] = JsonDocument.Parse("""{ "Nope": 1 }""").RootElement.Clone() };
     }
 
     /// <summary>Builds a provider whose content is the one the engine ships, read as entities.</summary>

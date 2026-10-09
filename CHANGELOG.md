@@ -75,8 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content (`IPrototypeSource`, which the serializer takes from the container), so a scene that names a prototype while no
   content is loaded is refused rather than loaded empty, and every component that the prototype declares is read through the
   contract of the component before the world is touched: content that this build cannot read — a component that nothing
-  registers, or values that its contract refuses — is a scene that is refused rather than a load that stops with half of its
-  entities in the world. A component that matches its prototype in every field is left
+  registers, values that its contract refuses, or a field that the format of the component does not carry — is a scene that
+  is refused rather than a load that stops with half of its entities in the world. A component that matches its prototype in every field is left
   out, which is measured through the contract of the component: the fields that a document leaves out count as the values
   the component starts with, whatever the order of the fields. An entity that lost a component of its prototype is written
   in full, because a scene has no way to say that, and so is an entity whose prototype this build does not hold: a scene
