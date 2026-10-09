@@ -29,7 +29,14 @@ public sealed class SpriteAnimationSystemTests : IDisposable
         + "  idle:\n"
         + "    row: 2\n"
         + "    frames: 1\n"
-        + "    delay: 0.4\n";
+        + "    delay: 0.4\n"
+        + "  flurry:\n"
+        + "    row: 1\n"
+        + "    frames: 2\n"
+        + "    delays:\n"
+        + "      - 0.05\n"
+        + "      - 0.2\n"
+        + "    loop: false\n";
 
     private readonly string _root;
     private readonly World _world = new();
@@ -212,6 +219,26 @@ public sealed class SpriteAnimationSystemTests : IDisposable
         _world.Get<SpriteAnimationComponent>(entity).Time.Should().Be(0f);
         _finished.Should().BeEmpty("a state of one frame never reaches a last frame that it could report");
         _sheets.Resolve("goblin.yml", "idle", 0).Source.Y.Should().Be(2f / 3f, "which is the row of the state on the sheet");
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateWithALengthPerFrame_PlaysEveryFrameOnItsOwnLength()
+    {
+        Entity entity = Animate("flurry");
+
+        Step(0.05f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(1, "the first frame of the state lasts a twentieth of a second");
+
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(1, "the second frame lasts four times as long as the first");
+
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(1, "the last frame of a state that does not loop stays on screen");
+        _world.Get<SpriteAnimationComponent>(entity).Paused.Should().BeTrue("the play stands still until a game says what comes next");
+        _finished.Should().ContainSingle("the state ends when the length of its last frame is over");
     }
 
     /// <summary>Puts a sprite of the sheet and an animation of it on a new entity.</summary>

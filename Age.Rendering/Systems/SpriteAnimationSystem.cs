@@ -98,9 +98,11 @@ public sealed class SpriteAnimationSystem : ISystem
                 float speed = animation.Speed > 0f ? animation.Speed : 1f;
                 elapsed += (float)time.Delta * speed;
 
-                while (elapsed >= declared.Delay)
+                // Every frame of a state has its own length, which is what a document writes with 'delays': the frame that
+                // is on screen is the one whose length the elapsed time is counted against.
+                while (elapsed >= declared.DelayOf(frame))
                 {
-                    elapsed -= declared.Delay;
+                    elapsed -= declared.DelayOf(frame);
                     frame++;
 
                     if (frame < declared.Frames)

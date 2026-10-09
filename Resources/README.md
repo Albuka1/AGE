@@ -13,8 +13,10 @@ A path is written the same way everywhere: in the engine, in a document of conte
   of a build, so a path with a typo in it fails a build rather than a fight.
 - A sprite sheet is a document named like the image beside it, so `Textures/Entities/goblin.yml` is the sheet of
   `Textures/Entities/goblin.tga`: it declares `version` (the format this build reads), `image`, `cell`, `columns`, `rows`,
-  `states`, and `license` with `copyright` for art that came from somewhere else. The linter checks all of it, including
-  that the grid a document declares is the size of the image it names.
+  `states`, and `license` with `copyright` for art that came from somewhere else. A state gives the length of a frame with
+  `delay` for every frame of it, or the length of each frame with `delays`. The linter checks all of it: that the grid a
+  document declares is the size of the image it names, that it says where its art comes from, and that a state a prototype
+  names is one the document declares.
 - A section appears with its first file, so nothing is committed as an empty promise.
 
 ## What is here

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A state of a sheet gives the length of every frame of it with `delay`, or the length of each frame with `delays`, which is
+  what an attack needs: a wind-up, a strike and a recovery are three different lengths, and `SpriteAnimationSystem` takes
+  the length of the frame that is on screen. `SpriteComponent.State` says which member of its component names the sheet that
+  the state belongs to, so `Age.Content.Lint` reads that document and refuses a state it does not declare, naming the states
+  it does. The developer overlay names the sheets and the states behind the placeholders of a build, next to the images that
+  are missing.
 - A sprite sheet says which version of the format it is written in with `version`, and a document of a version this build
   does not read is refused with a message rather than read as if it were this one, so the format can move later without
   silently drawing the wrong cell. The document may also say where its art comes from with `license` and `copyright`, and

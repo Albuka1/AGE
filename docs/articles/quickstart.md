@@ -262,12 +262,12 @@ var linter = new ContentLinter(prototypes, provider.GetRequiredService<Component
 LintReport report = linter.Lint("Prototypes");
 LintReport sheets = linter.LintSheets("Textures");   // the grid of a sheet against the image beside it, its version and its licence
 
-foreach (LintProblem problem in report.Problems)
+foreach (LintProblem problem in report.Problems.Concat(sheets.Problems))
 {
     Console.Error.WriteLine(problem);   // Prototypes/Entities/goblin.yml(7): ...
 }
 
-return report.IsClean ? 0 : 1;
+return report.IsClean && sheets.IsClean ? 0 : 1;
 ```
 
 ## Load an image
@@ -314,11 +314,16 @@ states:
   attack:
     row: 1
     frames: 3
-    delay: 0.1
+    delays:
+      - 0.18
+      - 0.08
+      - 0.15
     loop: false
 ```
 
-A sprite names the document, the state and the frame; an animation plays a state on the time of the simulation:
+A state gives one length for every frame with `delay`, or the length of each frame with `delays` — a wind-up, a strike
+and a recovery are not the same length. A sprite names the document, the state and the frame; an animation plays a state
+on the time of the simulation:
 
 ```csharp
 world.Set(goblin, new SpriteComponent { SheetPath = "Textures/Entities/goblin.yml", State = "idle", Color = Color.White });
@@ -340,9 +345,11 @@ world.Events.Subscribe<SpriteAnimationFinishedEvent>((entity, @event) =>
 
 No coordinate of an image is written in a game: the region of a frame is arithmetic over the grid that the document
 declares. A layer of a character is an entity of its own with a higher `ZOrder`, and a direction is a state of its own. A
-document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once, and
-`Age.Content.Lint` checks the paths a prototype names against the files a build ships, that the grid of a sheet is the size
-of the image beside it, and that every sheet says which licence its art comes with and who it belongs to.
+document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once — the
+overlay of a build names the sheets and the states behind those placeholders — and `Age.Content.Lint` checks the paths a
+prototype names against the files a build ships, that the grid of a sheet is the size of the image beside it, that every
+sheet says which licence its art comes with and who it belongs to, and that a state a prototype names is one the sheet it
+names declares.
 
 ## Draw text
 

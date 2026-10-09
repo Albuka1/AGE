@@ -51,6 +51,59 @@ public sealed class SpriteSheetReaderTests
     }
 
     [Fact]
+    public void SpriteSheetReader_AStateThatGivesALength_PlaysEveryFrameOnIt()
+    {
+        SpriteSheet sheet = SpriteSheetReader.Read(Document, "goblin.yml");
+
+        sheet.States["idle"].Delays.Should().Equal([0.15f, 0.15f, 0.15f, 0.15f], "a state that gives one length gives it for every frame of it");
+    }
+
+    [Fact]
+    public void SpriteSheetReader_AStateThatGivesALengthPerFrame_PlaysEveryFrameOnItsOwn()
+    {
+        string document = Document.Replace("delay: 0.08", "delays:\n      - 0.18\n      - 0.08\n      - 0.15", StringComparison.Ordinal);
+
+        SpriteSheet sheet = SpriteSheetReader.Read(document, "goblin.yml");
+        SpriteSheetState attack = sheet.States["attack"];
+
+        attack.Delays.Should().Equal(0.18f, 0.08f, 0.15f);
+        attack.DelayOf(0).Should().Be(0.18f, "a wind-up is slower than the strike that follows it");
+        attack.DelayOf(1).Should().Be(0.08f);
+        attack.DelayOf(2).Should().Be(0.15f);
+        attack.DelayOf(9).Should().Be(0.15f, "a frame outside the state takes the length of the frame nearest to it");
+    }
+
+    [Fact]
+    public void SpriteSheetReader_ALengthPerFrameThatDoesNotCoverEveryFrame_IsReported()
+    {
+        string document = Document.Replace("delay: 0.08", "delays:\n      - 0.18\n      - 0.08", StringComparison.Ordinal);
+
+        Action read = () => SpriteSheetReader.Read(document, "goblin.yml");
+
+        read.Should().Throw<SpriteSheetException>().WithMessage("*holds 3 frames*'delays' gives 2*");
+    }
+
+    [Fact]
+    public void SpriteSheetReader_ALengthAndALengthPerFrame_AreReported()
+    {
+        string document = Document.Replace("delay: 0.08", "delay: 0.1\n    delays:\n      - 0.18\n      - 0.08\n      - 0.15", StringComparison.Ordinal);
+
+        Action read = () => SpriteSheetReader.Read(document, "goblin.yml");
+
+        read.Should().Throw<SpriteSheetException>().WithMessage("*with 'delay' or with 'delays'*");
+    }
+
+    [Fact]
+    public void SpriteSheetReader_ALengthPerFrameThatIsNotAList_IsReported()
+    {
+        string document = Document.Replace("delay: 0.08", "delays: 0.1", StringComparison.Ordinal);
+
+        Action read = () => SpriteSheetReader.Read(document, "goblin.yml");
+
+        read.Should().Throw<SpriteSheetException>().WithMessage("*'delays' holds one length in seconds per frame*");
+    }
+
+    [Fact]
     public void SpriteSheetReader_AStateOutsideTheGrid_IsReported()
     {
         const string Outside = """

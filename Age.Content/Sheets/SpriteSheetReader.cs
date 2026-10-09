@@ -30,7 +30,10 @@ namespace Age.Content.Sheets;
 ///   attack:
 ///     row: 2
 ///     frames: 3
-///     delay: 0.08
+///     delays:
+///       - 0.18
+///       - 0.08
+///       - 0.15
 ///     loop: false
 /// </code>
 /// </example>
@@ -38,9 +41,11 @@ namespace Age.Content.Sheets;
 /// <c>version</c> is required, and a document of a version this build does not read is refused. <c>license</c> and
 /// <c>copyright</c> are what a game says about art that is not its own: the reader leaves them alone, and
 /// <c>Age.Content.Lint</c> is what requires them of every sheet of a build. Every other field is required except
-/// <c>delay</c>, which is a tenth of a second, and <c>loop</c>, which is true. A field that the document does not declare
-/// and a value that does not fit are refused with the file and the line, so a sheet that is wrong is a message at the start
-/// of a game rather than a frame that draws the wrong part of an image.
+/// <c>delay</c>, which is a tenth of a second, and <c>loop</c>, which is true. A state gives the length of a frame with
+/// <c>delay</c> for every frame of it or with <c>delays</c> for one frame at a time, which is what an attack needs: a
+/// wind-up, a strike and a recovery are three different lengths. A field that the document does not declare and a value
+/// that does not fit are refused with the file and the line, so a sheet that is wrong is a message at the start of a game
+/// rather than a frame that draws the wrong part of an image.
 /// </para>
 /// </remarks>
 public static class SpriteSheetReader
@@ -185,7 +190,8 @@ public static class SpriteSheetReader
 
             int? row = null;
             int? frames = null;
-            float delay = DefaultDelay;
+            float? delay = null;
+            IReadOnlyList<float>? delays = null;
             bool loop = true;
 
             foreach (YamlEntry field in fields.Entries)
@@ -204,18 +210,27 @@ public static class SpriteSheetReader
                         delay = Number(file, field, "a length in seconds");
                         break;
 
+                    case "delays":
+                        delays = Delays(file, field);
+                        break;
+
                     case "loop":
                         loop = Flag(file, field);
                         break;
 
                     default:
-                        throw new SpriteSheetException($"{file}: '{field.Name}' is not a field of the state '{state.Name}', and a state holds row, frames, delay and loop", file, field.Line);
+                        throw new SpriteSheetException($"{file}: '{field.Name}' is not a field of the state '{state.Name}', and a state holds row, frames, delay, delays and loop", file, field.Line);
                 }
             }
 
             if (row is not int first || frames is not int count)
             {
                 throw new SpriteSheetException($"{file}: the state '{state.Name}' says which row it lies on with 'row' and how many frames it holds with 'frames'", file, fields.Line);
+            }
+
+            if (delay is not null && delays is not null)
+            {
+                throw new SpriteSheetException($"{file}: the state '{state.Name}' says how long a frame stays on screen with 'delay' or with 'delays', and not with both", file, fields.Line);
             }
 
             if (first >= rows)
@@ -228,10 +243,52 @@ public static class SpriteSheetReader
                 throw new SpriteSheetException($"{file}: the state '{state.Name}' holds {count} frames, and a row of the sheet holds {columns} cells", file, fields.Line);
             }
 
-            states[state.Name] = new SpriteSheetState(state.Name, first, count, delay, loop);
+            states[state.Name] = new SpriteSheetState(state.Name, first, count, Every(file, state, delay ?? DefaultDelay, count, delays), loop);
         }
 
         return states;
+    }
+
+    /// <summary>Reads the length of every frame of a state, which is a list that holds one number per frame.</summary>
+    private static IReadOnlyList<float> Delays(string file, YamlEntry entry)
+    {
+        if (entry.Value is not YamlSequence list)
+        {
+            throw new SpriteSheetException($"{file}: the field 'delays' holds one length in seconds per frame, and this one is {Shape(entry.Value)}", file, entry.Value.Line);
+        }
+
+        if (list.Items.Count == 0)
+        {
+            throw new SpriteSheetException($"{file}: the field 'delays' holds one length in seconds per frame, and this list is empty", file, list.Line);
+        }
+
+        var delays = new List<float>(list.Items.Count);
+
+        foreach (YamlValue item in list.Items)
+        {
+            delays.Add(Number(file, new YamlEntry("delays", item, item.Line), "a length in seconds"));
+        }
+
+        return delays;
+    }
+
+    /// <summary>Returns the length of every frame of a state, which a document gives either as one number per frame or as one for all of them.</summary>
+    private static IReadOnlyList<float> Every(string file, YamlEntry state, float delay, int frames, IReadOnlyList<float>? delays)
+    {
+        if (delays is null)
+        {
+            return Enumerable.Repeat(delay, frames).ToArray();
+        }
+
+        if (delays.Count != frames)
+        {
+            throw new SpriteSheetException(
+                $"{file}: the state '{state.Name}' holds {frames} frames, and 'delays' gives {delays.Count} of them: a state gives one length for every frame, or one for all of them with 'delay'",
+                file,
+                state.Value.Line);
+        }
+
+        return delays;
     }
 
     /// <summary>Reads a field that holds one word.</summary>
