@@ -19,7 +19,8 @@ What remains are the content features the engine does not have yet, and then the
 - UI widgets beyond a button and a label — slider, drop-down, check box, text field, scrollable panel — with anchors.
 - Positional audio: voices whose position can change, a listener that follows the camera, and the falloff between them.
 - Hierarchy.
-- User-defined shaders and materials.
+- Materials: a shader together with the values of its uniforms as content of their own, rather than a shader that a game sets
+  up in code before it draws.
 - OBB collision and multiple contacts.
 - A splash screen that works: the resources and the systems of the engine and of a game load while the logo is on screen, with
   a bar under it, instead of a window that stands empty until everything is ready.
