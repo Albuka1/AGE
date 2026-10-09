@@ -106,9 +106,14 @@ world.Set(panel, new ButtonComponent { BaseColor = Color.Blue, Interactable = tr
 world.Set(panel, new TextLabelComponent { Text = "Hello AGE", Color = Color.White });
 
 RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
+TextRenderSystem textRenderSystem = provider.GetRequiredService<TextRenderSystem>();
 UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
 RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
 renderPipeline.Add(renderSystem);
+
+// The text of a world is a pass of its own, between the world and the interface: a line stands where the entity that carries
+// it stands, so it belongs to the world, and it is drawn over the sprites and under the UI.
+renderPipeline.Add(textRenderSystem);
 renderPipeline.Add(uiRenderSystem);
 
 // The developer overlay draws over everything else: the numbers of the frame and the console of the engine. Its keys are
@@ -174,6 +179,25 @@ cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen liv
 cvars.Register("locale", "en", "The language the strings of the game are read in, such as en or ru.");
 Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
 locale.Language = cvars.Get<string>("locale");
+
+// A line of text in the world, in the language the game plays in. The name of a prototype is a key rather than a text, so
+// what a player reads is content: this line says the same thing as `locale.Get("ent-Goblin")` answers, and the `loc` command
+// switches the language of a running game.
+Entity label = world.CreateEntity();
+world.Set(label, new TransformComponent { Position = new Vector2(300f, 180f), Scale = new Vector2(1f, 1f) });
+world.Set(label, new TextComponent
+{
+    Text = locale.Get("ent-Goblin"),
+    FontPath = "Fonts/Cousine-Regular.ttf",
+    PixelHeight = 24f,
+
+    // The font is baked from the space to the end of the Cyrillic block, which is what a language with a script of its own
+    // needs: a character outside the range of a font is drawn as a space. The range of the printable ASCII one is the default.
+    FirstCharacter = ' ',
+    LastCharacter = '\u04FF',
+    Color = Color.White,
+    ZOrder = 10,
+});
 
 // The second sprite turns with a tween of three seconds that starts over when it reaches the end. Nothing in this game
 // advances it: the tween system does, on the time of every step, and the subscription above writes the value into the
@@ -284,6 +308,10 @@ gameLoop.Run(
             gameLoop.Stop();
         }
 
+        // The line of the world follows the language: the key is asked for again on every frame, so the setting that `loc`
+        // writes is what the next frame draws. A game with many lines would ask once per language and remember the answer.
+        world.GetRef<TextComponent>(label).Text = $"{locale.Get("ent-Goblin")} - {locale.Get("ent-Goblin.desc")}";
+
         // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
         // agree, including after the window was resized.
         camera.ViewportSize = renderer.ViewportSize;
@@ -303,6 +331,11 @@ gameLoop.Run(
 
         fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
         fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
+
+        // A count of things is a string of the content rather than a number this game writes: Russian writes three forms of it
+        // where English writes two, so the line says what the language says. `loc ru` changes it while the game runs.
+        fonts.Draw(font, locale.Get("ui-entities", ("count", world.Enumerate().Count())), new Vector2(24f, 88f), Color.White);
+        fonts.Draw(font, $"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Vector2(24f, 120f), new Color(255, 220, 120));
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open.

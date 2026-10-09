@@ -34,6 +34,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
         services.AddSingleton<RenderPipeline>();
         services.AddSingleton<RenderSystem>();
+        services.AddSingleton<TextRenderSystem>();
         services.AddSingleton<UIRenderSystem>();
         services.AddSingleton<IGameLoop, SilkGameLoop>();
         return services;

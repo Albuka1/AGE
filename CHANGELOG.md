@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The text of a world is a component and a pass of its own: `TextComponent` draws one line where the entity that carries it
+  stands, with a font that content names by path and bakes for the range of characters that the line needs, and
+  `TextRenderSystem` draws the lines in ascending `ZOrder` between the pass of the world and the pass of the UI. The bake of
+  a font takes the first and the last character of the range to cover — the space to the tilde is the default, and the space
+  to the end of the Cyrillic block is what a language with another script needs — and a font is cached by its path, its
+  height and its range. A line whose font cannot be baked is drawn with the built-in font of the renderer, reported once per
+  path, and a build refuses a font path that is not there, so a mistake is visible and cheap rather than fatal.
+
+### Fixed
+
+- A language whose documents cannot be read is no longer kept as an empty one, so a caller that fixed the content reads it
+  again instead of living with the half of a language. A language that is asked for and that the game does not hold says so
+  once, with the languages the game does have, and its folder is not walked, so the same missing folder is not reported
+  twice. `Age.Content.Lint` refuses a locale document that is written outside the folder of a language rather than taking its
+  file name for one, and the comments about the Russian plural forms say what the rule does: everything that is not one or
+  few takes `many`, and `other` belongs to a count that is not whole, which a rule of whole numbers never sees.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
