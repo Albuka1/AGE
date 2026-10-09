@@ -10,13 +10,18 @@ see, a renderer that turns a sprite by the rotation of its transform and release
 and an asset loader that reads a generated contract where a build is trimmed, so a game draws text in a font of its own
 instead of the built-in one. The strings of a game are content of their own: a key is answered in the language the game
 plays in, and the text of a world and of the interface is drawn from it, in a font baked for the script of that language.
+An interface is authored against a resolution of its own: a canvas scales it to the window, the anchors of an element keep
+it where it belongs at any size or shape of a window, and a camera that fits a design area to a window does the same for the
+world. A shader of a game draws with the frame it is drawn into — the world, the text and the interface as they stand — and a
+render target is what holds a layer of a frame that is processed more than once.
 
 What remains are the content features the engine does not have yet, and then the platform work.
 
 ## Features
 
 - Sprite sheets and animation: slicing an atlas into frames and named regions, and a system that advances them.
-- UI widgets beyond a button and a label — slider, drop-down, check box, text field, scrollable panel — with anchors.
+- UI widgets beyond a button and a label — slider, drop-down, check box, text field, scrollable panel — which the anchors, the
+  scaler of a canvas and the pointer test of the interface are already in place for.
 - Positional audio: voices whose position can change, a listener that follows the camera, and the falloff between them.
 - Hierarchy.
 - Materials: a shader together with the values of its uniforms as content of their own, rather than a shader that a game sets

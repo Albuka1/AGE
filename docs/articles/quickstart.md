@@ -436,6 +436,53 @@ renderPipeline.Add(provider.GetRequiredService<TextRenderSystem>());
 renderPipeline.Add(uiRenderSystem);
 ```
 
+## Lay out the interface at any resolution
+
+```csharp
+Entity canvas = world.CreateEntity();
+world.Set(canvas, new CanvasComponent
+{
+    IsRoot = true,
+    DesignSize = new Vector2(1280f, 720f),          // what the interface is authored against
+    ScaleMode = CanvasScaleMode.ScaleWithScreenSize,
+    Match = 0.5f,                                    // zero matches the width, one the height
+});
+
+// A panel that keeps its margin from the bottom-right corner of the canvas, whatever the window is.
+world.Set(panel, new RectTransformComponent
+{
+    Anchored = true,
+    AnchorMin = new Vector2(1f, 1f),
+    AnchorMax = new Vector2(1f, 1f),
+    Pivot = new Vector2(1f, 1f),
+    AnchoredPosition = new Vector2(-24f, -24f),
+    SizeDelta = new Vector2(200f, 50f),
+    Visible = true,
+});
+
+// The layout runs before the pointer test of the interface and before the pass that draws it.
+pipeline.AddFrame(provider.GetRequiredService<UILayoutSystem>());
+pipeline.AddFrame(provider.GetRequiredService<UIUpdateSystem>());
+```
+
+A canvas scales the interface to the window: the layout divides the size of the window by the scale of the canvas, and
+writes the rectangle of every anchored element of the world back into `RectTransformComponent.Position` and `Size` in pixels
+of the window, on every frame. An element that sets `Anchored` is placed by its anchors: `AnchorMin` and `AnchorMax` name the
+room of the canvas it is measured in — zero is the left or top edge of it and one the right or bottom edge — `Pivot` says
+which point of the element sits on that room, `AnchoredPosition` is the distance from it in design units, and `SizeDelta` is
+the size of the element, or the amount by which a stretched element is larger or smaller than the room between the anchors.
+The element that covers the whole canvas is one with the anchors of the two opposite corners and no size, and the element
+that keeps a margin from the bottom-right corner is one anchored to that corner with the pivot of the same corner and a
+negative anchored position. An element that leaves `Anchored` alone stands where `Position` and `Size` put it, in pixels,
+which is what content written for one resolution keeps doing. `Match` is what the scale follows: zero matches the width of
+the window, one matches the height, and a value between the two blends the ratios.
+
+The world has the same choice, in one call: `Camera2D.Fit` builds a camera that shows a design area of the world in a window
+of any size, so a game that lays its map out for 1280 by 720 draws the same view on a display of 3840 by 2160 and in a
+window of another shape, with `CameraFit.Contain` keeping the whole area in view and `CameraFit.Cover` filling the window
+and cropping the edges. A camera that leaves the zoom at one is the other way round and is the default of the engine: one
+unit of the world per pixel of the window, so a larger window shows more of the world.
+
 ## Draw with a shader
 
 ```csharp
@@ -444,7 +491,7 @@ ShaderHandle displacement = shaders.Load("Shaders/displacement.frag");
 
 renderer.UseShader(displacement);
 renderer.SetUniform("uDisplacementSize", 4f);
-renderer.SetSampler("uDisplacement", textures.Resolve("Textures/Effects/height.png"), 1);
+renderer.SetSampler("uDisplacement", textures.Resolve("Textures/Effects/height.png"), 2);
 renderer.DrawSprite(tile, position, size, Color.White);
 renderer.ResetShader();
 ```
@@ -472,6 +519,33 @@ that writes a vertex stage of its own writes it under the same header and takes 
 compiled once for a pair of stages, and the quads that were collected before a shader, a uniform or a sampler changes are drawn
 with the state they were collected under, because one draw call samples one program, one texture and one set of uniforms: set
 what a shader needs, then draw what belongs to it.
+
+A shader that post-processes a frame reads the surface that it is drawn into instead: the header names it `SCREEN_TEXTURE`, its
+size in pixels `SCREEN_SIZE` and a reader of it `sampleScreen`, and the engine copies that surface into a texture before the
+first quad of such a program is drawn, so the shader draws a picture of the frame rather than reading what it is writing. The
+copy is read from the bottom row of the surface upwards, which is why `sampleScreen` and `SCREEN_UV` flip the vertical axis: the
+coordinate of a quad starts at its top-left corner.
+
+```glsl
+uniform float uVignetteStrength;
+uniform vec3 uVignetteColour;
+
+void main()
+{
+    float distance = length(UV - vec2(0.5));
+    float falloff = smoothstep(0.25, 0.75, distance) * uVignetteStrength;
+
+    COLOR = vec4(mix(sampleScreen(UV).rgb, uVignetteColour, falloff), 1.0);
+}
+```
+
+A pass that draws a quad over the frame with a shader like that darkens everything that was drawn before it — the world, the
+text and the interface — and a pass that runs after it, such as the overlay of the developer, stays above it. A frame of several
+layers is built from render targets instead: `CreateRenderTarget` makes a surface with a texture of its own, `BeginRenderTarget`
+points the draws of a pass at it, `EndRenderTarget` points them at the window again, and what was drawn into a target is a
+texture that a shader binds as a sampler of its own — the third unit and up, because the first two belong to the engine — or
+draws as a quad. While a target is bound, `ViewportSize` answers with the size of it, so a pass, a camera and the layout of the
+interface measure the target rather than the window.
 
 ## Load and play a sound
 

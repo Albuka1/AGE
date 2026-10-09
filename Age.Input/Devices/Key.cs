@@ -12,6 +12,7 @@ public enum Key
     E,
     R,
     F,
+    G,
     Up,
     Down,
     Left,

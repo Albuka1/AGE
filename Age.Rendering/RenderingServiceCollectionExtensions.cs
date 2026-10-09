@@ -11,7 +11,8 @@ public static class RenderingServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the window service, the renderer, the texture service, the font service, the splash screen, the render
-    /// pipeline, the render systems, the components of this assembly and the Silk.NET game loop as singletons.
+    /// pipeline, the render systems, the layout of the interface, the components of this assembly and the Silk.NET game loop as
+    /// singletons.
     /// </summary>
     /// <remarks>
     /// <see cref="ITextureService"/> decodes through <see cref="T:Age.Assets.IImageLoader"/> and <see cref="IFontService"/>
@@ -43,6 +44,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<RenderSystem>();
         services.AddSingleton<TextRenderSystem>();
         services.AddSingleton<UIRenderSystem>();
+        services.AddSingleton<UILayoutSystem>();
         services.AddSingleton<IGameLoop, SilkGameLoop>();
         return services;
     }

@@ -9,8 +9,17 @@ namespace Age.Rendering;
 /// A shader of content is written in the OpenGL Shading Language, and the header is what gives it the names the engine binds:
 /// <c>UV</c> is the texture coordinate of the fragment, <c>COLOR</c> is the colour it writes, <c>TEXTURE</c> is the sampler of
 /// the image that is drawn, <c>TEXTURE_PIXEL_SIZE</c> is the size of one texel of it, <c>TIME</c> is the seconds since the
-/// renderer was created, and <c>sampleTexture</c> reads the image. A shader therefore writes what it means rather than a walk
-/// over the layout of a vertex, and the layout stays a decision of the renderer.
+/// renderer was created, <c>SCREEN_TEXTURE</c> is the surface that is being drawn into — the window, or the target of the pass
+/// — as it was before the draw that samples it, <c>SCREEN_SIZE</c> is the size of it in pixels and <c>SCREEN_PIXEL_SIZE</c> the
+/// size of one texel of it. <c>sampleTexture</c> reads the image of the quad and <c>sampleScreen</c> reads the surface, which is
+/// what a shader that post-processes a frame is written with. A shader therefore writes what it means rather than a walk over
+/// the layout of a vertex, and the layout stays a decision of the renderer.
+/// </para>
+/// <para>
+/// The copy of the surface that a stage samples is read from the bottom row of it upwards, because that is the order the
+/// framebuffer holds, while the coordinate of a quad starts at its top-left corner: <c>sampleScreen</c> and <c>SCREEN_UV</c>
+/// flip the vertical axis for a shader that thinks in the coordinates of the frame, and a shader that samples
+/// <c>SCREEN_TEXTURE</c> itself does the flip its own way.
 /// </para>
 /// <para>
 /// A game that writes a fragment shader only is the common case, and the standard vertex stage draws it: it places the quad of
@@ -49,12 +58,15 @@ internal static class ShaderSource
         layout (location = 2) in vec4 aColor;
         uniform mat4 uProjection;
         uniform float uTime;
+        uniform vec2 uScreenSize;
         out vec2 vTexCoord;
         out vec4 vColor;
         #define VERTEX aPosition
         #define UV aTexCoord
         #define COLOR aColor
         #define TIME uTime
+        #define SCREEN_SIZE uScreenSize
+        #define SCREEN_PIXEL_SIZE (1.0 / uScreenSize)
 
         """;
 
@@ -64,16 +76,27 @@ internal static class ShaderSource
         in vec4 vColor;
         uniform sampler2D uTexture;
         uniform float uTime;
+        uniform sampler2D uScreen;
+        uniform vec2 uScreenSize;
         out vec4 FragColor;
         #define UV vTexCoord
         #define COLOR FragColor
         #define TEXTURE uTexture
         #define TEXTURE_PIXEL_SIZE (1.0 / vec2(textureSize(uTexture, 0)))
         #define TIME uTime
+        #define SCREEN_TEXTURE uScreen
+        #define SCREEN_SIZE uScreenSize
+        #define SCREEN_PIXEL_SIZE (1.0 / uScreenSize)
+        #define SCREEN_UV vec2(vTexCoord.x, 1.0 - vTexCoord.y)
 
         vec4 sampleTexture(vec2 uv)
         {
             return texture(uTexture, uv);
+        }
+
+        vec4 sampleScreen(vec2 uv)
+        {
+            return texture(uScreen, vec2(uv.x, 1.0 - uv.y));
         }
 
         """;

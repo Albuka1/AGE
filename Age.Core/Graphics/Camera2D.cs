@@ -45,4 +45,49 @@ public struct Camera2D
 
         return Matrix4x4.CreateTranslation(-Position.X, -Position.Y, 0f) * Matrix4x4.CreateScale(1f / Zoom, 1f / Zoom, 1f);
     }
+
+    /// <summary>Returns a camera that shows a design area of the world in a window of the given size.</summary>
+    /// <param name="designSize">The area of the world that the game is authored against, in world units.</param>
+    /// <param name="windowSize">The size of the window, in pixels.</param>
+    /// <param name="fit">Which part of the design area stays in view when the window has another shape than the area does.</param>
+    /// <returns>A camera at the origin of the world, which measures the window and carries the zoom that fits the area to it.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The design size or the window size is zero, negative or not a number.</exception>
+    /// <remarks>
+    /// A camera that leaves the zoom at one shows one unit of the world per pixel of the window, so a larger window shows more
+    /// of the world and a display that scales draws it smaller than it looks. This is the other way round: the game is authored
+    /// against an area of a fixed size and the whole of that area is what a player sees, whatever the resolution of the display
+    /// and whatever the shape of the window are, so a game that lays its map out for a window of 1280 by 720 looks the same at
+    /// 3840 by 2160 and at 1280 by 800. The zoom is the ratio of the design area to the window, because the world is scaled by
+    /// one over it: what the returned camera covers is <see cref="VisibleWorld"/>, which is the area a game reads when it lays a
+    /// map out or places an interface of the world.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// Camera2D camera = Camera2D.Fit(new Vector2(1280f, 720f), renderer.ViewportSize);
+    ///
+    /// renderPipeline.Render(world, camera);
+    /// </code>
+    /// </example>
+    public static Camera2D Fit(Vector2 designSize, Vector2 windowSize, CameraFit fit = CameraFit.Contain)
+    {
+        if (!(designSize.X > 0f) || !(designSize.Y > 0f))
+        {
+            throw new ArgumentOutOfRangeException(nameof(designSize), designSize, "A design area is wider and taller than nothing.");
+        }
+
+        if (!(windowSize.X > 0f) || !(windowSize.Y > 0f))
+        {
+            throw new ArgumentOutOfRangeException(nameof(windowSize), windowSize, "A window is wider and taller than nothing.");
+        }
+
+        float byWidth = designSize.X / windowSize.X;
+        float byHeight = designSize.Y / windowSize.Y;
+
+        return new Camera2D
+        {
+            Position = Vector2.Zero,
+            ViewportSize = windowSize,
+            Zoom = fit == CameraFit.Cover ? MathF.Min(byWidth, byHeight) : MathF.Max(byWidth, byHeight),
+        };
+    }
 }

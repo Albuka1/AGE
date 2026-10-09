@@ -15,6 +15,13 @@ namespace Age.Rendering;
 /// drawn with the vertex stage of the engine, which places the quad of the renderer.
 /// </para>
 /// <para>
+/// A stage is written under the header of the engine, which names the surface that is being drawn into as
+/// <c>SCREEN_TEXTURE</c>, its size in pixels as <c>SCREEN_SIZE</c> and a reader of it as <c>sampleScreen</c>: the engine copies
+/// that surface into a texture for a program that declares the sampler, before the first quad of it is drawn, so a shader of a
+/// game draws a picture of the frame over the frame — the world, the text and the interface as they stand when the pass of the
+/// shader runs.
+/// </para>
+/// <para>
 /// A renderer that was attached to another window compiles against another device, so the handles of the window before are
 /// refused: <see cref="UnloadAll"/> forgets them without touching a device that is gone, and the shaders are loaded again,
 /// which compiles them for the window that is there now.
@@ -27,7 +34,7 @@ namespace Age.Rendering;
 ///
 /// renderer.UseShader(displacement);
 /// renderer.SetUniform("uDisplacementSize", 4f);
-/// renderer.SetSampler("uDisplacement", textures.Resolve("Textures/Effects/height.png"), 1);
+/// renderer.SetSampler("uDisplacement", textures.Resolve("Textures/Effects/height.png"), 2);
 /// </code>
 /// </example>
 public interface IShaderService

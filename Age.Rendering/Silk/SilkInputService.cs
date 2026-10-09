@@ -34,6 +34,7 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
         (SilkKey.E, Key.E),
         (SilkKey.R, Key.R),
         (SilkKey.F, Key.F),
+        (SilkKey.G, Key.G),
         (SilkKey.Up, Key.Up),
         (SilkKey.Down, Key.Down),
         (SilkKey.Left, Key.Left),

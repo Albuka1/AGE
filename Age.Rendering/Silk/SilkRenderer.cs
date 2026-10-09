@@ -77,11 +77,27 @@ public sealed class SilkRenderer : IRenderer
     private uint _vao;
     private uint _vbo;
     private uint _fontTexture;
+    private uint _screenTexture;
     private readonly Dictionary<string, int> _uniforms = new(StringComparer.Ordinal);
     private readonly HashSet<uint> _gamePrograms = new();
+    private readonly Dictionary<uint, RenderTargetHandle> _renderTargets = new();
     private Camera2D _camera = new() { Zoom = 1f };
-    private bool _frameCleared;
     private Vector2 _viewportPixels;
+
+    /// <summary>The framebuffer that the draws go into, which is the window while no target of a game is bound.</summary>
+    private uint _surface;
+
+    /// <summary>The size of the surface that is being drawn into, in pixels of the framebuffer.</summary>
+    private Vector2 _surfacePixels;
+
+    /// <summary>The size the texture of the screen was allocated with, which is what a copy into it compares against.</summary>
+    private Vector2 _screenTextureSize;
+
+    /// <summary>The surface that was cleared in this frame, which the window is while it holds the default framebuffer.</summary>
+    private uint _clearedSurface;
+
+    /// <summary>Whether the surface in <see cref="_clearedSurface"/> was cleared in this frame.</summary>
+    private bool _clearedInFrame;
 
     /// <inheritdoc />
     public Vector2 ViewportSize { get; private set; }
@@ -111,20 +127,20 @@ public sealed class SilkRenderer : IRenderer
     /// <inheritdoc />
     public void BeginFrame(bool clear)
     {
-        // What a caller drew before this frame is drawn now, with the state it was collected under, which is the projection of
-        // the camera that was set when it drew: a pass that sets the camera and then opens its frame keeps the order of the
-        // frames it makes.
-        Flush();
-
         GL gl = RequireContext();
-        RefreshViewport();
 
-        if (clear && !_frameCleared)
+        // What a caller collected outside a frame of its own is drawn after the surface of this frame is cleared, because a
+        // draw that is flushed into a clear is work that can never be seen. What a caller drew before this frame is drawn with
+        // the state it was collected under, which is the projection of the camera that was set when it drew: a pass that sets
+        // the camera and then opens its frame keeps the order of the frames it makes.
+        if (_surface == 0)
         {
-            gl.ClearColor(Color.Black.R / 255f, Color.Black.G / 255f, Color.Black.B / 255f, Color.Black.A / 255f);
-            gl.Clear(ClearBufferMask.ColorBufferBit);
-            _frameCleared = true;
+            RefreshViewport();
         }
+
+        ClearIfNeeded(gl, _surface, clear);
+
+        Flush();
 
         gl.UseProgram(_currentProgram);
         gl.BindVertexArray(_vao);
@@ -241,7 +257,180 @@ public sealed class SilkRenderer : IRenderer
         gl.BindTexture(TextureTarget.Texture2D, 0);
         gl.BindVertexArray(0);
         gl.UseProgram(0);
-        _frameCleared = false;
+
+        // The next frame clears the surface it draws into again, whichever surface that is.
+        _clearedInFrame = false;
+    }
+
+    /// <inheritdoc />
+    public RenderTargetHandle CreateRenderTarget(int width, int height)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        GL gl = RequireContext();
+        uint texture = CreateTargetTexture(gl, (uint)width, (uint)height);
+        uint framebuffer = gl.GenFramebuffer();
+
+        try
+        {
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, framebuffer);
+            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, texture, 0);
+
+            // A target that the device cannot draw into is refused here rather than at the first frame that draws into it,
+            // which is the same rule a shader follows: a mistake is reported where a person makes it.
+            FramebufferStatus status = (FramebufferStatus)gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
+
+            if (status != FramebufferStatus.Complete)
+            {
+                throw new InvalidOperationException($"The device refused a render target of {width} by {height}: {status}.");
+            }
+        }
+        catch
+        {
+            gl.DeleteFramebuffer(framebuffer);
+            gl.DeleteTexture(texture);
+            throw;
+        }
+        finally
+        {
+            // What stays selected is the surface that was being drawn into, whether it is the window or a target.
+            gl.BindFramebuffer(FramebufferTarget.Framebuffer, _surface);
+        }
+
+        var target = new RenderTargetHandle(framebuffer, texture, new Vector2(width, height));
+        _renderTargets.Add(framebuffer, target);
+
+        return target;
+    }
+
+    /// <inheritdoc />
+    public void BeginRenderTarget(RenderTargetHandle target, bool clear)
+    {
+        if (!_renderTargets.TryGetValue(target.Framebuffer, out RenderTargetHandle known) || known != target)
+        {
+            throw new ArgumentException("The handle is not a render target that this renderer created, or it belongs to a device it is no longer attached to.", nameof(target));
+        }
+
+        // What a caller collected before the target was bound belongs to the surface before it, so it is drawn there.
+        Flush();
+
+        GL gl = RequireContext();
+        _surface = target.Framebuffer;
+        _surfacePixels = target.Size;
+        ViewportSize = target.Size;
+
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, _surface);
+        gl.Viewport(0, 0, (uint)target.Size.X, (uint)target.Size.Y);
+        ClearIfNeeded(gl, _surface, clear);
+    }
+
+    /// <inheritdoc />
+    public void EndRenderTarget()
+    {
+        Flush();
+
+        GL gl = RequireContext();
+        _surface = 0;
+
+        gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+
+        // The window is read again rather than remembered, because the frame that follows can be the one that comes after a
+        // resize, and the size of the window is what a camera measures a game in.
+        RefreshViewport(force: true);
+    }
+
+    /// <inheritdoc />
+    public void ReleaseRenderTarget(RenderTargetHandle target)
+    {
+        // Only a target that this renderer created is one of this device: a handle of a device that is gone, and a handle
+        // that never named a target, are left alone rather than deleted by number.
+        if (!_renderTargets.Remove(target.Framebuffer))
+        {
+            return;
+        }
+
+        if (_surface == target.Framebuffer)
+        {
+            EndRenderTarget();
+        }
+
+        GL gl = RequireContext();
+        gl.DeleteFramebuffer(target.Framebuffer);
+        gl.DeleteTexture((uint)target.Texture.Id);
+    }
+
+    /// <summary>Copies the surface that is being drawn into the texture of the screen and binds it for the stage that asks for it.</summary>
+    /// <param name="gl">The device of the attached window.</param>
+    /// <remarks>
+    /// A program that declares no sampler of the screen is drawn without a copy, which is what keeps the frames of a game that
+    /// uses no such shader free of the work. The texture holds the surface as it was before the draw that samples it, so a
+    /// stage draws a picture of the frame over the frame itself rather than reading what it is writing.
+    /// </remarks>
+    private void BindScreenTexture(GL gl)
+    {
+        if (Location(gl, "uScreen") == -1)
+        {
+            return;
+        }
+
+        CopySurface(gl);
+
+        gl.ActiveTexture(TextureUnit.Texture1);
+        gl.BindTexture(TextureTarget.Texture2D, _screenTexture);
+        gl.Uniform1(Location(gl, "uScreen"), 1);
+        gl.ActiveTexture(TextureUnit.Texture0);
+    }
+
+    /// <summary>Copies the pixels of the surface that is being drawn into the texture of the screen.</summary>
+    /// <param name="gl">The device of the attached window.</param>
+    /// <remarks>
+    /// The texture is allocated again only when the surface changed its size, because a frame that samples the screen pays for
+    /// this copy. What is read is the surface that is being drawn into, which is the window or the target that is bound, and
+    /// the first row of a texture is the bottom row of it: the copy is upside down for a shader that thinks in the coordinates
+    /// of the frame, which <c>sampleScreen</c> and <c>SCREEN_UV</c> of the header of a shader flip back.
+    /// </remarks>
+    private void CopySurface(GL gl)
+    {
+        uint width = (uint)MathF.Max(_surfacePixels.X, 1f);
+        uint height = (uint)MathF.Max(_surfacePixels.Y, 1f);
+
+        gl.BindTexture(TextureTarget.Texture2D, _screenTexture);
+
+        if (_screenTextureSize.X != width || _screenTextureSize.Y != height)
+        {
+            unsafe
+            {
+                gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, width, height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, (void*)0);
+            }
+
+            _screenTextureSize = new Vector2(width, height);
+        }
+
+        gl.CopyTexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, 0, 0, width, height);
+    }
+
+    /// <summary>Clears the surface that a call opened a frame on, unless that surface was cleared in this frame already.</summary>
+    /// <param name="gl">The device of the attached window.</param>
+    /// <param name="surface">The framebuffer of the surface: zero is the window, and any other number is a target.</param>
+    /// <param name="clear">Whether the caller asked for a clear.</param>
+    /// <remarks>
+    /// A surface is cleared at most once in a frame, which is what lets a pass that clears the window and a pass that draws
+    /// over it both open a frame without the second one wiping the first. A target is a surface of its own, so a round trip
+    /// through one leaves the clear of the window alone.
+    /// </remarks>
+    private void ClearIfNeeded(GL gl, uint surface, bool clear)
+    {
+        if (!clear || (_clearedInFrame && _clearedSurface == surface))
+        {
+            return;
+        }
+
+        gl.ClearColor(Color.Black.R / 255f, Color.Black.G / 255f, Color.Black.B / 255f, Color.Black.A / 255f);
+        gl.Clear(ClearBufferMask.ColorBufferBit);
+
+        _clearedSurface = surface;
+        _clearedInFrame = true;
     }
 
     private void CreateResources()
@@ -292,7 +481,61 @@ public sealed class SilkRenderer : IRenderer
 
         _whiteTexture = CreateWhiteTexture();
         _fontTexture = CreateFontTexture();
+        _screenTexture = CreateScreenTexture();
         gl.BindVertexArray(0);
+    }
+
+    /// <summary>Creates the texture that holds the surface a shader of a game samples, which is empty until a frame copies one into it.</summary>
+    /// <returns>The identifier of the texture, which this renderer owns and releases.</returns>
+    private uint CreateScreenTexture()
+    {
+        GL gl = RequireContext();
+        uint texture = gl.GenTexture();
+        gl.BindTexture(TextureTarget.Texture2D, texture);
+        CreateTextureParameters(gl, TextureMinFilter.Nearest);
+        gl.BindTexture(TextureTarget.Texture2D, 0);
+
+        return texture;
+    }
+
+    /// <summary>Creates the texture a render target holds what was drawn in, which the device allocates.</summary>
+    /// <param name="gl">The device of the attached window.</param>
+    /// <param name="width">The width of the texture, in pixels.</param>
+    /// <param name="height">The height of the texture, in pixels.</param>
+    /// <returns>The identifier of the texture, which the target, and then the caller that releases the target, owns.</returns>
+    /// <remarks>What is drawn into a target is a picture of the frame, so it is sampled with a filter that keeps a picture scaled by a shader smooth.</remarks>
+    private static uint CreateTargetTexture(GL gl, uint width, uint height)
+    {
+        uint texture = gl.GenTexture();
+
+        try
+        {
+            gl.BindTexture(TextureTarget.Texture2D, texture);
+            CreateTextureParameters(gl, TextureMinFilter.Linear);
+
+            unsafe
+            {
+                gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, width, height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, (void*)0);
+            }
+        }
+        finally
+        {
+            gl.BindTexture(TextureTarget.Texture2D, 0);
+        }
+
+        return texture;
+    }
+
+    /// <summary>Gives a texture of this renderer the wrapping and the filtering that every image of a frame is sampled with.</summary>
+    /// <param name="gl">The device of the attached window.</param>
+    /// <param name="filter">The filter that a texture uses when it is drawn smaller or larger than it is.</param>
+    /// <remarks>A texture is bound when this is called, and the edge of one is clamped rather than repeated, which is what a sprite that reaches the border of its image needs.</remarks>
+    private static void CreateTextureParameters(GL gl, TextureMinFilter filter)
+    {
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)filter);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, filter == TextureMinFilter.Linear ? (int)TextureMagFilter.Linear : (int)TextureMagFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
     }
 
     /// <summary>Creates the texture of one white pixel that a quad with a colour of its own samples, so that every quad is a textured one.</summary>
@@ -377,6 +620,10 @@ public sealed class SilkRenderer : IRenderer
         _uniforms.Clear();
         gl.UseProgram(_currentProgram);
         ApplyStandardUniforms(gl);
+
+        // A stage that samples the surface it is drawn into is given a copy of it here, which is where the frame that has been
+        // drawn so far becomes an image that a shader of a game reads.
+        BindScreenTexture(gl);
     }
 
     /// <inheritdoc />
@@ -452,9 +699,9 @@ public sealed class SilkRenderer : IRenderer
 
         // The first unit is the one the engine binds the image that is being drawn to, so a sampler of a game starts at the
         // second: a sampler that took the first would read the image of the sprite rather than the one a game bound.
-        if (unit < 1)
+        if (unit < 2)
         {
-            throw new ArgumentOutOfRangeException(nameof(unit), unit, "A sampler of a game starts at the second texture unit, because the first one is where the engine binds the image that is being drawn.");
+            throw new ArgumentOutOfRangeException(nameof(unit), unit, "A sampler of a game starts at the third texture unit, because the first one is where the engine binds the image that is being drawn and the second one is where it binds the surface that a stage reads as SCREEN_TEXTURE.");
         }
 
         Flush();
@@ -510,6 +757,11 @@ public sealed class SilkRenderer : IRenderer
         gl.Uniform1(Location(gl, "uTexture"), 0);
         gl.Uniform1(Location(gl, "uUseTexture"), 1);
         gl.Uniform1(Location(gl, "uTime"), (float)_clock.Elapsed.TotalSeconds);
+
+        // The size of the surface in pixels, which is what a stage that samples it needs to read one texel of it or to move by
+        // a pixel of the frame. It is the framebuffer of the window rather than the units of a camera, because the surface is
+        // an image: on a display that scales, a window of 1280 by 720 holds 2560 by 1440 pixels of it.
+        gl.Uniform2(Location(gl, "uScreenSize"), MathF.Max(_surfacePixels.X, 1f), MathF.Max(_surfacePixels.Y, 1f));
     }
 
     /// <summary>Reads the size of the window and points the device at the pixels of its framebuffer.</summary>
@@ -533,6 +785,10 @@ public sealed class SilkRenderer : IRenderer
         ViewportSize = new Vector2(size.X, size.Y);
 
         var pixels = new Vector2(MathF.Max(framebuffer.X, 1), MathF.Max(framebuffer.Y, 1));
+
+        // What a shader that samples the screen and the viewport of the device work in is the framebuffer of the window; the
+        // units of a camera are the size of the window.
+        _surfacePixels = pixels;
 
         if (!force && pixels == _viewportPixels)
         {
@@ -594,6 +850,12 @@ public sealed class SilkRenderer : IRenderer
             _fontTexture = 0;
         }
 
+        if (_screenTexture != 0)
+        {
+            gl.DeleteTexture(_screenTexture);
+            _screenTexture = 0;
+        }
+
         if (_vbo != 0)
         {
             gl.DeleteBuffer(_vbo);
@@ -621,7 +883,22 @@ public sealed class SilkRenderer : IRenderer
 
         _gamePrograms.Clear();
 
+        // A target is a framebuffer with a texture, and both belong to the device that is being let go of, exactly as the
+        // programs of a game do.
+        foreach (RenderTargetHandle target in _renderTargets.Values)
+        {
+            gl.DeleteFramebuffer(target.Framebuffer);
+            gl.DeleteTexture((uint)target.Texture.Id);
+        }
+
+        _renderTargets.Clear();
+
         _gl = null;
+        _surface = 0;
+        _surfacePixels = Vector2.Zero;
+        _screenTextureSize = Vector2.Zero;
+        _clearedSurface = 0;
+        _clearedInFrame = false;
         ViewportSize = Vector2.Zero;
         _viewportPixels = Vector2.Zero;
     }

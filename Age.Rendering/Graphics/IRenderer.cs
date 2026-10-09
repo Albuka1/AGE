@@ -33,6 +33,9 @@ public interface IRenderer : IDisposable
     /// May be called more than once per frame, for example once for the world and once for the UI. The first call that
     /// passes <see langword="true"/> clears to <see cref="Color.Black"/>; every later call leaves the buffer untouched,
     /// even when it also passes <see langword="true"/>. Draws use the camera of the most recent <see cref="SetCamera"/> call.
+    /// A draw that a caller collected outside a frame of its own is drawn here, after the clear of this frame and before what
+    /// follows of it, with the camera that was set when it was collected: wrap the draws that belong to one picture in a frame
+    /// of their own, because a draw that no frame opened lands in the frame after it and under everything of that one.
     /// </remarks>
     void BeginFrame(bool clear);
 
@@ -75,6 +78,51 @@ public interface IRenderer : IDisposable
     /// <summary>Deletes a texture that <see cref="CreateTexture"/> created. A handle without a texture is ignored.</summary>
     /// <param name="texture">The texture to delete.</param>
     void ReleaseTexture(TextureHandle texture);
+
+    /// <summary>Creates a surface that draws go into instead of the window, with a texture that holds what was drawn.</summary>
+    /// <param name="width">The width of the target, in pixels.</param>
+    /// <param name="height">The height of the target, in pixels.</param>
+    /// <returns>The handle of the target, for <see cref="BeginRenderTarget"/>, <see cref="EndRenderTarget"/> and <see cref="ReleaseRenderTarget"/>.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Width or height is zero or negative.</exception>
+    /// <exception cref="InvalidOperationException">The renderer has not been attached to a window, or the device refused a target of that size.</exception>
+    /// <remarks>
+    /// A renderer that draws into the window only refuses this. A target is what a frame of several layers is built from: a
+    /// pass draws into one, the result of it is a texture that another pass samples, and the last pass draws into the window.
+    /// </remarks>
+    RenderTargetHandle CreateRenderTarget(int width, int height) =>
+        throw new NotSupportedException("This renderer draws into the window only.");
+
+    /// <summary>Points the following draws at a target instead of the window.</summary>
+    /// <param name="target">The target to draw into.</param>
+    /// <param name="clear">Requests clearing of the color buffer of the target. The request is honoured only while that surface has not been cleared in this frame.</param>
+    /// <exception cref="ArgumentException">The handle is not a target that this renderer created, or it belongs to a device the renderer is no longer attached to.</exception>
+    /// <remarks>
+    /// Everything drawn until <see cref="EndRenderTarget"/> goes into the texture of the target, and
+    /// <see cref="ViewportSize"/> answers with the size of the target, so a pass, a camera and a layout that measure what
+    /// they draw measure the target rather than the window. A pass that draws into a target is a pass like any other: it
+    /// sets its camera and opens its frame after this call. A surface is cleared at most once in a frame, which is what
+    /// makes the clear of the window survive a round trip through a target.
+    /// </remarks>
+    void BeginRenderTarget(RenderTargetHandle target, bool clear) =>
+        throw new NotSupportedException("This renderer draws into the window only.");
+
+    /// <summary>Points the following draws at the window again, and measures it in the size of the window.</summary>
+    /// <remarks>
+    /// The window is read again here, because the frame that follows can be the first one after a resize. What was drawn
+    /// into the target stays in the texture of its handle, which a game binds as a sampler or draws as a quad.
+    /// </remarks>
+    void EndRenderTarget() =>
+        throw new NotSupportedException("This renderer draws into the window only.");
+
+    /// <summary>Deletes a target that <see cref="CreateRenderTarget"/> created, together with the texture of it.</summary>
+    /// <param name="target">The target to delete.</param>
+    /// <remarks>
+    /// A target that is still bound is left first, so what follows draws into the window again, and a handle that this
+    /// renderer did not create is ignored rather than deleted by number.
+    /// </remarks>
+    void ReleaseRenderTarget(RenderTargetHandle target)
+    {
+    }
 
     /// <summary>Draws a filled rectangle.</summary>
     void DrawRectangle(Rect rect, Color color);
@@ -137,7 +185,7 @@ public interface IRenderer : IDisposable
     /// <param name="name">The name of the sampler uniform, as the shader declares it.</param>
     /// <param name="texture">The texture to sample. A handle of zero binds no image.</param>
     /// <param name="unit">The texture unit to bind it to, which the sampler is told to read.</param>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="unit"/> is below one, because the first unit is the one the engine binds the image that is being drawn to.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="unit"/> is below two, because the first unit is where the engine binds the image that is being drawn and the second one is where it binds the surface that a stage reads as <c>SCREEN_TEXTURE</c>.</exception>
     void SetSampler(string name, TextureHandle texture, int unit) => throw new NotSupportedException("This renderer draws without shaders of their own.");
 
     /// <summary>Flushes pending draws and ends the frame.</summary>

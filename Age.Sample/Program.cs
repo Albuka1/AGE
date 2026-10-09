@@ -1,3 +1,4 @@
+using System.Globalization;
 using Age.Assets;
 using Age.Audio;
 using Age.Content;
@@ -49,7 +50,9 @@ pipeline.Add(provider.GetRequiredService<TweenSystem>());
 pipeline.Add(provider.GetRequiredService<SpriteAnimationSystem>());
 
 // The interface is a frame system, not a step system: the pointer is a state of the frame, and it keeps working while
-// the simulation is paused, which is the whole point of a pause menu.
+// the simulation is paused, which is the whole point of a pause menu. The layout runs first: it is what turns the anchors of
+// an element into the rectangle that the pointer test of the interface and the pass of the UI both read.
+pipeline.AddFrame(provider.GetRequiredService<UILayoutSystem>());
 pipeline.AddFrame(provider.GetRequiredService<UIUpdateSystem>());
 
 IWindowService windowService = provider.GetRequiredService<IWindowService>();
@@ -89,12 +92,12 @@ ShaderHandle vignette = shaders.Load("Shaders/vignette.frag");
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
 SoundHandle click = sounds.Load("Audio/Effects/click.wav");
 
-var camera = new Camera2D
-{
-    Position = Vector2.Zero,
-    Zoom = 1f,
-    ViewportSize = new Vector2(1280f, 720f),
-};
+// The area of the world that this game is authored against, in world units, which is also the resolution that its interface
+// is authored against: the canvas of the interface scales it to the window, and `fit` of the console switches the camera of
+// the world between one unit per pixel of the window, which shows more of the world in a larger window, and this whole area,
+// which looks the same at every resolution. The command `ui` reports both of them while the game runs.
+var design = new Vector2(1280f, 720f);
+bool fitWorld = false;
 
 Entity first = world.CreateEntity();
 world.Set(first, new TransformComponent { Position = new Vector2(400f, 300f), Scale = new Vector2(1f, 1f) });
@@ -106,8 +109,32 @@ world.Set(second, new TransformComponent { Position = new Vector2(430f, 315f), S
 world.Set(second, new SpriteComponent { Size = new Vector2(64f, 64f), Color = Color.Green, ZOrder = 1 });
 world.Set(second, new ColliderComponent { Size = new Vector2(64f, 64f) });
 
+// The interface of this game is authored against the resolution above rather than against pixels of a screen: the canvas
+// scales the whole of it to the window, and the elements below are anchored to the corners of that canvas instead of being put
+// at a pixel, so the same layout fits a display of any resolution and a window of any shape. The command `ui` reports the scale
+// that the layout resolved and changes the axis it follows while the game runs.
+Entity canvas = world.CreateEntity();
+world.Set(canvas, new CanvasComponent
+{
+    IsRoot = true,
+    DesignSize = design,
+    ScaleMode = CanvasScaleMode.ScaleWithScreenSize,
+    Match = 0.5f,
+});
+
 Entity panel = world.CreateEntity();
-world.Set(panel, new RectTransformComponent { Position = new Vector2(100f, 100f), Size = new Vector2(200f, 50f), ZOrder = 0, Visible = true });
+world.Set(panel, new RectTransformComponent
+{
+    // Anchored to the top-left corner of the canvas with a margin of its own, which is what keeps it there at any resolution.
+    Anchored = true,
+    AnchorMin = Vector2.Zero,
+    AnchorMax = Vector2.Zero,
+    Pivot = Vector2.Zero,
+    AnchoredPosition = new Vector2(100f, 100f),
+    SizeDelta = new Vector2(200f, 50f),
+    ZOrder = 0,
+    Visible = true,
+});
 world.Set(panel, new ButtonComponent { BaseColor = Color.Blue, Interactable = true });
 world.Set(panel, new TextComponent
 {
@@ -115,6 +142,27 @@ world.Set(panel, new TextComponent
     // its alignment is what centers the text in the box of the element.
     Key = "ui-entities",
     Count = 3,
+    Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
+});
+
+// The other corner of the same canvas, with the opposite anchor and pivot: this element keeps its margin from the bottom-right
+// corner of the window however the window is resized, which is what the anchors are for.
+Entity corner = world.CreateEntity();
+world.Set(corner, new RectTransformComponent
+{
+    Anchored = true,
+    AnchorMin = new Vector2(1f, 1f),
+    AnchorMax = new Vector2(1f, 1f),
+    Pivot = new Vector2(1f, 1f),
+    AnchoredPosition = new Vector2(-100f, -100f),
+    SizeDelta = new Vector2(200f, 50f),
+    ZOrder = 1,
+    Visible = true,
+});
+world.Set(corner, new ButtonComponent { BaseColor = new Color(60, 90, 160), Interactable = true });
+world.Set(corner, new TextComponent
+{
+    Text = "corner anchor",
     Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
 });
 
@@ -266,6 +314,52 @@ console.Register("vignette", "Turns the vignette of this game on and off, which 
     console.Write($"vignette {(vignettePass.Enabled ? "on" : "off")}");
 });
 
+// The scaler of the interface is content of this game rather than a decision of the engine, and it is resolved by the layout
+// system on every frame: `ui` reports the scale the canvas ended up with and where the anchored elements were put, and `ui 0`,
+// `ui 1` and `ui 0.5` change the axis the scale follows, which is what a person tuning a layout watches.
+console.Register("ui", "Reports the scaler of the interface and the rectangle of every anchored element, and sets which axis the scale follows when it is given a value.", arguments =>
+{
+    Entity found = world.Enumerate<CanvasComponent>().FirstOrDefault();
+
+    if (!world.IsAlive(found) || !world.Has<CanvasComponent>(found))
+    {
+        console.Write("this world holds no canvas, so the interface is measured against the window itself");
+        return;
+    }
+
+    ref CanvasComponent canvasComponent = ref world.GetRef<CanvasComponent>(found);
+
+    if (arguments.Count > 0 && float.TryParse(arguments[0], CultureInfo.InvariantCulture, out float match))
+    {
+        canvasComponent.Match = match;
+    }
+
+    console.Write($"canvas {canvasComponent.Resolution.X:0}x{canvasComponent.Resolution.Y:0} design units at scale {canvasComponent.Scale:0.###}, match {canvasComponent.Match:0.##}, window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}");
+
+    foreach (Entity element in world.Enumerate<RectTransformComponent>())
+    {
+        RectTransformComponent rect = world.Get<RectTransformComponent>(element);
+
+        if (rect.Anchored)
+        {
+            console.Write($"  anchored from {rect.AnchorMin.X:0.#},{rect.AnchorMin.Y:0.#} to {rect.AnchorMax.X:0.#},{rect.AnchorMax.Y:0.#} sits at {rect.Position.X:0},{rect.Position.Y:0} with a size of {rect.Size.X:0}x{rect.Size.Y:0}");
+        }
+    }
+});
+
+// The world of this game is drawn one unit per pixel by default, so a larger window shows more of it. `G` is the other way
+// round: the camera is built from the area this game is authored against, so a window of any shape shows the same view of the
+// world, cropped rather than stretched where the shapes differ. The HUD reports which of the two is in use.
+console.Register("fit", "Reports how the camera of the world is built and switches it to the other of the two ways.", _ =>
+{
+    fitWorld = !fitWorld;
+
+    Camera2D fitted = Camera2D.Fit(design, renderer.ViewportSize, CameraFit.Cover);
+    Vector2 view = fitWorld ? fitted.VisibleWorld.Size : renderer.ViewportSize;
+
+    console.Write($"world {(fitWorld ? "fitted" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of the world");
+});
+
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
 // stays paused until the splash is over, so nothing moves behind the logo. `Q` pauses the clock, which stops the steps
@@ -335,18 +429,39 @@ gameLoop.Run(
             lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
         }
 
+        // The other way of drawing the world: the camera is built from the design area of this game rather than from the pixels
+        // of the window, so a window of any shape shows the same view of the world and crops what does not fit instead of
+        // stretching it. The line reports the area that is in view, which is what a person tuning a design wonders about.
+        if (input.IsKeyPressed(Key.G))
+        {
+            fitWorld = !fitWorld;
+
+            Camera2D fitted = Camera2D.Fit(design, renderer.ViewportSize, CameraFit.Cover);
+            Vector2 view = fitWorld ? fitted.VisibleWorld.Size : renderer.ViewportSize;
+
+            Console.WriteLine($"The world is {(fitWorld ? "fitted to the design area" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of it.");
+        }
+
         if (input.IsKeyPressed(Key.Escape))
         {
             gameLoop.Stop();
         }
 
         // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
-        // agree, including after the window was resized.
-        camera.ViewportSize = renderer.ViewportSize;
+        // agree, including after the window was resized. `fit` switches it between one unit per pixel of the window and the
+        // area this game is authored against, which is what a game that must look the same on every display does.
+        Camera2D camera = fitWorld
+            ? Camera2D.Fit(design, renderer.ViewportSize, CameraFit.Cover)
+            : new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = renderer.ViewportSize };
+
         renderPipeline.Render(world, camera);
 
         // Text of this game, baked from the TrueType font in Resources/Fonts. The UI pass above draws with the built-in
-        // bitmap font, so both are visible in the same frame.
+        // bitmap font, so both are visible in the same frame. The lines are drawn in a frame of this game's own, because a
+        // frame is what puts what it holds on screen: a draw that no frame opened lands in the frame after it, under
+        // everything of that one, which is not what a line that reports the state of a frame wants.
+        renderer.BeginFrame(false);
+
         string spawnText = lastSpawned == default
             ? "nothing spawned yet"
             : $"last spawn is entity {lastSpawned.Id}, generation {lastSpawned.Generation}, {(world.IsAlive(lastSpawned) ? "alive" : "destroyed")}";
@@ -357,13 +472,24 @@ gameLoop.Run(
             ? $"paused at tick {timestep.Tick}"
             : $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x";
 
-        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
+        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
         fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
+
+        // The size of the frame and the scale that the canvas of the interface resolved for it, which is what makes the effect
+        // of a resize visible without opening the console: `ui` and `fit` report the same numbers line by line. The lines of
+        // this HUD are drawn at pixels of the window rather than through the canvas, because they are numbers of a developer
+        // rather than an interface of the game.
+        Entity canvasOf = world.Enumerate<CanvasComponent>().FirstOrDefault();
+        CanvasComponent canvasState = world.Has<CanvasComponent>(canvasOf) ? world.Get<CanvasComponent>(canvasOf) : default;
+
+        fonts.Draw(font, $"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Vector2(24f, 152f), new Color(255, 220, 120));
 
         // A count of things is a string of the content rather than a number this game writes: Russian writes three forms of it
         // where English writes two, so the line says what the language says. `loc ru` changes it while the game runs.
         fonts.Draw(font, locale.Get("ui-entities", ("count", world.Enumerate().Count())), new Vector2(24f, 88f), Color.White);
         fonts.Draw(font, $"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Vector2(24f, 120f), new Color(255, 220, 120));
+
+        renderer.EndFrame();
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open.
@@ -483,9 +609,10 @@ static void TintByCollision(World world, Entity first, Entity second)
     }
 }
 
-// Draws the vignette of this game over the frame, which is what a pass of a game looks like that is not a pass of the engine: a
-// quad in pixels covers the frame, and a fragment stage of the content writes a colour of its own into it. It runs after the
-// world and the interface and before the overlay, so the console and the numbers of the developer stay above it.
+// Draws the vignette of this game over the frame, which is what a post-process of a game looks like: a quad in pixels covers the
+// frame, and the fragment stage of the content reads the surface that the quad is drawn into — the world, the text and the
+// interface of this game as they stand — and writes it back with its edges darkened. It runs after the world and the interface
+// and before the overlay, so the console and the numbers of the developer stay above it.
 internal sealed class VignettePass(IRenderer renderer, ShaderHandle vignette) : IRenderPass
 {
     // Whether the pass draws the vignette, which the console of this game turns off and on while it runs.
@@ -503,8 +630,9 @@ internal sealed class VignettePass(IRenderer renderer, ShaderHandle vignette) : 
         // A camera that maps one unit to one pixel of the frame: what this pass covers is the frame rather than the world.
         var screenCamera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = renderer.ViewportSize };
 
-        // The colour of the vignette is a setting of this game, because the frame of a game is cleared to black by the pass of
-        // the world and a black vignette over a black frame would draw nothing.
+        // The engine copies the surface into a texture when a shader declares the sampler of it, which is what this call does
+        // for the stage below: what it reads is the frame of this game as it stands when this pass runs, so the vignette is a
+        // picture of the frame with its edges darkened rather than a colour over it. The two settings are of this game.
         renderer.SetCamera(screenCamera);
         renderer.BeginFrame(false);
         renderer.UseShader(vignette);

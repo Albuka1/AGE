@@ -90,6 +90,25 @@ public sealed class ShaderServiceTests : IDisposable
         lines[ShaderSource.FragmentHeaderLines].Should().Be("void main() { }", "a line that a compiler reports counts the lines of the header as well");
     }
 
+    [Fact]
+    public void ShaderService_Load_TheHeaderOfAStage_NamesTheSurfaceThatTheFrameIsDrawnInto()
+    {
+        _shaders.Load(FragmentPath);
+
+        string vertex = _renderer.Compiled[0].Vertex;
+        string fragment = _renderer.Compiled[0].Fragment;
+
+        // A shader of a game post-processes the frame that it is drawn into, so the header of a stage names that surface, the
+        // size of it in pixels, and the flip that the copy of it needs.
+        fragment.Should().Contain("uniform sampler2D uScreen;");
+        fragment.Should().Contain("#define SCREEN_TEXTURE uScreen");
+        fragment.Should().Contain("#define SCREEN_SIZE uScreenSize");
+        fragment.Should().Contain("#define SCREEN_PIXEL_SIZE (1.0 / uScreenSize)");
+        fragment.Should().Contain("#define SCREEN_UV vec2(vTexCoord.x, 1.0 - vTexCoord.y)");
+        fragment.Should().Contain("vec4 sampleScreen(vec2 uv)");
+        vertex.Should().Contain("uniform vec2 uScreenSize;", "the stage that places a quad measures a pixel of the surface as well");
+    }
+
     private sealed class RecordingRenderer : IRenderer
     {
         public List<(string Vertex, string Fragment)> Compiled { get; } = [];
