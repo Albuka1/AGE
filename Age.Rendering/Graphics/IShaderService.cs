@@ -14,6 +14,11 @@ namespace Age.Rendering;
 /// A shader is a fragment stage of its own and, when it needs it, a vertex stage: a game that names the fragment stage only is
 /// drawn with the vertex stage of the engine, which places the quad of the renderer.
 /// </para>
+/// <para>
+/// A renderer that was attached to another window compiles against another device, so the handles of the window before are
+/// refused: <see cref="UnloadAll"/> forgets them without touching a device that is gone, and the shaders are loaded again,
+/// which compiles them for the window that is there now.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>

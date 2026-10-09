@@ -59,6 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A window that a person resized, and a game that switched to a full screen, drew into the viewport of the frame before,
+  because the renderer measured the window again but never pointed the device at the new size: a frame now reads the framebuffer
+  of the window as it begins and sets the viewport to it, which is also what makes a display that scales fill every pixel of the
+  window. What a camera measures a game in stays the size of the window, so a game keeps drawing in the units it was written in
+  and sees more of its world rather than a stretched one.
+- The programs that a game compiled through the renderer are deleted when the renderer lets go of a device, as the program of
+  the engine is, and a handle of the window before is refused by `UseShader` rather than handed to a device that has never seen
+  it. A release refuses a program that this renderer did not compile, so a number that belongs to another device is never
+  deleted by mistake.
 - A language whose documents cannot be read is no longer kept as an empty one, so a caller that fixed the content reads it
   again instead of living with the half of a language. A language that is asked for and that the game does not hold says so
   once, with the languages the game does have, and its folder is not walked, so the same missing folder is not reported

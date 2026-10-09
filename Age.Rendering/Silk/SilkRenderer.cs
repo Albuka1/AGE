@@ -78,8 +78,10 @@ public sealed class SilkRenderer : IRenderer
     private uint _vbo;
     private uint _fontTexture;
     private readonly Dictionary<string, int> _uniforms = new(StringComparer.Ordinal);
+    private readonly HashSet<uint> _gamePrograms = new();
     private Camera2D _camera = new() { Zoom = 1f };
     private bool _frameCleared;
+    private Vector2 _viewportPixels;
 
     /// <inheritdoc />
     public Vector2 ViewportSize { get; private set; }
@@ -94,8 +96,10 @@ public sealed class SilkRenderer : IRenderer
 
         _windowService = window;
         _gl = GL.GetApi(window.Window);
-        ViewportSize = new Vector2(window.Window.Size.X, window.Window.Size.Y);
         CreateResources();
+
+        // The device of a window that has just been attached draws into a viewport of its own.
+        RefreshViewport(force: true);
     }
 
     /// <inheritdoc />
@@ -332,13 +336,19 @@ public sealed class SilkRenderer : IRenderer
         ArgumentNullException.ThrowIfNull(vertexSource);
         ArgumentNullException.ThrowIfNull(fragmentSource);
 
-        return CreateProgram(RequireContext(), vertexSource, fragmentSource);
+        // What a game compiles is held as well as the program of the engine, because the objects of a device are deleted when
+        // the renderer lets go of it and a program that was compiled here is one of them.
+        uint program = CreateProgram(RequireContext(), vertexSource, fragmentSource);
+        _gamePrograms.Add(program);
+        return program;
     }
 
     /// <inheritdoc />
     public void ReleaseShader(uint program)
     {
-        if (program == 0)
+        // Only a program that this renderer compiled is one of this device: a program of zero, and a program of a device that
+        // is gone, are left alone rather than deleted by number, which would delete whatever holds that number now.
+        if (!_gamePrograms.Remove(program))
         {
             return;
         }
@@ -354,9 +364,9 @@ public sealed class SilkRenderer : IRenderer
     /// <inheritdoc />
     public void UseShader(ShaderHandle shader)
     {
-        if (shader.Program == 0)
+        if (shader.Program == 0 || !_gamePrograms.Contains(shader.Program))
         {
-            throw new ArgumentException("The handle is not a shader that the engine compiled.", nameof(shader));
+            throw new ArgumentException("The handle is not a shader that this renderer compiled, or it belongs to a device it is no longer attached to.", nameof(shader));
         }
 
         // A draw call samples one program, so what a caller collected under the shader that is being replaced is drawn first.
@@ -502,7 +512,16 @@ public sealed class SilkRenderer : IRenderer
         gl.Uniform1(Location(gl, "uTime"), (float)_clock.Elapsed.TotalSeconds);
     }
 
-    private void RefreshViewport()
+    /// <summary>Reads the size of the window and points the device at the pixels of its framebuffer.</summary>
+    /// <param name="force">Whether to set the viewport even when it is the one of the previous call.</param>
+    /// <remarks>
+    /// The size is read again as a frame begins, because a window that a person resized, and a game that switched to a full
+    /// screen, have another one by then. What a camera measures a game in is the size of the window, and what the device draws
+    /// into is the framebuffer of it, which differs on a display that scales: a window of 1280 by 720 has a framebuffer of
+    /// 2560 by 1440 at a scale of two, so a game keeps drawing in the units it was written in while the device fills every
+    /// pixel of the window. The viewport is set only when the pixels change, because a device call is worth saving.
+    /// </remarks>
+    private void RefreshViewport(bool force = false)
     {
         if (_windowService is null)
         {
@@ -510,7 +529,18 @@ public sealed class SilkRenderer : IRenderer
         }
 
         var size = _windowService.Window.Size;
+        var framebuffer = _windowService.Window.FramebufferSize;
         ViewportSize = new Vector2(size.X, size.Y);
+
+        var pixels = new Vector2(MathF.Max(framebuffer.X, 1), MathF.Max(framebuffer.Y, 1));
+
+        if (!force && pixels == _viewportPixels)
+        {
+            return;
+        }
+
+        _viewportPixels = pixels;
+        RequireContext().Viewport(0, 0, (uint)pixels.X, (uint)pixels.Y);
     }
 
     private readonly ILogger<SilkRenderer>? _logger;
@@ -582,8 +612,18 @@ public sealed class SilkRenderer : IRenderer
             _program = 0;
         }
 
+        // The programs that a game compiled through this renderer belong to the device as much as the program of the engine does,
+        // so they are deleted here as well: a device that is let go of leaves nothing of its own behind.
+        foreach (uint program in _gamePrograms)
+        {
+            gl.DeleteProgram(program);
+        }
+
+        _gamePrograms.Clear();
+
         _gl = null;
         ViewportSize = Vector2.Zero;
+        _viewportPixels = Vector2.Zero;
     }
 
     private static uint CreateProgram(GL gl, string vertexSource, string fragmentSource)

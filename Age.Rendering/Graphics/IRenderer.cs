@@ -17,6 +17,11 @@ public interface IRenderer : IDisposable
     Vector2 ViewportSize { get; }
 
     /// <summary>Binds the renderer to a window and creates its device resources.</summary>
+    /// <remarks>
+    /// The programs that a game compiled through <see cref="CompileShader"/> are objects of the device as well, so they are
+    /// deleted when the renderer lets go of it, and a handle of the window before is refused by <see cref="UseShader"/> rather
+    /// than handed to a device that has never seen it: load the shaders again for the new window.
+    /// </remarks>
     void Attach(IWindowService window);
 
     /// <summary>Sets the camera that is used by subsequent draws.</summary>
@@ -100,7 +105,7 @@ public interface IRenderer : IDisposable
     /// <remarks>
     /// What a caller collected before this call is drawn first, because one draw call samples one program: the quads that are
     /// gathered under the shader that is being replaced are a batch of their own. A renderer that draws without shaders of its
-    /// own refuses this.
+    /// own refuses this, and so does a handle that belongs to a device the renderer is no longer attached to.
     /// </remarks>
     void UseShader(ShaderHandle shader) =>
         throw new NotSupportedException("This renderer draws without shaders of their own.");
