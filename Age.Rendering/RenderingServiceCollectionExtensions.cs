@@ -27,6 +27,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<ISpriteSheetService, SpriteSheetService>();
         services.AddSingleton<SpriteAnimationSystem>();
         services.AddSingleton<IFontService, FontService>();
+        services.AddSingleton<IShaderService, ShaderService>();
         services.AddSingleton(provider => new TextRenderer(
             provider.GetRequiredService<IRenderer>(),
             provider.GetService<IFontService>(),

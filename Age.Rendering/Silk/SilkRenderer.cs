@@ -72,12 +72,11 @@ public sealed class SilkRenderer : IRenderer
     private IWindowService? _windowService;
     private GL? _gl;
     private uint _program;
+    private uint _currentProgram;
     private uint _vao;
     private uint _vbo;
     private uint _fontTexture;
-    private int _projectionLocation;
-    private int _textureLocation;
-    private int _useTextureLocation;
+    private readonly Dictionary<string, int> _uniforms = new(StringComparer.Ordinal);
     private Camera2D _camera = new() { Zoom = 1f };
     private bool _frameCleared;
 
@@ -122,28 +121,13 @@ public sealed class SilkRenderer : IRenderer
             _frameCleared = true;
         }
 
-        gl.UseProgram(_program);
+        gl.UseProgram(_currentProgram);
         gl.BindVertexArray(_vao);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
         gl.Enable(EnableCap.Blend);
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
-        float width = MathF.Max(ViewportSize.X, 1f);
-        float height = MathF.Max(ViewportSize.Y, 1f);
-        CopyTransposed(_camera.GetViewMatrix() * Matrix4x4.CreateOrthographic(width, height), _matrixScratch);
-
-        unsafe
-        {
-            fixed (float* pointer = _matrixScratch)
-            {
-                gl.UniformMatrix4(_projectionLocation, 1, false, pointer);
-            }
-        }
-
-        // Every quad samples a texture, the white pixel of one for a quad that carries a colour of its own, so the sampler is
-        // bound once and the shader takes the textured path for every one of them.
-        gl.Uniform1(_textureLocation, 0);
-        gl.Uniform1(_useTextureLocation, 1);
+        ApplyStandardUniforms(gl);
     }
 
     /// <inheritdoc />
@@ -254,10 +238,8 @@ public sealed class SilkRenderer : IRenderer
     private void CreateResources()
     {
         GL gl = RequireContext();
-        _program = CreateProgram(gl);
-        _projectionLocation = gl.GetUniformLocation(_program, "uProjection");
-        _textureLocation = gl.GetUniformLocation(_program, "uTexture");
-        _useTextureLocation = gl.GetUniformLocation(_program, "uUseTexture");
+        _program = CreateProgram(gl, VertexShaderSource, FragmentShaderSource);
+        _currentProgram = _program;
 
         _vao = gl.GenVertexArray();
         gl.BindVertexArray(_vao);
@@ -331,6 +313,176 @@ public sealed class SilkRenderer : IRenderer
 
         gl.BindTexture(TextureTarget.Texture2D, 0);
         return texture;
+    }
+
+    /// <inheritdoc />
+    public uint CompileShader(string vertexSource, string fragmentSource)
+    {
+        ArgumentNullException.ThrowIfNull(vertexSource);
+        ArgumentNullException.ThrowIfNull(fragmentSource);
+
+        return CreateProgram(RequireContext(), vertexSource, fragmentSource);
+    }
+
+    /// <inheritdoc />
+    public void ReleaseShader(uint program)
+    {
+        if (program == 0)
+        {
+            return;
+        }
+
+        if (_currentProgram == program)
+        {
+            ResetShader();
+        }
+
+        RequireContext().DeleteProgram(program);
+    }
+
+    /// <inheritdoc />
+    public void UseShader(ShaderHandle shader)
+    {
+        if (shader.Program == 0)
+        {
+            throw new ArgumentException("The handle is not a shader that the engine compiled.", nameof(shader));
+        }
+
+        // A draw call samples one program, so what a caller collected under the shader that is being replaced is drawn first.
+        Flush();
+
+        GL gl = RequireContext();
+        _currentProgram = shader.Program;
+        _uniforms.Clear();
+        gl.UseProgram(_currentProgram);
+        ApplyStandardUniforms(gl);
+    }
+
+    /// <inheritdoc />
+    public void ResetShader()
+    {
+        Flush();
+
+        GL gl = RequireContext();
+        _currentProgram = _program;
+        _uniforms.Clear();
+        gl.UseProgram(_currentProgram);
+        ApplyStandardUniforms(gl);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform(string name, float value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        Flush();
+
+        GL gl = RequireContext();
+        gl.Uniform1(Location(gl, name), value);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform(string name, int value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        Flush();
+
+        GL gl = RequireContext();
+        gl.Uniform1(Location(gl, name), value);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform(string name, ReadOnlySpan<float> values)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (values.Length is < 1 or > 4)
+        {
+            throw new ArgumentException($"A uniform of {values.Length} numbers is not one that a shader of one, two, three or four numbers takes.", nameof(values));
+        }
+
+        Flush();
+
+        GL gl = RequireContext();
+        int location = Location(gl, name);
+
+        switch (values.Length)
+        {
+            case 1:
+                gl.Uniform1(location, values[0]);
+                break;
+            case 2:
+                gl.Uniform2(location, values[0], values[1]);
+                break;
+            case 3:
+                gl.Uniform3(location, values[0], values[1], values[2]);
+                break;
+            default:
+                gl.Uniform4(location, values[0], values[1], values[2], values[3]);
+                break;
+        }
+    }
+
+    /// <inheritdoc />
+    public void SetSampler(string name, TextureHandle texture, int unit)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentOutOfRangeException.ThrowIfNegative(unit);
+
+        Flush();
+
+        GL gl = RequireContext();
+        gl.ActiveTexture((TextureUnit)((int)TextureUnit.Texture0 + unit));
+        gl.BindTexture(TextureTarget.Texture2D, (uint)texture.Id);
+        gl.Uniform1(Location(gl, name), unit);
+        gl.ActiveTexture(TextureUnit.Texture0);
+    }
+
+    /// <summary>Returns the location of a uniform of the program that is being used, which is looked up once for that program.</summary>
+    /// <param name="gl">The device of the attached window.</param>
+    /// <param name="name">The name of the uniform, as a shader declares it.</param>
+    /// <returns>The location of the uniform, or -1 when the program declares no uniform of that name, which the device ignores.</returns>
+    private int Location(GL gl, string name)
+    {
+        if (_uniforms.TryGetValue(name, out int location))
+        {
+            return location;
+        }
+
+        location = gl.GetUniformLocation(_currentProgram, name);
+        _uniforms[name] = location;
+
+        return location;
+    }
+
+    /// <summary>Uploads what every shader of the engine is given: the projection of the camera, the time and the sampler of the image.</summary>
+    /// <param name="gl">The device of the attached window.</param>
+    /// <remarks>
+    /// A program that declares none of these ignores what it is told about, so the engine uploads them to every program rather
+    /// than asking which one is being used.
+    /// </remarks>
+    private void ApplyStandardUniforms(GL gl)
+    {
+        float width = MathF.Max(ViewportSize.X, 1f);
+        float height = MathF.Max(ViewportSize.Y, 1f);
+        CopyTransposed(_camera.GetViewMatrix() * Matrix4x4.CreateOrthographic(width, height), _matrixScratch);
+
+        unsafe
+        {
+            fixed (float* pointer = _matrixScratch)
+            {
+                gl.UniformMatrix4(Location(gl, "uProjection"), 1, false, pointer);
+            }
+        }
+
+        // Every quad samples a texture, the white pixel of one for a quad that carries a colour of its own, so the shader of the
+        // engine takes its textured path and the sampler of the image is the first unit. The time is what a shader animates on,
+        // and it is the time of the machine rather than the time of a simulation: a game that wants the time of its own sets
+        // the uniform itself.
+        gl.Uniform1(Location(gl, "uTexture"), 0);
+        gl.Uniform1(Location(gl, "uUseTexture"), 1);
+        gl.Uniform1(Location(gl, "uTime"), Environment.TickCount64 / 1000f);
     }
 
     private void RefreshViewport()
@@ -412,10 +564,10 @@ public sealed class SilkRenderer : IRenderer
         ViewportSize = Vector2.Zero;
     }
 
-    private static uint CreateProgram(GL gl)
+    private static uint CreateProgram(GL gl, string vertexSource, string fragmentSource)
     {
-        uint vertex = CompileShader(gl, ShaderType.VertexShader, VertexShaderSource);
-        uint fragment = CompileShader(gl, ShaderType.FragmentShader, FragmentShaderSource);
+        uint vertex = CompileShader(gl, ShaderType.VertexShader, vertexSource);
+        uint fragment = CompileShader(gl, ShaderType.FragmentShader, fragmentSource);
 
         uint program = gl.CreateProgram();
         gl.AttachShader(program, vertex);
@@ -453,13 +605,13 @@ public sealed class SilkRenderer : IRenderer
         uint sampler = texture == 0 ? _whiteTexture : texture;
         Rect source = texture == 0 ? UnitSquare : uv;
 
-        if (!_batch.CanAdd(_program, sampler))
+        if (!_batch.CanAdd(_currentProgram, sampler))
         {
             Flush();
         }
 
         SpriteQuad.Corners(position, size, rotation, _cornerScratch);
-        _batch.Add(_cornerScratch, source, color, _program, sampler);
+        _batch.Add(_cornerScratch, source, color, _currentProgram, sampler);
     }
 
     /// <summary>Draws every quad that the batch holds, which is what ends a batch: another texture, another program, or the end of a frame.</summary>

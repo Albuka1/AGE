@@ -436,6 +436,43 @@ renderPipeline.Add(provider.GetRequiredService<TextRenderSystem>());
 renderPipeline.Add(uiRenderSystem);
 ```
 
+## Draw with a shader
+
+```csharp
+IShaderService shaders = provider.GetRequiredService<IShaderService>();
+ShaderHandle displacement = shaders.Load("Shaders/displacement.frag");
+
+renderer.UseShader(displacement);
+renderer.SetUniform("uDisplacementSize", 4f);
+renderer.SetSampler("uDisplacement", textures.Resolve("Textures/Effects/height.png"), 1);
+renderer.DrawSprite(tile, position, size, Color.White);
+renderer.ResetShader();
+```
+
+A shader is content: the fragment stage lives under `Resources/Shaders`, and the engine draws it with a vertex stage of its own
+that places the quad, so a shader that displaces an image is a few lines of the OpenGL Shading Language:
+
+```glsl
+uniform sampler2D uDisplacement;
+uniform float uDisplacementSize;
+uniform vec4 uDisplacementUv;
+
+void main()
+{
+    vec4 height = texture(uDisplacement, mix(uDisplacementUv.xy, uDisplacementUv.zw, UV));
+    vec2 value = (height.xy - vec2(128.0 / 255.0)) / (1.0 - 128.0 / 255.0);
+
+    COLOR = sampleTexture(UV + value * TEXTURE_PIXEL_SIZE * uDisplacementSize * vec2(1.0, -1.0));
+    COLOR.a *= height.a;
+}
+```
+
+`UV`, `COLOR`, `TEXTURE`, `TEXTURE_PIXEL_SIZE` and `TIME` are what the header of the engine gives to every shader, and a game
+that writes a vertex stage of its own writes it under the same header and takes the placement of the quad over. A shader is
+compiled once for a pair of stages, and the quads that were collected before a shader, a uniform or a sampler changes are drawn
+with the state they were collected under, because one draw call samples one program, one texture and one set of uniforms: set
+what a shader needs, then draw what belongs to it.
+
 ## Load and play a sound
 
 ```csharp

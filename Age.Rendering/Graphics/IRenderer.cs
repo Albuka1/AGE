@@ -77,6 +77,64 @@ public interface IRenderer : IDisposable
     /// <summary>Draws a single line of text with the built-in bitmap font.</summary>
     void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color);
 
+    /// <summary>Compiles a program from the two stages of a shader.</summary>
+    /// <param name="vertexSource">The vertex stage, in the OpenGL Shading Language.</param>
+    /// <param name="fragmentSource">The fragment stage, in the OpenGL Shading Language.</param>
+    /// <returns>The identifier of the program, for <see cref="UseShader"/> and <see cref="ReleaseShader"/>.</returns>
+    /// <exception cref="InvalidOperationException">The renderer has not been attached to a window, or a stage does not compile.</exception>
+    /// <remarks>
+    /// A renderer that draws without shaders of its own refuses this. A game does not compile a shader itself: it asks
+    /// <c>IShaderService</c>, which reads the stages of the content and caches the program.
+    /// </remarks>
+    uint CompileShader(string vertexSource, string fragmentSource) =>
+        throw new NotSupportedException("This renderer draws without shaders of their own.");
+
+    /// <summary>Deletes a program that <see cref="CompileShader"/> created. A program of zero is ignored.</summary>
+    /// <param name="program">The identifier of the program.</param>
+    void ReleaseShader(uint program)
+    {
+    }
+
+    /// <summary>Draws every quad after this call with a shader.</summary>
+    /// <param name="shader">The shader to draw with, which the renderer drew no quad of yet or drew quads of already.</param>
+    /// <remarks>
+    /// What a caller collected before this call is drawn first, because one draw call samples one program: the quads that are
+    /// gathered under the shader that is being replaced are a batch of their own. A renderer that draws without shaders of its
+    /// own refuses this.
+    /// </remarks>
+    void UseShader(ShaderHandle shader) =>
+        throw new NotSupportedException("This renderer draws without shaders of their own.");
+
+    /// <summary>Draws every quad after this call with the shader the renderer was created with.</summary>
+    /// <remarks>What a caller collected under the shader that is being replaced is drawn first, as with <see cref="UseShader"/>.</remarks>
+    void ResetShader()
+    {
+    }
+
+    /// <summary>Sets a uniform of the shader that is being used to a number.</summary>
+    /// <param name="name">The name of the uniform, as the shader declares it.</param>
+    /// <param name="value">The value to set.</param>
+    /// <remarks>What a caller collected before this call is drawn first, because a uniform is one value for a whole draw call.</remarks>
+    void SetUniform(string name, float value) => throw new NotSupportedException("This renderer draws without shaders of their own.");
+
+    /// <summary>Sets a uniform of the shader that is being used to a whole number.</summary>
+    /// <param name="name">The name of the uniform, as the shader declares it.</param>
+    /// <param name="value">The value to set.</param>
+    void SetUniform(string name, int value) => throw new NotSupportedException("This renderer draws without shaders of their own.");
+
+    /// <summary>Sets a uniform of the shader that is being used to a vector of two, three or four numbers.</summary>
+    /// <param name="name">The name of the uniform, as the shader declares it.</param>
+    /// <param name="values">The values of the vector, which decides its width.</param>
+    /// <exception cref="ArgumentException"><paramref name="values"/> holds fewer than two or more than four numbers.</exception>
+    void SetUniform(string name, ReadOnlySpan<float> values) => throw new NotSupportedException("This renderer draws without shaders of their own.");
+
+    /// <summary>Binds a texture to a sampler of the shader that is being used.</summary>
+    /// <param name="name">The name of the sampler uniform, as the shader declares it.</param>
+    /// <param name="texture">The texture to sample. A handle of zero binds no image.</param>
+    /// <param name="unit">The texture unit to bind it to, which the sampler is told to read.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="unit"/> is negative.</exception>
+    void SetSampler(string name, TextureHandle texture, int unit) => throw new NotSupportedException("This renderer draws without shaders of their own.");
+
     /// <summary>Flushes pending draws and ends the frame.</summary>
     void EndFrame();
 }
