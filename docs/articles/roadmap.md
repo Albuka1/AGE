@@ -31,10 +31,6 @@ What remains are the content features the engine does not have yet, and then the
   tooltip, and the strings of both of them read from the content like every other string of a game.
 - Text beyond fitting a line into a box: the kerning of a font is not read, one text carries one style, and a script that is
   written right to left or a font whose glyphs are colored pictures needs more than the layout has today.
-- A renderer that collects the quads of one texture into one buffer and draws them in one call: every glyph of a line, and every
-  sprite that shares a sheet, is a quad of its own today, so a busy frame of a game issues a buffer upload and a draw call for
-  each of them. It is a change of the graphics layer rather than of the text or the sprites, so it is verified by running a game
-  with a window and comparing frames, not by a test.
 
 ## Platform
 

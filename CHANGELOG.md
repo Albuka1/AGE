@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A frame costs a handful of draw calls rather than one for every quad of it: the quads that share a program and a texture are
+  collected and drawn in one call, and a quad that carries a colour of its own samples a texture of one white pixel, which is
+  what lets it be drawn in the same call as the sprites, the glyphs and the rectangles around it. A frame of a game that draws a
+  map of sprites, a line of text and an interface of it is a few hundred quads, which was a few hundred uploads and draw calls.
 - **Breaking:** the text of a world and the text of an interface are one component, and `TextLabelComponent` is gone. A label
   is a `TextComponent` on an entity that has a `RectTransformComponent`, and its text is laid out into the box of that
   rectangle, where a line of an entity with a `TransformComponent` stands at the transform. The component names a `Key` of the

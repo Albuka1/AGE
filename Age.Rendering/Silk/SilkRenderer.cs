@@ -16,8 +16,8 @@ namespace Age.Rendering;
 /// </remarks>
 public sealed class SilkRenderer : IRenderer
 {
-    private const int FloatsPerVertex = 8;
-    private const int VerticesPerQuad = 4;
+    private const int FloatsPerVertex = QuadBatch.FloatsPerVertex;
+    private const int VerticesPerQuad = QuadBatch.VerticesPerQuad;
     private const int VertexStride = FloatsPerVertex * sizeof(float);
     private const int FontAtlasWidth = BitmapFontMetrics.GlyphCount * BitmapFontMetrics.GlyphWidth;
 
@@ -57,9 +57,17 @@ public sealed class SilkRenderer : IRenderer
         }
         """;
 
-    private readonly float[] _vertexScratch = new float[FloatsPerVertex * VerticesPerQuad];
+    /// <summary>The number of quads that one batch of this renderer holds before it is drawn and starts over.</summary>
+    private const int MaximumQuads = 4096;
+
+    /// <summary>The part of a texture that a quad with a colour of its own shows, which is the whole of the pixel that it samples.</summary>
+    private static readonly Rect UnitSquare = new(Vector2.Zero, new Vector2(1f, 1f));
+
     private readonly float[] _matrixScratch = new float[16];
     private readonly Vector2[] _cornerScratch = new Vector2[VerticesPerQuad];
+    private readonly QuadBatch _batch = new(MaximumQuads);
+    private uint _indexBuffer;
+    private uint _whiteTexture;
 
     private IWindowService? _windowService;
     private GL? _gl;
@@ -99,6 +107,11 @@ public sealed class SilkRenderer : IRenderer
     /// <inheritdoc />
     public void BeginFrame(bool clear)
     {
+        // What a caller drew before this frame is drawn now, with the state it was collected under, which is the projection of
+        // the camera that was set when it drew: a pass that sets the camera and then opens its frame keeps the order of the
+        // frames it makes.
+        Flush();
+
         GL gl = RequireContext();
         RefreshViewport();
 
@@ -127,7 +140,10 @@ public sealed class SilkRenderer : IRenderer
             }
         }
 
+        // Every quad samples a texture, the white pixel of one for a quad that carries a colour of its own, so the sampler is
+        // bound once and the shader takes the textured path for every one of them.
         gl.Uniform1(_textureLocation, 0);
+        gl.Uniform1(_useTextureLocation, 1);
     }
 
     /// <inheritdoc />
@@ -226,6 +242,8 @@ public sealed class SilkRenderer : IRenderer
     /// <inheritdoc />
     public void EndFrame()
     {
+        Flush();
+
         GL gl = RequireContext();
         gl.BindTexture(TextureTarget.Texture2D, 0);
         gl.BindVertexArray(0);
@@ -248,7 +266,7 @@ public sealed class SilkRenderer : IRenderer
 
         unsafe
         {
-            gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(VertexStride * VerticesPerQuad), (void*)0, BufferUsageARB.DynamicDraw);
+            gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(VertexStride * VerticesPerQuad * MaximumQuads), (void*)0, BufferUsageARB.DynamicDraw);
 
             gl.EnableVertexAttribArray(0);
             gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, (uint)VertexStride, (void*)0);
@@ -260,8 +278,59 @@ public sealed class SilkRenderer : IRenderer
             gl.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, (uint)VertexStride, (void*)(4 * sizeof(float)));
         }
 
+        // The indices of the quads never change, so they are uploaded once and bound while the vertex array is bound: a draw of
+        // the batch is the beginning of them, which is what lets one call draw every quad that the batch holds.
+        _indexBuffer = gl.GenBuffer();
+        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _indexBuffer);
+
+        ReadOnlySpan<uint> indices = _batch.AllIndices;
+
+        unsafe
+        {
+            fixed (uint* pointer = indices)
+            {
+                gl.BufferData(BufferTargetARB.ElementArrayBuffer, (nuint)(indices.Length * sizeof(uint)), pointer, BufferUsageARB.StaticDraw);
+            }
+        }
+
+        _whiteTexture = CreateWhiteTexture();
         _fontTexture = CreateFontTexture();
         gl.BindVertexArray(0);
+    }
+
+    /// <summary>Creates the texture of one white pixel that a quad with a colour of its own samples, so that every quad is a textured one.</summary>
+    /// <returns>The identifier of the texture, which this renderer owns and releases.</returns>
+    private uint CreateWhiteTexture()
+    {
+        GL gl = RequireContext();
+        uint texture = gl.GenTexture();
+        gl.BindTexture(TextureTarget.Texture2D, texture);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+
+        ReadOnlySpan<byte> pixel = [255, 255, 255, 255];
+
+        unsafe
+        {
+            fixed (byte* pointer = pixel)
+            {
+                gl.TexImage2D(
+                    TextureTarget.Texture2D,
+                    0,
+                    InternalFormat.Rgba,
+                    1,
+                    1,
+                    0,
+                    PixelFormat.Rgba,
+                    PixelType.UnsignedByte,
+                    pointer);
+            }
+        }
+
+        gl.BindTexture(TextureTarget.Texture2D, 0);
+        return texture;
     }
 
     private void RefreshViewport()
@@ -302,6 +371,18 @@ public sealed class SilkRenderer : IRenderer
         }
 
         GL gl = _gl;
+
+        if (_whiteTexture != 0)
+        {
+            gl.DeleteTexture(_whiteTexture);
+            _whiteTexture = 0;
+        }
+
+        if (_indexBuffer != 0)
+        {
+            gl.DeleteBuffer(_indexBuffer);
+            _indexBuffer = 0;
+        }
 
         if (_fontTexture != 0)
         {
@@ -366,45 +447,56 @@ public sealed class SilkRenderer : IRenderer
 
     private void DrawQuad(Vector2 position, Vector2 size, Color color, Rect uv, uint texture, float rotation)
     {
-        GL gl = RequireContext();
+        // A quad without a texture is drawn as its colour alone, and the white pixel of the texture of one pixel is what makes
+        // that a textured draw like any other: every quad then samples a texture, so a batch holds the quads of an image and the
+        // quads of a solid colour in one call.
+        uint sampler = texture == 0 ? _whiteTexture : texture;
+        Rect source = texture == 0 ? UnitSquare : uv;
+
+        if (!_batch.CanAdd(_program, sampler))
+        {
+            Flush();
+        }
 
         SpriteQuad.Corners(position, size, rotation, _cornerScratch);
+        _batch.Add(_cornerScratch, source, color, _program, sampler);
+    }
 
-        float r = color.R / 255f;
-        float g = color.G / 255f;
-        float b = color.B / 255f;
-        float a = color.A / 255f;
+    /// <summary>Draws every quad that the batch holds, which is what ends a batch: another texture, another program, or the end of a frame.</summary>
+    /// <remarks>
+    /// The vertices of the batch are uploaded and drawn in one call, and the texture of the batch is bound once, which is what
+    /// makes a frame of a game cost a handful of calls rather than one for every glyph of a line, every sprite of a map and
+    /// every rectangle of an interface. The indices of the quads live in a buffer of their own, which was filled once when the
+    /// device was created, so a draw of fewer quads than the batch holds is the beginning of it.
+    /// </remarks>
+    private void Flush()
+    {
+        if (_batch.Count == 0)
+        {
+            return;
+        }
 
-        WriteVertex(0, _cornerScratch[0].X, _cornerScratch[0].Y, uv.X, uv.Y, r, g, b, a);
-        WriteVertex(1, _cornerScratch[1].X, _cornerScratch[1].Y, uv.X + uv.Width, uv.Y, r, g, b, a);
-        WriteVertex(2, _cornerScratch[2].X, _cornerScratch[2].Y, uv.X, uv.Y + uv.Height, r, g, b, a);
-        WriteVertex(3, _cornerScratch[3].X, _cornerScratch[3].Y, uv.X + uv.Width, uv.Y + uv.Height, r, g, b, a);
+        GL gl = RequireContext();
+
+        gl.ActiveTexture(TextureUnit.Texture0);
+        gl.BindTexture(TextureTarget.Texture2D, _batch.Texture);
+
+        ReadOnlySpan<float> vertices = _batch.Vertices;
 
         unsafe
         {
-            fixed (float* pointer = _vertexScratch)
+            fixed (float* pointer = vertices)
             {
-                gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, (nuint)(_vertexScratch.Length * sizeof(float)), pointer);
+                gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, (nuint)(vertices.Length * sizeof(float)), pointer);
             }
         }
 
-        gl.ActiveTexture(TextureUnit.Texture0);
-        gl.BindTexture(TextureTarget.Texture2D, texture);
-        gl.Uniform1(_useTextureLocation, texture == 0 ? 0 : 1);
-        gl.DrawArrays(PrimitiveType.TriangleStrip, 0, VerticesPerQuad);
-    }
+        unsafe
+        {
+            gl.DrawElements((GLEnum)PrimitiveType.Triangles, (uint)_batch.Indices.Length, (GLEnum)DrawElementsType.UnsignedInt, (void*)0);
+        }
 
-    private void WriteVertex(int index, float x, float y, float u, float v, float r, float g, float b, float a)
-    {
-        int offset = index * FloatsPerVertex;
-        _vertexScratch[offset] = x;
-        _vertexScratch[offset + 1] = y;
-        _vertexScratch[offset + 2] = u;
-        _vertexScratch[offset + 3] = v;
-        _vertexScratch[offset + 4] = r;
-        _vertexScratch[offset + 5] = g;
-        _vertexScratch[offset + 6] = b;
-        _vertexScratch[offset + 7] = a;
+        _batch.Clear();
     }
 
     private uint CreateFontTexture()
