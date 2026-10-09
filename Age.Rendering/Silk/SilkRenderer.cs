@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Age.Core;
 using Microsoft.Extensions.Logging;
 using Silk.NET.OpenGL;
@@ -186,6 +187,10 @@ public sealed class SilkRenderer : IRenderer
         {
             return;
         }
+
+        // What was collected of that image is drawn before the image goes away, because a batch holds the identifier of the
+        // texture it samples rather than a copy of its pixels.
+        Flush();
 
         RequireContext().DeleteTexture((uint)texture.Id);
     }
@@ -478,11 +483,11 @@ public sealed class SilkRenderer : IRenderer
 
         // Every quad samples a texture, the white pixel of one for a quad that carries a colour of its own, so the shader of the
         // engine takes its textured path and the sampler of the image is the first unit. The time is what a shader animates on,
-        // and it is the time of the machine rather than the time of a simulation: a game that wants the time of its own sets
-        // the uniform itself.
+        // and it is the seconds since the renderer was created rather than the time of a simulation: a game that wants the time
+        // of its own sets the uniform itself.
         gl.Uniform1(Location(gl, "uTexture"), 0);
         gl.Uniform1(Location(gl, "uUseTexture"), 1);
-        gl.Uniform1(Location(gl, "uTime"), Environment.TickCount64 / 1000f);
+        gl.Uniform1(Location(gl, "uTime"), (float)_clock.Elapsed.TotalSeconds);
     }
 
     private void RefreshViewport()
@@ -497,10 +502,15 @@ public sealed class SilkRenderer : IRenderer
     }
 
     private readonly ILogger<SilkRenderer>? _logger;
+    private readonly Stopwatch _clock = new();
 
     /// <summary>Initializes the renderer, which reports a frame that was drawn before the device was there.</summary>
     /// <param name="logger">The logger that reports a refused frame, or null to report nothing.</param>
-    public SilkRenderer(ILogger<SilkRenderer>? logger = null) => _logger = logger;
+    public SilkRenderer(ILogger<SilkRenderer>? logger = null)
+    {
+        _logger = logger;
+        _clock.Start();
+    }
 
     /// <summary>Returns the device of the attached window, and leaves a record when there is none, which is what a refused frame looks like.</summary>
     private GL RequireContext()
@@ -567,17 +577,42 @@ public sealed class SilkRenderer : IRenderer
     private static uint CreateProgram(GL gl, string vertexSource, string fragmentSource)
     {
         uint vertex = CompileShader(gl, ShaderType.VertexShader, vertexSource);
-        uint fragment = CompileShader(gl, ShaderType.FragmentShader, fragmentSource);
 
-        uint program = gl.CreateProgram();
-        gl.AttachShader(program, vertex);
-        gl.AttachShader(program, fragment);
-        gl.LinkProgram(program);
-        gl.DetachShader(program, vertex);
-        gl.DetachShader(program, fragment);
-        gl.DeleteShader(vertex);
-        gl.DeleteShader(fragment);
-        return program;
+        try
+        {
+            uint fragment = CompileShader(gl, ShaderType.FragmentShader, fragmentSource);
+
+            try
+            {
+                uint program = gl.CreateProgram();
+                gl.AttachShader(program, vertex);
+                gl.AttachShader(program, fragment);
+                gl.LinkProgram(program);
+                gl.DetachShader(program, vertex);
+                gl.DetachShader(program, fragment);
+
+                // A stage that compiles is not a program that links, and a program that does not link draws nothing: the log of
+                // the link says which pair of stages it was, and the program of a failure is deleted here rather than held.
+                gl.GetProgram(program, ProgramPropertyARB.LinkStatus, out int linked);
+
+                if (linked == 0)
+                {
+                    string log = gl.GetProgramInfoLog(program);
+                    gl.DeleteProgram(program);
+                    throw new InvalidOperationException($"Shader link failed: {log}");
+                }
+
+                return program;
+            }
+            finally
+            {
+                gl.DeleteShader(fragment);
+            }
+        }
+        finally
+        {
+            gl.DeleteShader(vertex);
+        }
     }
 
     private static uint CompileShader(GL gl, ShaderType type, string source)
