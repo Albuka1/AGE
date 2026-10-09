@@ -69,12 +69,17 @@ public sealed class TextRenderSystemTests
         fonts.Requests.Should().BeEmpty();
     }
 
-    [Fact]
-    public void TextRenderSystem_FontThatCannotBeBaked_FallsBackToTheBuiltInFontAndIsReportedOnce()
+    [Theory]
+    [InlineData(typeof(FileNotFoundException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(NotSupportedException))]
+    [InlineData(typeof(ArgumentException))]
+    [InlineData(typeof(InvalidOperationException))]
+    public void TextRenderSystem_FontThatCannotBeBaked_FallsBackToTheBuiltInFontAndIsReportedOnce(Type failure)
     {
         var world = new World();
         var renderer = new RecordingRenderer();
-        var fonts = new FakeFontService { Failure = new FileNotFoundException("There is no file at that path.") };
+        var fonts = new FakeFontService { Failure = (Exception)Activator.CreateInstance(failure, "the font cannot be read")! };
         var logger = new RecordingLogger();
         var system = new TextRenderSystem(renderer, new SpriteSorter(), fonts, logger);
         CreateLine(world, "Hello AGE", zOrder: 0);
@@ -86,7 +91,7 @@ public sealed class TextRenderSystemTests
         fonts.Drawn.Should().BeEmpty();
         logger.Entries.Should().ContainSingle("one line per font rather than one per frame");
         logger.Entries[0].Should().Contain("Fonts/Cousine-Regular.ttf");
-        logger.Entries[0].Should().Contain("There is no file at that path.");
+        logger.Entries[0].Should().Contain("the font cannot be read");
     }
 
     [Fact]

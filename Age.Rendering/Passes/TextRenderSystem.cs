@@ -108,13 +108,19 @@ public sealed class TextRenderSystem : IRenderPass
         {
             font = _fonts.Load(path, text.PixelHeight, first, last);
         }
-        catch (Exception exception) when (exception is ArgumentException or IOException or InvalidOperationException)
+        catch (Exception exception) when (exception is ArgumentException or IOException or InvalidOperationException or UnauthorizedAccessException or NotSupportedException)
         {
             Report(path, exception);
             return false;
         }
 
-        world.GetRef<TextComponent>(entity).Font = font;
+        // The handle is written back only when it changed, so a line that is drawn again with the font it already resolved
+        // leaves the world alone.
+        if (font != text.Font)
+        {
+            world.GetRef<TextComponent>(entity).Font = font;
+        }
+
         return true;
     }
 

@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the end of the Cyrillic block is what a language with another script needs — and a font is cached by its path, its
   height and its range. A line whose font cannot be baked is drawn with the built-in font of the renderer, reported once per
   path, and a build refuses a font path that is not there, so a mistake is visible and cheap rather than fatal.
+- A label of the interface names a font of its own as well: `TextLabelComponent` takes the path of a font, the height of a
+  line and the range of characters it covers, so a label of a button is drawn in the font of the game and in the script of
+  its language, and a label that names none keeps drawing with the built-in bitmap font.
 
 ### Fixed
 
