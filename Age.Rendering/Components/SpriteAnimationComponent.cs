@@ -29,7 +29,12 @@ namespace Age.Rendering;
 public struct SpriteAnimationComponent : IComponent
 {
     /// <summary>Gets or sets the state of the sheet to play, or null to play the state that the sprite names.</summary>
-    /// <remarks>The state that plays is written into the <see cref="SpriteComponent"/> of the same entity, so what a game changes here is what is drawn.</remarks>
+    /// <remarks>
+    /// The state that plays is written into the <see cref="SpriteComponent"/> of the same entity, so what a game changes here
+    /// is what is drawn. The sheet is the one that sprite names, and a state this component asks for is a state of it: a
+    /// build hears about a state that the sheet does not declare rather than the first frame of a fight.
+    /// </remarks>
+    [SheetState(typeof(SpriteComponent), nameof(SpriteComponent.SheetPath))]
     public string? State;
 
     /// <summary>Gets or sets the seconds that the current frame has been on screen, which the system writes.</summary>

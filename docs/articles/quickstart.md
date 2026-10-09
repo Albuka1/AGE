@@ -346,10 +346,10 @@ world.Events.Subscribe<SpriteAnimationFinishedEvent>((entity, @event) =>
 No coordinate of an image is written in a game: the region of a frame is arithmetic over the grid that the document
 declares. A layer of a character is an entity of its own with a higher `ZOrder`, and a direction is a state of its own. A
 document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once — the
-overlay of a build names the sheets and the states behind those placeholders — and `Age.Content.Lint` checks the paths a
-prototype names against the files a build ships, that the grid of a sheet is the size of the image beside it, that every
-sheet says which licence its art comes with and who it belongs to, and that a state a prototype names is one the sheet it
-names declares.
+overlay of a build names the sheets and the states behind those placeholders — and `Age.Content.Lint` reads every document
+under the textures of a build: it checks the paths a prototype names against the files a build ships, the grid of a sheet
+against the image it names, that every sheet says which licence its art comes with and who it belongs to, and that every
+state a prototype names — on the sprite or on its animation — is one the sheet it names declares.
 
 ## Draw text
 

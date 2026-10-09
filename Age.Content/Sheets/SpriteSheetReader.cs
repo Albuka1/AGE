@@ -243,7 +243,7 @@ public static class SpriteSheetReader
                 throw new SpriteSheetException($"{file}: the state '{state.Name}' holds {count} frames, and a row of the sheet holds {columns} cells", file, fields.Line);
             }
 
-            states[state.Name] = new SpriteSheetState(state.Name, first, count, Every(file, state, delay ?? DefaultDelay, count, delays), loop);
+            states[state.Name] = new SpriteSheetState(state.Name, first, count, delay ?? DefaultDelay, Every(file, state, count, delays), loop);
         }
 
         return states;
@@ -272,12 +272,13 @@ public static class SpriteSheetReader
         return delays;
     }
 
-    /// <summary>Returns the length of every frame of a state, which a document gives either as one number per frame or as one for all of them.</summary>
-    private static IReadOnlyList<float> Every(string file, YamlEntry state, float delay, int frames, IReadOnlyList<float>? delays)
+    /// <summary>Returns the length of every frame of a state, or null when the document gives one length for all of them.</summary>
+    private static IReadOnlyList<float>? Every(string file, YamlEntry state, int frames, IReadOnlyList<float>? delays)
     {
         if (delays is null)
         {
-            return Enumerable.Repeat(delay, frames).ToArray();
+            // A state that plays evenly keeps its one number rather than a copy of it for every frame of the grid.
+            return null;
         }
 
         if (delays.Count != frames)

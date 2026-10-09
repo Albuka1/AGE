@@ -42,9 +42,6 @@ public sealed class ContentLinter
 {
     private const BindingFlags MembersOfAComponent = BindingFlags.Public | BindingFlags.Instance;
 
-    /// <summary>The extensions of the images that a sheet may name, which are the formats the loader of images reads.</summary>
-    private static readonly string[] Images = [".png", ".bmp", ".tga", ".jpg", ".jpeg", ".gif"];
-
     private readonly IPrototypeManager _prototypes;
     private readonly ComponentRegistry _components;
     private readonly IAssetLoader _assets;
@@ -106,7 +103,7 @@ public sealed class ContentLinter
         {
             foreach (PrototypeComponent component in prototype.Components)
             {
-                Check(component, problems);
+                Check(component, prototype.Components, problems);
             }
         }
 
@@ -118,11 +115,11 @@ public sealed class ContentLinter
     /// <returns>What was read and what is wrong with it, which holds no problem when every sheet is sound.</returns>
     /// <exception cref="ArgumentException">The folder is null, empty or whitespace.</exception>
     /// <remarks>
-    /// A document is a sheet when an image of the same name stands beside it, which is how the folder is laid out: the
-    /// sheets of a game are the documents under its textures. What this checks is what nobody sees until the frame is
-    /// drawn: that the grid a document declares is the image it names, that it says which version of the format it is
-    /// written in, and that it says where its art comes from. The last two are rules of a build rather than of the format,
-    /// which is why the reader leaves those fields alone.
+    /// Every document of YAML in the folder is a sheet of the build, because the folder is the one that holds the images and
+    /// the documents beside them: a document that is not a sheet is a mistake of where it lives, and a sheet that nothing
+    /// reads is a sheet that nothing checks. What this checks is what nobody sees until the frame is drawn: the image that a
+    /// document names and the grid it declares over it, the version of the format it is written in, and where its art comes
+    /// from. The last two are rules of a build rather than of the format, which is why the reader leaves those fields alone.
     /// </remarks>
     public LintReport LintSheets(string folder)
     {
@@ -144,7 +141,7 @@ public sealed class ContentLinter
 
         foreach (string file in files)
         {
-            if (IsDocument(file) && HasImageBeside(file) && Sheet(file, problems) is not null)
+            if (IsDocument(file) && Sheet(file, problems) is not null)
             {
                 count++;
             }
@@ -224,24 +221,11 @@ public sealed class ContentLinter
     private static bool IsDocument(string file) =>
         file.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Determines whether an image stands beside a document, which is what makes the document the sheet of it.</summary>
-    private bool HasImageBeside(string file)
-    {
-        string name = file[..^Path.GetExtension(file).Length];
-
-        foreach (string extension in Images)
-        {
-            if (_assets.Exists(name + extension))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /// <summary>Checks one component of a prototype: what a document may write, and what it names.</summary>
-    private void Check(PrototypeComponent component, List<LintProblem> problems)
+    /// <param name="component">The component to check.</param>
+    /// <param name="components">The components of the document the component belongs to, which a member of it may point at.</param>
+    /// <param name="problems">The report that what is wrong is added to.</param>
+    private void Check(PrototypeComponent component, IReadOnlyList<PrototypeComponent> components, List<LintProblem> problems)
     {
         if (component.Values.ValueKind != JsonValueKind.Object || !_components.TryGetType(component.Name, out Type? type))
         {
@@ -282,16 +266,17 @@ public sealed class ContentLinter
             CheckResource(component, member, field.Value.GetString()!, problems);
         }
 
-        CheckState(component, type, problems);
+        CheckState(component, type, components, problems);
     }
 
     /// <summary>Checks that a state a component names is one the sheet it names declares, which is what a game would find out at the first frame instead.</summary>
     /// <remarks>
-    /// A member that carries <see cref="SheetStateAttribute"/> points at the member of the same component that holds the path
-    /// of the sheet, and both are read out of the document: a document that writes one of them and not the other has nothing
-    /// to check here, and a sheet that cannot be read is what the pass over the sheets of a build reports.
+    /// A member that carries <see cref="SheetStateAttribute"/> says which member holds the path of the sheet, either of the
+    /// same component or of another one of the document, and both values are read out of the document: a document that writes
+    /// one of them and not the other has nothing to check here, and a sheet that cannot be read is what the pass over the
+    /// sheets of a build reports.
     /// </remarks>
-    private void CheckState(PrototypeComponent component, Type type, List<LintProblem> problems)
+    private void CheckState(PrototypeComponent component, Type type, IReadOnlyList<PrototypeComponent> components, List<LintProblem> problems)
     {
         foreach (MemberInfo member in Members(type))
         {
@@ -300,12 +285,16 @@ public sealed class ContentLinter
                 continue;
             }
 
-            if (Value(component, member) is not string state || Value(component, type, marked.Sheet) is not string path)
+            string? path = marked.Component is Type owner
+                ? Value(components, owner, marked.Sheet)
+                : Value(component, type, marked.Sheet);
+
+            if (Value(component, member) is not string state || path is not string sheetPath)
             {
                 continue;
             }
 
-            if (SheetAt(path) is not SpriteSheet sheet || sheet.TryGetState(state, out SpriteSheetState? _))
+            if (SheetAt(sheetPath) is not SpriteSheet sheet || sheet.TryGetState(state, out SpriteSheetState? _))
             {
                 continue;
             }
@@ -313,8 +302,22 @@ public sealed class ContentLinter
             problems.Add(new LintProblem(
                 component.File,
                 component.Line,
-                $"the state '{state}' of the component '{component.Name}' is not one that the sheet '{path}' declares: it holds {string.Join(", ", sheet.States.Keys)}"));
+                $"the state '{state}' of the component '{component.Name}' is not one that the sheet '{sheetPath}' declares: it holds {string.Join(", ", sheet.States.Keys)}"));
         }
+    }
+
+    /// <summary>Returns the value that a document writes for a member of another component of it, or null when it writes none.</summary>
+    private string? Value(IReadOnlyList<PrototypeComponent> components, Type component, string member)
+    {
+        foreach (PrototypeComponent sibling in components)
+        {
+            if (_components.TryGetType(sibling.Name, out Type? type) && type == component)
+            {
+                return Value(sibling, type, member);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Returns the sheet of a document, reading it once, or null when it cannot be read.</summary>

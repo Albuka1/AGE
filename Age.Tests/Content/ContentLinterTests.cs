@@ -184,6 +184,37 @@ public sealed class ContentLinterTests
     }
 
     [Fact]
+    public void ContentLinter_AStateThatTheAnimationNames_IsCheckedAgainstTheSheetOfTheSprite()
+    {
+        // The animation of an entity plays a state of the sheet that the sprite of the same entity names, so a state it asks
+        // for is one the document has to declare.
+        LintReport report = LintWith(
+            "- type: entity\n  id: Broken\n  components:\n    - type: Sprite\n      SheetPath: Textures/Entities/goblin.yml\n    - type: SpriteAnimation\n      State: flying\n",
+            ("Textures/Entities/goblin.yml", Sheet));
+
+        report.Problems.Should().ContainSingle().Which.Message
+            .Should().Contain("'flying'")
+            .And.Contain("SpriteAnimation")
+            .And.Contain("idle");
+    }
+
+    [Fact]
+    public void ContentLinter_ASheetWhoseImageIsNotThere_IsReported()
+    {
+        LintReport report = LintSheets(root =>
+        {
+            string folder = Path.Combine(root, "Textures", "Entities");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "goblin.yml"), Sheet);
+        });
+
+        report.Count.Should().Be(1, "the document is a sheet of the build whether or not its image is there");
+        report.Problems.Should().ContainSingle().Which.Message
+            .Should().Contain("Textures/Entities/goblin.tga")
+            .And.Contain("cannot be read");
+    }
+
+    [Fact]
     public void ContentLinter_ASheetsFolderThatIsNotThere_IsReportedWithItsName()
     {
         // A build that is pointed at a folder which is not there hears about it: the tool names the folder rather than

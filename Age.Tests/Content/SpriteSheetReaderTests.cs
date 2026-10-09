@@ -55,7 +55,13 @@ public sealed class SpriteSheetReaderTests
     {
         SpriteSheet sheet = SpriteSheetReader.Read(Document, "goblin.yml");
 
-        sheet.States["idle"].Delays.Should().Equal([0.15f, 0.15f, 0.15f, 0.15f], "a state that gives one length gives it for every frame of it");
+        SpriteSheetState idle = sheet.States["idle"];
+
+        idle.Delay.Should().Be(0.15f);
+        idle.Delays.Should().BeNull("a state that gives one length keeps it once rather than a copy for every frame");
+        idle.DelayOf(0).Should().Be(0.15f);
+        idle.DelayOf(3).Should().Be(0.15f, "every frame of a state that plays evenly lasts as long as the state says");
+        idle.DelayOf(99).Should().Be(0.15f);
     }
 
     [Fact]

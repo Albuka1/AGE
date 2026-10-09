@@ -74,21 +74,22 @@ public sealed record SpriteSheet(
 /// <param name="Name">The name the document declared.</param>
 /// <param name="Row">The row of the grid, counting from zero at the top.</param>
 /// <param name="Frames">The number of frames, which are the first cells of the row.</param>
-/// <param name="Delays">The seconds every frame stays on screen, one delay per frame.</param>
+/// <param name="Delay">The seconds a frame stays on screen, which is the length of every frame of a state that plays evenly.</param>
+/// <param name="Delays">The seconds each frame stays on screen, one per frame, or null when the state gives one length for all of them.</param>
 /// <param name="Loop">A value indicating whether the state starts over at its last frame.</param>
-public sealed record SpriteSheetState(string Name, int Row, int Frames, IReadOnlyList<float> Delays, bool Loop)
+public sealed record SpriteSheetState(string Name, int Row, int Frames, float Delay, IReadOnlyList<float>? Delays, bool Loop)
 {
-    /// <summary>Gets the seconds the first frame stays on screen, which is the length of every frame of a state that plays evenly.</summary>
-    public float Delay => Delays.Count > 0 ? Delays[0] : 0f;
-
     /// <summary>Returns the seconds one frame of the state stays on screen.</summary>
     /// <param name="frame">The frame inside the state, counting from zero.</param>
     /// <returns>The seconds the frame stays on screen.</returns>
     /// <remarks>
     /// A state may give every frame a length of its own, which is what an attack needs: a wind-up, a strike and a recovery
-    /// are three different lengths, and one number for the whole state makes the strike as slow as the wind-up.
+    /// are three different lengths, and one number for the whole state makes the strike as slow as the wind-up. A state that
+    /// gives one length keeps it once rather than a list of one number per frame, because a state of a thousand frames that
+    /// plays evenly is thousands of copies of one number.
     /// </remarks>
-    public float DelayOf(int frame) => Delays.Count == 0 ? 0f : Delays[Math.Clamp(frame, 0, Delays.Count - 1)];
+    public float DelayOf(int frame) =>
+        Delays is null ? Delay : Delays[Math.Clamp(frame, 0, Delays.Count - 1)];
 
     /// <inheritdoc />
     public override string ToString() => $"the state '{Name}'";

@@ -14,9 +14,9 @@ A path is written the same way everywhere: in the engine, in a document of conte
 - A sprite sheet is a document named like the image beside it, so `Textures/Entities/goblin.yml` is the sheet of
   `Textures/Entities/goblin.tga`: it declares `version` (the format this build reads), `image`, `cell`, `columns`, `rows`,
   `states`, and `license` with `copyright` for art that came from somewhere else. A state gives the length of a frame with
-  `delay` for every frame of it, or the length of each frame with `delays`. The linter checks all of it: that the grid a
-  document declares is the size of the image it names, that it says where its art comes from, and that a state a prototype
-  names is one the document declares.
+  `delay` for every frame of it, or the length of each frame with `delays`. Every document of YAML under the textures of a
+  build is a sheet of it, and the linter reads all of them: the image a document names and the grid it declares over it, the
+  version, where its art comes from, and every state a prototype names — on the sprite or on its animation.
 - A section appears with its first file, so nothing is committed as an empty promise.
 
 ## What is here
