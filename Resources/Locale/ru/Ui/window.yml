@@ -1,0 +1,7 @@
+# Russian writes a count in three forms rather than two: 'one' for 1 and 21, 'few' for 2 to 4, 'many' for 5 to 20 and for the
+# tens that end in zero, and 'other' for the counts that are not whole, so that a line stays readable when a fraction lands
+# in it. A form the language does not write falls back to 'other', and a count that is not whole takes 'other' as well.
+ui-entities.one: "{count} сущность"
+ui-entities.few: "{count} сущности"
+ui-entities.many: "{count} сущностей"
+ui-entities.other: "{count} сущности"

@@ -1,0 +1,9 @@
+# The strings of the creatures of the engine, in the language every other language falls back to. A key that holds a dot says
+# what the key before the dot says besides its text: 'desc' is the description of a creature. A text written as "{ ent-X }" —
+# in quotes, because a document is written in block style — is what that key says rather than a text of its own, which is how a
+# string is inherited instead of copied.
+ent-CreatureBase: creature
+ent-CreatureBase.desc: A thing that lives and moves.
+
+ent-Goblin: goblin
+ent-Goblin.desc: A small, mean creature that bites at the ankles.

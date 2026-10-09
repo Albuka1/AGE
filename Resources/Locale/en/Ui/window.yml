@@ -1,0 +1,6 @@
+# The strings of the interface, in the language every other language falls back to. A key that writes a count holds the forms
+# its language selects between rather than one text, and the form 'other' is the one every language that writes by count has:
+# 'ui-entities.one' is what English writes for a single entity and 'ui-entities.other' for every other count. A key that writes
+# a count has no text of its own, because there would be two answers to the same question.
+ui-entities.one: "{count} entity"
+ui-entities.other: "{count} entities"

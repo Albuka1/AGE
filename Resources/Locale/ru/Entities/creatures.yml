@@ -1,0 +1,7 @@
+# The same keys in Russian: a language folder holds the keys the base language holds, and only the strings change. A game that
+# adds a language copies this shape, and a translation that is not finished falls back to the base language key by key.
+ent-CreatureBase: существо
+ent-CreatureBase.desc: То, что живёт и двигается.
+
+ent-Goblin: гоблин
+ent-Goblin.desc: Маленькое злобное существо, которое кусает за пятки.

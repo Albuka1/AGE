@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The strings of a game are content: `Resources/Locale/<language>/…` holds documents of keys and the strings they say, in the
+  same subset of YAML as the rest of the content, and `ILocaleService` answers a game with the string of a key in the language
+  it plays in, falling back to the base language (`en`) key by key, so a translation that is not finished shows English rather
+  than keys. A key that holds a dot says what the key before the dot says besides its text — `desc` is a description, and `one`,
+  `few` and `many` are the forms a language writes for a count — and a text written as `"{ other-key }"` is what that key says
+  rather than a copy of it, which is how a string is inherited rather than repeated. A key that is not there is answered with
+  the key itself, counted in `Missing` and written once in the log, `PluralRules` selects the form for a count in the languages
+  the engine ships, and `Resources/Locale/en` with `Resources/Locale/ru` are what a game copies to add a language of its own.
 - A release is cut by one script and checked by the workflow that publishes it: `tools/release.ps1` bumps the version, closes
   the unreleased section of this file into a dated one, builds and tests what it is about to release, and only then commits and
   tags, while the Release workflow refuses a tag that does not name the version the build reports and a version that this file
