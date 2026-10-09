@@ -1,0 +1,8 @@
+# The strings of the items of the engine, in the language every other language falls back to. A name and a description are what
+# the prototype of the item points at: the document writes no text of its own, and no key here means the item is drawn as its
+# identifier, which is what the linter of the content refuses before a build ships it.
+ent-ItemBase: item
+ent-ItemBase.desc: A thing one carries.
+
+ent-Sword: sword
+ent-Sword.desc: A blade with a hilt, which is what a fight is usually about.

@@ -278,6 +278,75 @@ public sealed class ContentLinterTests
         }
     }
 
+    [Fact]
+    public void ContentLinter_AStringThatTheBaseLanguageDoesNotHold_IsReported()
+    {
+        LintReport report = LintLocale(
+            "- type: entity\n  id: Fine\n",
+            ("en/Entities/creatures.yml", "ent-Fine: fine\nent-Fine.desc: a fine thing\n"),
+            ("ru/Entities/creatures.yml", "ent-Fine: ладно\nent-Fine.desc: ладная вещь\nent-Nowhere: нигде\n"));
+
+        report.Problems.Should().ContainSingle().Which.Message.Should().Contain("'ent-Nowhere'").And.Contain("'en'");
+    }
+
+    [Fact]
+    public void ContentLinter_AStringThatAPrototypeNamesAndNothingAnswers_IsReported()
+    {
+        LintReport report = LintLocale(
+            "- type: entity\n  id: Goblin\n  name: ent-Nothing\n",
+            ("en/Entities/creatures.yml", "ent-Goblin: goblin\nent-Goblin.desc: A small, mean creature.\n"));
+
+        report.Problems.Should().ContainSingle().Which.Message.Should().Contain("'ent-Nothing'").And.Contain("'Goblin'");
+    }
+
+    [Fact]
+    public void ContentLinter_WhatTheEngineShips_HasStringsForEveryName()
+    {
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+        var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+        LintReport content = linter.Lint("Prototypes");
+        LintReport strings = linter.LintLocales("Locale");
+
+        content.IsClean.Should().BeTrue();
+        strings.IsClean.Should().BeTrue("every entity of the engine is named by a string of the base language");
+        strings.Count.Should().BeGreaterThan(8, "the engine ships the strings of its creatures, its items and its window");
+    }
+
+    /// <summary>Lints the strings of a game root of its own, together with the prototype that names them.</summary>
+    private static LintReport LintLocale(string prototype, params (string Path, string Text)[] documents)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-lint-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Prototypes"));
+
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "Prototypes", "thing.yml"), prototype);
+
+            foreach ((string path, string text) in documents)
+            {
+                string file = Path.Combine(root, "Locale", path);
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.WriteAllText(file, text);
+            }
+
+            using ServiceProvider provider = Create();
+            var assets = new NullAssetLoader();
+            assets.Initialize(root);
+            var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+            LintReport content = linter.Lint("Prototypes");
+            LintReport strings = linter.LintLocales("Locale");
+
+            return new LintReport(content.Count, [.. content.Problems, .. strings.Problems]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>Lints one document that is written into a game root of its own, together with the files it may name.</summary>
     private static LintReport Lint(string document, params string[] files)
     {

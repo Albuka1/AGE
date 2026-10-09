@@ -133,10 +133,30 @@ public sealed class LocaleService : ILocaleService
 
         if (language is not null)
         {
-            return Load(language).TryGet(key, out LocaleString? _);
+            return Holds(Load(language), key);
         }
 
-        return Load(_language).TryGet(key, out LocaleString? _) || Load(Base).TryGet(key, out LocaleString? _);
+        return Holds(Load(_language), key) || Holds(Load(Base), key);
+    }
+
+    /// <summary>Determines whether a language holds a key, which may name what a key says besides its text.</summary>
+    private static bool Holds(LocaleLanguage language, string key)
+    {
+        if (language.TryGet(key, out LocaleString? _))
+        {
+            return true;
+        }
+
+        int dot = key.LastIndexOf('.');
+
+        if (dot <= 0 || !language.TryGet(key[..dot], out LocaleString? owner))
+        {
+            return false;
+        }
+
+        string part = key[(dot + 1)..];
+
+        return owner.Attributes.ContainsKey(part) || owner.Forms.ContainsKey(part);
     }
 
     /// <inheritdoc />

@@ -100,12 +100,14 @@ public sealed class SpawnServiceTests
         // A game reads its content with the kind it registered, and it is free to hand back something else: this one answers
         // every document with a prototype that names a component the engine does not know, which is what a spawn refuses.
         var ghost = new EntityPrototype(new Prototype(
-            "Ghost",
-            EntityPrototype.Kind,
+            id: "Ghost",
+            kind: EntityPrototype.Kind,
             parent: null,
-            "Prototypes/Entities/ghost.yml",
+            nameKey: null,
+            descKey: null,
+            file: "Prototypes/Entities/ghost.yml",
             line: 3,
-            [new PrototypeComponent("Nowhere", YamlJson.Write(YamlReader.Read("Level: 3\n", "ghost.yml")), "Prototypes/Entities/ghost.yml", 5)]));
+            components: [new PrototypeComponent("Nowhere", YamlJson.Write(YamlReader.Read("Level: 3\n", "ghost.yml")), "Prototypes/Entities/ghost.yml", 5)]));
 
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register(EntityPrototype.Kind, _ => ghost);

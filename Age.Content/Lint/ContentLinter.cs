@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Age.Assets;
+using Age.Content.Locale;
 using Age.Content.Prototypes;
 using Age.Content.Sheets;
 using Age.Core;
@@ -220,6 +221,158 @@ public sealed class ContentLinter
     /// <summary>Determines whether a file is a document of YAML, which is what a sheet is written in.</summary>
     private static bool IsDocument(string file) =>
         file.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Reads every document of every language and reports what is wrong with the strings of a game.</summary>
+    /// <param name="folder">The folder that holds the languages, one folder each, relative to the game root, such as <c>Locale</c>.</param>
+    /// <returns>What was read and what is wrong with it.</returns>
+    /// <exception cref="ArgumentException">The folder is null, empty or whitespace.</exception>
+    /// <remarks>
+    /// What a build of a game can refuse that a frame cannot: a document that does not describe strings, a key that two
+    /// documents of one language both write, a text that refers to a key the language does not hold, a translation that holds
+    /// a key the base language does not, and a name or a description that a prototype points at and no string answers. The base
+    /// language is what every other language falls back to, so a folder that holds no such language is a problem of the content
+    /// rather than an empty report.
+    /// </remarks>
+    public LintReport LintLocales(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+
+        var problems = new List<LintProblem>();
+        var languages = new Dictionary<string, Dictionary<string, LocaleString>>(StringComparer.Ordinal);
+
+        IEnumerable<string> files;
+
+        try
+        {
+            files = _assets.Enumerate(folder);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // A game whose content says nothing yet has no folder of languages, which is what a game with no sheets looks like.
+            return new LintReport(0, []);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
+        {
+            return new LintReport(0, [new LintProblem(folder, 0, exception.Message)]);
+        }
+
+        foreach (string file in files)
+        {
+            if (!IsDocument(file))
+            {
+                continue;
+            }
+
+            string language = file.Split('/')[1];
+
+            if (!languages.TryGetValue(language, out Dictionary<string, LocaleString>? strings))
+            {
+                strings = new Dictionary<string, LocaleString>(StringComparer.Ordinal);
+                languages[language] = strings;
+            }
+
+            try
+            {
+                foreach ((string key, LocaleString value) in LocaleReader.Read(_assets.Load<string>(file), file))
+                {
+                    if (strings.TryGetValue(key, out LocaleString? first))
+                    {
+                        problems.Add(new LintProblem(file, value.Line, $"the key '{key}' is already written by {first.File}, and a language says one thing per key"));
+                        continue;
+                    }
+
+                    strings[key] = value;
+                }
+            }
+            catch (LocaleException exception)
+            {
+                problems.Add(new LintProblem(exception.File, exception.Line, exception.Message));
+            }
+            catch (IOException exception)
+            {
+                problems.Add(new LintProblem(file, 0, exception.Message));
+            }
+        }
+
+        return Strings(languages, problems);
+    }
+
+    /// <summary>Checks what the languages of a game say about each other, which is what a build can refuse.</summary>
+    private LintReport Strings(Dictionary<string, Dictionary<string, LocaleString>> languages, List<LintProblem> problems)
+    {
+        var count = languages.Sum(language => language.Value.Count);
+
+        if (!languages.TryGetValue(LocaleService.Base, out Dictionary<string, LocaleString>? baseStrings))
+        {
+            problems.Add(new LintProblem(
+                LocaleService.Base,
+                0,
+                $"the strings of a game hold the language '{LocaleService.Base}', which every other language falls back to, and this game holds {string.Join(", ", languages.Keys.Order(StringComparer.Ordinal))}"));
+
+            return new LintReport(count, problems);
+        }
+
+        var locale = new LocaleService(_assets);
+
+        foreach ((string language, Dictionary<string, LocaleString> strings) in languages)
+        {
+            foreach ((string key, LocaleString value) in strings)
+            {
+                if (!string.Equals(language, LocaleService.Base, StringComparison.Ordinal) && !baseStrings.ContainsKey(key))
+                {
+                    problems.Add(new LintProblem(value.File, value.Line, $"the string '{key}' is one that '{LocaleService.Base}' does not hold, so nothing of the game asks for it"));
+                }
+
+                foreach (string reference in References(value))
+                {
+                    if (!locale.Has(reference, language))
+                    {
+                        problems.Add(new LintProblem(value.File, value.Line, $"the string '{key}' of '{language}' says what '{reference}' says, and no string of that language answers"));
+                    }
+                }
+            }
+        }
+
+        foreach (Prototype prototype in _prototypes.Prototypes)
+        {
+            // The kind is what knows how an entity names itself, so the rule of a name lives in one place rather than in two.
+            if (!_prototypes.TryGet(prototype.Id, out IPrototype? built) || built is not EntityPrototype entity)
+            {
+                continue;
+            }
+
+            foreach (string key in new[] { entity.NameKey, entity.DescKey })
+            {
+                // The rule of what a key holds lives in the service of the strings, so a name and a description written as
+                // attributes of a key are answered here the way the game answers them.
+                if (!locale.Has(key, LocaleService.Base))
+                {
+                    problems.Add(new LintProblem(
+                        entity.Data.File,
+                        entity.Data.Line,
+                        $"the entity '{entity.Id}' is named by the string '{key}', and '{LocaleService.Base}' holds no string under that key"));
+                }
+            }
+        }
+
+        return new LintReport(count, problems);
+    }
+
+    /// <summary>Returns the keys that the texts of a string refer to, which are what its language has to answer as well.</summary>
+    private static IEnumerable<string> References(LocaleString value)
+    {
+        var references = new List<string>();
+
+        foreach (string? text in new[] { value.Text }.Concat(value.Attributes.Values).Concat(value.Forms.Values))
+        {
+            if (text is not null && LocaleReference.TryKey(text) is string reference)
+            {
+                references.Add(reference);
+            }
+        }
+
+        return references;
+    }
 
     /// <summary>Checks one component of a prototype: what a document may write, and what it names.</summary>
     /// <param name="component">The component to check.</param>

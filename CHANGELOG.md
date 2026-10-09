@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than a copy of it, which is how a string is inherited rather than repeated. A key that is not there is answered with
   the key itself, counted in `Missing` and written once in the log, `PluralRules` selects the form for a count in the languages
   the engine ships, and `Resources/Locale/en` with `Resources/Locale/ru` are what a game copies to add a language of its own.
+  A prototype names its strings with the fields `name` and `desc`, which hold keys rather than texts and are inherited with the
+  rest of the prototype, so an entity of `Goblin` is named by `ent-Goblin` and described by `ent-Goblin.desc` without a document
+  writing either; a name is written once where a kind is declared, and `ent-GoblinHeavy` that is a `Goblin` says so by writing
+  nothing at all. `Age.Content.Lint` reads every language of a build: a key that two documents write, a reference that its
+  language does not answer, a translation that holds a key the base language does not, and a name or a description that a
+  prototype points at and no string answers are all mistakes of the content rather than something a player finds. The sample
+  reads its language from the setting `locale` and the command `loc` reports what the strings say and switches the language
+  while the game runs.
 - A release is cut by one script and checked by the workflow that publishes it: `tools/release.ps1` bumps the version, closes
   the unreleased section of this file into a dated one, builds and tests what it is about to release, and only then commits and
   tags, while the Release workflow refuses a tag that does not name the version the build reports and a version that this file

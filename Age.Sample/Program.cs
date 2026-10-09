@@ -169,6 +169,12 @@ CVarService cvars = provider.GetRequiredService<CVarService>();
 
 cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen lives, in seconds.");
 
+// The language the strings are read in is a setting rather than a way the game was built: the command 'loc' changes it while
+// the game runs, and everything that asks the locale service for a key answers in the new language from then on.
+cvars.Register("locale", "en", "The language the strings of the game are read in, such as en or ru.");
+Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
+locale.Language = cvars.Get<string>("locale");
+
 // The second sprite turns with a tween of three seconds that starts over when it reaches the end. Nothing in this game
 // advances it: the tween system does, on the time of every step, and the subscription above writes the value into the
 // transform of the entity it belongs to.
@@ -191,6 +197,17 @@ console.Register("stats", "Reports what the world holds, what it is missing and 
 
 // A goblin of the content: the world receives exactly the components that the document declares, and this game names none
 // of them. Where it stands is the one thing a spawn takes from the caller, because a map is what decides that.
+console.Register("loc", "Reports the language the strings are read in, and switches to the one this names.", arguments =>
+{
+    if (arguments.Count > 0)
+    {
+        locale.Language = arguments[0];
+    }
+
+    console.Write($"language {locale.Language}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve");
+    console.Write($"goblin: {locale.Get("ent-Goblin")} / {locale.Get("ent-Goblin.desc")}");
+    console.Write($"items: {locale.Get("ui-entities", ("count", 1))}, {locale.Get("ui-entities", ("count", 4))}");
+});
 console.Register("goblin", "Puts a goblin of the content in the world, at 320 by 240.", _ => spawner.Spawn(world, "Goblin", new Vector2(320f, 240f)));
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any

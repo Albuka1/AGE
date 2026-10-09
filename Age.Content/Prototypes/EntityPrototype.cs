@@ -39,6 +39,17 @@ public sealed class EntityPrototype : IPrototype
     /// <summary>Gets the components of the entity and the values they start with, in the order the documents declared them.</summary>
     public IReadOnlyList<PrototypeComponent> Components => Data.Components;
 
+    /// <summary>Gets the key of the string that names this entity, which is what a game draws.</summary>
+    /// <remarks>
+    /// A document that writes <c>name</c> names the key itself; one that writes nothing takes the key of its identifier,
+    /// <c>ent-&lt;Id&gt;</c>, which is what the documents of a game are expected to hold. A key that no language holds is drawn as
+    /// the identifier of the entity before it is drawn as nothing at all.
+    /// </remarks>
+    public string NameKey => Data.NameKey ?? $"ent-{Id}";
+
+    /// <summary>Gets the key of the string that describes this entity, which is what a game shows on a closer look.</summary>
+    public string DescKey => Data.DescKey ?? $"ent-{Id}.desc";
+
     /// <summary>Determines whether the entity carries a component.</summary>
     /// <param name="name">The name a document uses for the component.</param>
     /// <returns><see langword="true"/> when the entity carries it.</returns>
