@@ -85,7 +85,6 @@ FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04FF');
 // pass of a game adds of its own.
 IShaderService shaders = provider.GetRequiredService<IShaderService>();
 ShaderHandle vignette = shaders.Load("Shaders/vignette.frag");
-var vignetteOn = true;
 
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
 SoundHandle click = sounds.Load("Audio/Effects/click.wav");
@@ -129,6 +128,11 @@ renderPipeline.Add(renderSystem);
 // it stands, so it belongs to the world, and it is drawn over the sprites and under the UI.
 renderPipeline.Add(textRenderSystem);
 renderPipeline.Add(uiRenderSystem);
+
+// The vignette of this game is a pass like the ones of the engine, which is what the pipeline is for: it runs after the world
+// and the interface and before the overlay, so the console and the numbers of the developer stay above it.
+var vignettePass = new VignettePass(renderer, vignette);
+renderPipeline.Add(vignettePass);
 
 // The developer overlay draws over everything else: the numbers of the frame and the console of the engine. Its keys are
 // Tab for the console, which pauses the simulation while it is open, and F1 for the numbers.
@@ -256,10 +260,10 @@ console.Register("goblin", "Puts a goblin of the content in the world, at 320 by
 // The shader of this game is a setting of the sample rather than of the engine: `vignette` turns it on and off while the game
 // runs, which is what shows that the quads which were collected before a shader changes are drawn with the state they were
 // collected under.
-console.Register("vignette", "Turns the vignette of this game on and off, which is a shader of the content drawn over the frame.", _ =>
+console.Register("vignette", "Turns the vignette of this game on and off, which is a pass of the content drawn over the frame.", _ =>
 {
-    vignetteOn = !vignetteOn;
-    console.Write($"vignette {(vignetteOn ? "on" : "off")}");
+    vignettePass.Enabled = !vignettePass.Enabled;
+    console.Write($"vignette {(vignettePass.Enabled ? "on" : "off")}");
 });
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
@@ -338,28 +342,8 @@ gameLoop.Run(
 
         // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
         // agree, including after the window was resized.
-        // A camera that maps one unit to one pixel of the frame, which is what the overlay below is drawn with: the world of
-        // this game moves under its own camera, and the vignette covers the frame in pixels rather than in world units.
-        var screenCamera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = renderer.ViewportSize };
-
         camera.ViewportSize = renderer.ViewportSize;
         renderPipeline.Render(world, camera);
-
-        // The vignette of this game: a quad that covers the frame, drawn with a shader of the content over the world and the
-        // interface of it. The shader writes a colour of its own with an alpha that grows towards the corners of the quad, so
-        // the middle of the frame is left alone, and the numbers below are drawn after it to stay readable. The colour is a
-        // setting of this game: a black vignette over the black frame that a pass of the engine clears to would draw nothing.
-        if (vignetteOn)
-        {
-            renderer.SetCamera(screenCamera);
-            renderer.BeginFrame(false);
-            renderer.UseShader(vignette);
-            renderer.SetUniform("uVignetteColour", [0.16f, 0.20f, 0.38f]);
-            renderer.SetUniform("uVignetteStrength", 0.85f);
-            renderer.DrawRectangle(new Rect(Vector2.Zero, renderer.ViewportSize), Color.White);
-            renderer.ResetShader();
-            renderer.EndFrame();
-        }
 
         // Text of this game, baked from the TrueType font in Resources/Fonts. The UI pass above draws with the built-in
         // bitmap font, so both are visible in the same frame.
@@ -496,5 +480,38 @@ static void TintByCollision(World world, Entity first, Entity second)
 
         ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
         sprite.Color = world.Has<CollisionComponent>(entity) ? touching : calm;
+    }
+}
+
+// Draws the vignette of this game over the frame, which is what a pass of a game looks like that is not a pass of the engine: a
+// quad in pixels covers the frame, and a fragment stage of the content writes a colour of its own into it. It runs after the
+// world and the interface and before the overlay, so the console and the numbers of the developer stay above it.
+internal sealed class VignettePass(IRenderer renderer, ShaderHandle vignette) : IRenderPass
+{
+    // Whether the pass draws the vignette, which the console of this game turns off and on while it runs.
+    public bool Enabled { get; set; } = true;
+
+    public void Render(World world, in Camera2D camera)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        if (!Enabled)
+        {
+            return;
+        }
+
+        // A camera that maps one unit to one pixel of the frame: what this pass covers is the frame rather than the world.
+        var screenCamera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = renderer.ViewportSize };
+
+        // The colour of the vignette is a setting of this game, because the frame of a game is cleared to black by the pass of
+        // the world and a black vignette over a black frame would draw nothing.
+        renderer.SetCamera(screenCamera);
+        renderer.BeginFrame(false);
+        renderer.UseShader(vignette);
+        renderer.SetUniform("uVignetteColour", [0.16f, 0.20f, 0.38f]);
+        renderer.SetUniform("uVignetteStrength", 0.85f);
+        renderer.DrawRectangle(new Rect(Vector2.Zero, renderer.ViewportSize), Color.White);
+        renderer.ResetShader();
+        renderer.EndFrame();
     }
 }
