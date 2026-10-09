@@ -38,6 +38,7 @@ A path is written the same way everywhere: in the engine, in a document of conte
 | `Textures/Icons` | `icon-20.png`, `icon-40.png` and `icon-60.png`, the window icon in the three sizes the operating system picks from | `Age.Rendering` |
 | `Textures/Logo` | `logo-320.png`, the logo the splash screen shows | `Age.Rendering` |
 | `Textures/Tiles` | `tiles.bmp`, the tile the sprite of the sample draws | `Age.Sample` |
+| `Shaders` | `vignette.frag`, the fragment stage that the sample draws over its frame to darken the edges of it | `Age.Sample`, `Age.Tests` |
 
 The table holds every file of this folder, and a test walks the folder and checks it: a file that no line mentions fails
 the build, and a path this file mentions that is not there fails it too. That is what keeps this catalogue from going
@@ -51,7 +52,6 @@ A section is created with its first file; until then this table says where it wi
 | --- | --- | --- |
 | `Maps` | A map as a file of its own, when a map is authored rather than saved during a run | A map a person authors |
 | `Ui` | Layout documents of the interface | B6 |
-| `Shaders` | Shader sources, when a pass needs one of its own | — |
 
 ## How a project uses it
 

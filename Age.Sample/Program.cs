@@ -80,6 +80,13 @@ const string TilePath = "Textures/Tiles/tiles.bmp";
 IFontService fonts = provider.GetRequiredService<IFontService>();
 FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04FF');
 
+// A shader of the content: the fragment stage under Resources/Shaders is read through the asset loader, compiled once, and drawn
+// with the vertex stage of the engine, which places the quad. This one is drawn over the frame at the end of it, which is what a
+// pass of a game adds of its own.
+IShaderService shaders = provider.GetRequiredService<IShaderService>();
+ShaderHandle vignette = shaders.Load("Shaders/vignette.frag");
+var vignetteOn = true;
+
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
 SoundHandle click = sounds.Load("Audio/Effects/click.wav");
 
@@ -246,6 +253,15 @@ console.Register("loc", "Reports the language the strings are read in, and switc
 });
 console.Register("goblin", "Puts a goblin of the content in the world, at 320 by 240.", _ => spawner.Spawn(world, "Goblin", new Vector2(320f, 240f)));
 
+// The shader of this game is a setting of the sample rather than of the engine: `vignette` turns it on and off while the game
+// runs, which is what shows that the quads which were collected before a shader changes are drawn with the state they were
+// collected under.
+console.Register("vignette", "Turns the vignette of this game on and off, which is a shader of the content drawn over the frame.", _ =>
+{
+    vignetteOn = !vignetteOn;
+    console.Write($"vignette {(vignetteOn ? "on" : "off")}");
+});
+
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
 // stays paused until the splash is over, so nothing moves behind the logo. `Q` pauses the clock, which stops the steps
@@ -324,6 +340,19 @@ gameLoop.Run(
         // agree, including after the window was resized.
         camera.ViewportSize = renderer.ViewportSize;
         renderPipeline.Render(world, camera);
+
+        // The vignette of this game: a quad that covers the frame, drawn with a shader of the content over the world and the
+        // interface of it. The shader writes a colour of its own with an alpha that grows towards the corners of the quad, so
+        // the middle of the frame is left alone, and the numbers below are drawn after it to stay readable.
+        if (vignetteOn)
+        {
+            renderer.BeginFrame(false);
+            renderer.UseShader(vignette);
+            renderer.SetUniform("uVignetteStrength", 0.8f);
+            renderer.DrawRectangle(new Rect(Vector2.Zero, renderer.ViewportSize), Color.White);
+            renderer.ResetShader();
+            renderer.EndFrame();
+        }
 
         // Text of this game, baked from the TrueType font in Resources/Fonts. The UI pass above draws with the built-in
         // bitmap font, so both are visible in the same frame.
