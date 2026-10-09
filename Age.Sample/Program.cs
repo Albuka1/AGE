@@ -338,17 +338,24 @@ gameLoop.Run(
 
         // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
         // agree, including after the window was resized.
+        // A camera that maps one unit to one pixel of the frame, which is what the overlay below is drawn with: the world of
+        // this game moves under its own camera, and the vignette covers the frame in pixels rather than in world units.
+        var screenCamera = new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = renderer.ViewportSize };
+
         camera.ViewportSize = renderer.ViewportSize;
         renderPipeline.Render(world, camera);
 
         // The vignette of this game: a quad that covers the frame, drawn with a shader of the content over the world and the
         // interface of it. The shader writes a colour of its own with an alpha that grows towards the corners of the quad, so
-        // the middle of the frame is left alone, and the numbers below are drawn after it to stay readable.
+        // the middle of the frame is left alone, and the numbers below are drawn after it to stay readable. The colour is a
+        // setting of this game: a black vignette over the black frame that a pass of the engine clears to would draw nothing.
         if (vignetteOn)
         {
+            renderer.SetCamera(screenCamera);
             renderer.BeginFrame(false);
             renderer.UseShader(vignette);
-            renderer.SetUniform("uVignetteStrength", 0.8f);
+            renderer.SetUniform("uVignetteColour", [0.16f, 0.20f, 0.38f]);
+            renderer.SetUniform("uVignetteStrength", 0.85f);
             renderer.DrawRectangle(new Rect(Vector2.Zero, renderer.ViewportSize), Color.White);
             renderer.ResetShader();
             renderer.EndFrame();
