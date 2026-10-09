@@ -175,6 +175,52 @@ public sealed class SpawnServiceTests
         }
     }
 
+    [Fact]
+    public void SpawnService_ContentThatNamesTheHandleOfATexture_LoadsWithoutIt()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-content-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Prototypes"));
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(root, "Prototypes", "sprite.yml"),
+                "- type: entity\n"
+                + "  id: Broken\n"
+                + "  components:\n"
+                + "    - type: Sprite\n"
+                + "      Texture: 7\n");
+
+            using ServiceProvider provider = new ServiceCollection()
+                .AddAgeCore()
+                .AddAgeContent()
+                .AddAgePhysics()
+                .AddAgeUI()
+                .AddAgeRendering()
+                .BuildServiceProvider();
+
+            PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+            prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+
+            var assets = new NullAssetLoader();
+            assets.Initialize(root);
+            prototypes.Load(assets, "Prototypes").Should().Be(1);
+
+            SpawnService spawner = provider.GetRequiredService<SpawnService>();
+            var world = new World();
+            Entity sprite = spawner.Spawn(world, "Broken");
+
+            // A handle belongs to the run that made it, so it is state rather than data and is not part of the format: a
+            // document that writes one is read without it, and content names an image with TexturePath instead.
+            world.Get<SpriteComponent>(sprite).TexturePath.Should().BeNull();
+            world.Get<SpriteComponent>(sprite).Texture.Id.Should().Be(0);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>Builds a provider whose content is the one the engine ships.</summary>
     private static ServiceProvider Create()
     {

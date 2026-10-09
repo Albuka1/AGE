@@ -172,6 +172,41 @@ public sealed class PrototypeSceneTests
         world.PrototypeOf(next).Should().BeNull("the entity that takes the slot is not the one that was made from a prototype");
     }
 
+    [Fact]
+    public void PrototypeScene_AComponentThatThePrototypeDoesNotDeclare_IsWrittenAndComesBack()
+    {
+        using ServiceProvider provider = Create();
+        SpawnService spawner = provider.GetRequiredService<SpawnService>();
+        ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+        var world = new World();
+
+        List<Entity> spawned = [.. Enumerable.Range(0, 2).Select(_ => spawner.Spawn(world, "Goblin"))];
+
+        // A game gives one goblin a sprite, which its prototype does not declare: the scene writes that component in full.
+        world.Set(spawned[0], new SpriteComponent { TexturePath = "Textures/Tiles/tiles.bmp", Size = new Vector2(32f, 32f), Color = Color.Red });
+
+        string json = scenes.Save(world);
+
+        using (JsonDocument document = JsonDocument.Parse(json))
+        {
+            JsonElement entities = document.RootElement.GetProperty("Entities");
+
+            entities[0].GetProperty("Prototype").GetString().Should().Be("Goblin");
+            entities[0].GetProperty("Components").EnumerateObject().Select(property => property.Name).Should().Equal("Sprite");
+            entities[0].GetProperty("Components").GetProperty("Sprite").GetProperty("TexturePath").GetString().Should().Be("Textures/Tiles/tiles.bmp");
+            entities[1].GetProperty("Components").EnumerateObject().Should().BeEmpty("the second goblin is nothing but its prototype");
+        }
+
+        var loaded = new World();
+        scenes.Load(loaded, json);
+
+        List<Entity> restored = [.. loaded.Enumerate()];
+
+        loaded.Get<SpriteComponent>(restored[0]).TexturePath.Should().Be("Textures/Tiles/tiles.bmp");
+        loaded.Get<SpriteComponent>(restored[0]).Color.Should().Be(Color.Red);
+        loaded.Has<SpriteComponent>(restored[1]).Should().BeFalse("a component that the prototype does not declare is not invented for the others");
+    }
+
     /// <summary>Builds a provider whose content is the one the engine ships, read as entities.</summary>
     private static ServiceProvider Create()
     {
