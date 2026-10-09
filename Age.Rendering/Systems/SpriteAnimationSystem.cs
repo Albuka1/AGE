@@ -12,7 +12,9 @@ namespace Age.Rendering;
 /// and the length of one frame rather than reading a copy of them out of the component: a change in the document changes
 /// what plays without a change in a game. The frame that is on screen is written into the <see cref="SpriteComponent"/> of
 /// the same entity, which is the one place a renderer reads it, and so is the state that plays: what plays is what is drawn,
-/// and a state that takes over starts at its first frame.
+/// and a state that takes over starts at its first frame. A state that the sheet does not declare, and a state of one frame,
+/// are the state the sprite draws all the same: there is nothing to advance, and a state that is not there is what a
+/// renderer answers with the placeholder of the texture service.
 /// </para>
 /// <para>
 /// The animated entities are read into a buffer before anything is written, because the world must not change while its
@@ -68,54 +70,57 @@ public sealed class SpriteAnimationSystem : ISystem
             SpriteComponent sprite = world.Get<SpriteComponent>(entity);
             string state = animation.State ?? sprite.State ?? string.Empty;
 
-            if (sprite.SheetPath is not string sheetPath
-                || !_sheets.TryState(sheetPath, state, out SpriteSheetState? declared)
-                || declared.Frames <= 1)
+            if (sprite.SheetPath is not string sheetPath)
             {
-                // Nothing to play: a sheet or a state that cannot be read was reported by the service already, and a state
-                // of one frame is the frame it holds.
+                // Nothing to play: the animation of an entity that names no sheet has nothing to advance.
                 continue;
             }
 
-            float speed = animation.Speed > 0f ? animation.Speed : 1f;
             int frame = sprite.Frame;
             float elapsed = animation.Time;
+            var finished = false;
 
             if (!string.Equals(sprite.State, state, StringComparison.Ordinal))
             {
                 // What plays is what is drawn: a game that changes the state of an animation does not have to change the
-                // state of the sprite of the same entity too, and a state that takes over starts at its first frame.
+                // state of the sprite of the same entity too. The move is kept even when the state turns out to be one that
+                // cannot be played, so a sprite never goes on drawing the state it was in, and a state that takes over
+                // starts at its first frame.
                 world.GetRef<SpriteComponent>(entity).State = state;
                 frame = 0;
                 elapsed = 0f;
             }
 
-            elapsed += (float)time.Delta * speed;
-
-            var finished = false;
-
-            while (elapsed >= declared.Delay)
+            // A sheet or a state that cannot be read was reported by the service already, and a state of one frame is the
+            // frame it holds: there is nothing to advance, while the sprite draws the state it was asked for either way.
+            if (_sheets.TryState(sheetPath, state, out SpriteSheetState? declared) && declared.Frames > 1)
             {
-                elapsed -= declared.Delay;
-                frame++;
+                float speed = animation.Speed > 0f ? animation.Speed : 1f;
+                elapsed += (float)time.Delta * speed;
 
-                if (frame < declared.Frames)
+                while (elapsed >= declared.Delay)
                 {
-                    continue;
-                }
+                    elapsed -= declared.Delay;
+                    frame++;
 
-                if (declared.Loop)
-                {
-                    frame = 0;
-                    continue;
-                }
+                    if (frame < declared.Frames)
+                    {
+                        continue;
+                    }
 
-                // The last frame of a state that does not loop stays on screen, and the play stands still until a game
-                // says what comes next.
-                frame = declared.Frames - 1;
-                animation.Paused = true;
-                finished = true;
-                break;
+                    if (declared.Loop)
+                    {
+                        frame = 0;
+                        continue;
+                    }
+
+                    // The last frame of a state that does not loop stays on screen, and the play stands still until a game
+                    // says what comes next.
+                    frame = declared.Frames - 1;
+                    animation.Paused = true;
+                    finished = true;
+                    break;
+                }
             }
 
             animation.Time = elapsed;

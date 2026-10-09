@@ -14,7 +14,7 @@ public sealed class SpriteAnimationSystemTests : IDisposable
         + "  X: 16\n"
         + "  Y: 16\n"
         + "columns: 4\n"
-        + "rows: 2\n"
+        + "rows: 3\n"
         + "states:\n"
         + "  walk:\n"
         + "    row: 0\n"
@@ -24,12 +24,17 @@ public sealed class SpriteAnimationSystemTests : IDisposable
         + "    row: 1\n"
         + "    frames: 3\n"
         + "    delay: 0.1\n"
-        + "    loop: false\n";
+        + "    loop: false\n"
+        + "  idle:\n"
+        + "    row: 2\n"
+        + "    frames: 1\n"
+        + "    delay: 0.4\n";
 
     private readonly string _root;
     private readonly World _world = new();
     private readonly List<SpriteAnimationFinishedEvent> _finished = [];
     private readonly SpriteSheetService _sheets;
+    private readonly TextureService _textures;
     private readonly SpriteAnimationSystem _system;
 
     public SpriteAnimationSystemTests()
@@ -41,7 +46,8 @@ public sealed class SpriteAnimationSystemTests : IDisposable
         var assets = new NullAssetLoader();
         assets.Initialize(_root);
 
-        _sheets = new SpriteSheetService(assets, new TextureService(new FakeImageLoader(), new FakeRenderer()));
+        _textures = new TextureService(new FakeImageLoader(), new FakeRenderer());
+        _sheets = new SpriteSheetService(assets, _textures);
         _system = new SpriteAnimationSystem(_sheets);
         _world.Events.Subscribe<SpriteAnimationFinishedEvent>((_, @event) => _finished.Add(@event));
     }
@@ -156,7 +162,7 @@ public sealed class SpriteAnimationSystemTests : IDisposable
 
         SpriteRegion region = _sheets.Resolve("goblin.yml", sprite.State!, sprite.Frame);
 
-        region.Source.Y.Should().Be(0.5f, "the frame that is drawn lies on the row of the state of the attack");
+        region.Source.Y.Should().Be(1f / 3f, "the frame that is drawn lies on the row of the state of the attack");
     }
 
     [Fact]
@@ -168,6 +174,43 @@ public sealed class SpriteAnimationSystemTests : IDisposable
         Step(0.1f);
 
         _world.Get<SpriteComponent>(entity).Frame.Should().Be(2, "the play is only started over when the state changes");
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateThatCannotBePlayed_IsTheStateTheSpriteDraws()
+    {
+        Entity entity = Animate("walk");
+        Step(0.1f);
+        _world.GetRef<SpriteAnimationComponent>(entity).State = "jump";
+
+        Step(0.1f);
+
+        SpriteComponent sprite = _world.Get<SpriteComponent>(entity);
+
+        sprite.State.Should().Be("jump", "the sprite does not go on drawing the state it was in");
+        sprite.Frame.Should().Be(0, "and it stands on the first frame of the state it was asked for");
+        _world.Get<SpriteAnimationComponent>(entity).Time.Should().Be(0f, "the play of the state it left does not carry into the new one");
+        _finished.Should().BeEmpty();
+        _sheets.Missing.Should().Contain("goblin.yml:jump");
+        _sheets.Resolve("goblin.yml", sprite.State!, sprite.Frame).Texture.Should().Be(_textures.Error, "which a renderer answers with the placeholder for a state that is not there");
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateOfOneFrame_IsDrawnAndPlayedNoFurther()
+    {
+        Entity entity = Animate("walk");
+        Step(0.1f);
+        _world.GetRef<SpriteAnimationComponent>(entity).State = "idle";
+
+        Step(0.1f);
+
+        SpriteComponent sprite = _world.Get<SpriteComponent>(entity);
+
+        sprite.State.Should().Be("idle");
+        sprite.Frame.Should().Be(0, "a state of one frame stays on the frame it holds");
+        _world.Get<SpriteAnimationComponent>(entity).Time.Should().Be(0f);
+        _finished.Should().BeEmpty("a state of one frame never reaches a last frame that it could report");
+        _sheets.Resolve("goblin.yml", "idle", 0).Source.Y.Should().Be(2f / 3f, "which is the row of the state on the sheet");
     }
 
     /// <summary>Puts a sprite of the sheet and an animation of it on a new entity.</summary>
