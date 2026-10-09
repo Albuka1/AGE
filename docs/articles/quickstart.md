@@ -235,6 +235,9 @@ of a hundred units of one prototype is a hundred calls rather than a hundred
 copies. Where a spawn puts the entity is the one thing it takes from the caller,
 and a prototype that carries no transform is placed nowhere.
 
+Content lives under `Resources`, and that folder is a catalogue: a path is `<Section>/<Subsection>/<file>`, written the
+same way in the engine, in a document and in `Resources/README.md`, which a test keeps in step with the files it lists.
+
 ## Check the content of a build
 
 ```bash

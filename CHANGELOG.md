@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The `Resources` folder is a catalogue rather than a pile: `Resources/README.md` says where a file goes
+  (`<Section>/<Subsection>/<file>`, the same path in the engine, in a document of content and in the table), lists every
+  file the folder holds and who uses it, and names the sections that arrive with a later step (`Locale` with F2, `Maps`,
+  `Ui` with B6, `Shaders`), so nothing is committed as an empty promise. Two tests walk the folder and check both
+  directions: a file that no line of the catalogue names fails the build, and a path that a line names but the folder does
+  not hold fails it too.
 - `Age.Content.Lint`, a tool that reads the content of a game the way a build does and exits with a non-zero code when
   anything is wrong, so a broken prototype fails a build rather than a fight. It wraps the reader — which now names the
   file of a document in every refusal, because the YAML reader knows the line and not the file it was reading — and adds

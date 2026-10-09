@@ -67,11 +67,13 @@ Every project lives in a folder named after it at the repository root, and all b
 collected in a single `artifacts/` folder.
 
 Every asset the repository ships lives in one `Resources/` folder at the root, split by kind — `Audio/Effects`,
-`Audio/Samples`, `Fonts`, `Textures/Icons`, `Textures/Logo`, `Textures/Tiles`. `Directory.Build.props` exposes the
-folder as `$(AgeResources)`: `Age.Rendering` embeds the branding images from it, and the sample and the tests copy it
-next to their output, which makes `Resources` the asset root of `Age.Sample` — its paths are written against that
-folder, such as `Fonts/Cousine-Regular.ttf` or `Textures/Tiles/tiles.bmp`. The `Resources/README.md` file lists what
-each of them is and who uses it.
+`Audio/Samples`, `Fonts`, `Prototypes/Entities`, `Prototypes/Items`, `Textures/Icons`, `Textures/Logo`,
+`Textures/Tiles`. `Directory.Build.props` exposes the folder as `$(AgeResources)`: `Age.Rendering` embeds the branding
+images from it, and the sample and the tests copy it next to their output, which makes `Resources` the asset root of
+`Age.Sample` — its paths are written against that folder, such as `Fonts/Cousine-Regular.ttf` or
+`Textures/Tiles/tiles.bmp`. The `Resources/README.md` file is the catalogue of that folder: it says where a new file
+goes, lists every file it holds and who uses it, and a test walks the folder to keep the two in step, so a file that no
+line mentions fails a build rather than being found later by nobody.
 
 ## Requirements
 
