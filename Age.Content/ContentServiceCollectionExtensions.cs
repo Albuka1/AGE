@@ -12,8 +12,9 @@ public static class ContentServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the <see cref="PrototypeManager"/>, which a game fills with the content of its own, the
-    /// <see cref="SpawnService"/>, which makes entities out of it and answers a scene about its prototypes, and the
-    /// <see cref="ILocaleService"/>, which answers with the strings of the language the game plays in.
+    /// <see cref="SpawnService"/>, which makes entities out of it and answers a scene about its prototypes, the
+    /// <see cref="ILocaleService"/>, which answers with the strings of the language the game plays in, and the
+    /// <see cref="ITextSource"/> that answers the text of a component from it.
     /// </summary>
     /// <remarks>
     /// Both are built over the <see cref="ComponentRegistry"/> of the container, so a game registers the kinds it reads,
@@ -30,6 +31,7 @@ public static class ContentServiceCollectionExtensions
         services.AddSingleton<ILocaleService>(provider => new LocaleService(
             provider.GetRequiredService<Age.Assets.IAssetLoader>(),
             provider.GetService<Microsoft.Extensions.Logging.ILogger<LocaleService>>()));
+        services.AddSingleton<ITextSource>(provider => new LocaleTextSource(provider.GetRequiredService<ILocaleService>()));
         return services;
     }
 }
