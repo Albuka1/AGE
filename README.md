@@ -127,6 +127,9 @@ not have yet, then the platform work.
 Changes are made through pull requests against `main`. See
 [CONTRIBUTING](CODE_OF_CONDUCT.md) and the pull request template for details.
 
+A release is cut by one script and checked by the workflow that publishes it: see
+[docs/articles/releasing.md](docs/articles/releasing.md) for what the version numbers mean and how a version is released.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A release is cut by one script and checked by the workflow that publishes it: `tools/release.ps1` bumps the version, closes
+  the unreleased section of this file into a dated one, builds and tests what it is about to release, and only then commits and
+  tags, while the Release workflow refuses a tag that does not name the version the build reports and a version that this file
+  has no section for. A tag with a suffix such as `v0.3.0-alpha.1` becomes a prerelease, and `docs/articles/releasing.md` says
+  what each number means and why the versions of the content formats are their own.
+
 - A state of a sheet gives the length of every frame of it with `delay`, or the length of each frame with `delays`, which is
   what an attack needs: a wind-up, a strike and a recovery are three different lengths, and `SpriteAnimationSystem` takes
   the length of the frame that is on screen. A state that plays evenly keeps its one number rather than a copy of it for
