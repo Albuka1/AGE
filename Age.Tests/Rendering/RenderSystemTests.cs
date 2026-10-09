@@ -148,6 +148,29 @@ public sealed class RenderSystemTests
         textures.Count.Should().Be(0, "nothing was uploaded for it");
     }
 
+    [Fact]
+    public void RenderSystem_ASpriteWhoseTextureWasUnloaded_ResolvesItsPathAgain()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var images = new CountingImageLoader();
+        var textures = new TextureService(images, renderer);
+        var system = new RenderSystem(renderer, new SpriteSorter(), textures);
+        CreateSprite(world, new Vector2(100f, 100f), path: "Textures/Tiles/tiles.bmp");
+
+        system.Render(world, Camera(1280f, 720f));
+        TextureHandle first = renderer.Textures[0];
+        images.Calls.Should().Be(1);
+
+        textures.UnloadAll();
+        system.Render(world, Camera(1280f, 720f));
+
+        images.Calls.Should().Be(2, "the handle of the first frame is gone, so the image of the path is loaded again");
+        renderer.Textures.Should().HaveCount(2);
+        renderer.Textures[1].Should().NotBe(first);
+        renderer.Textures[1].Id.Should().NotBe(0, "the sprite is drawn from a texture that is alive rather than from the one that was released");
+    }
+
     private static Camera2D Camera(float width, float height, float zoom = 1f) => new()
     {
         Position = Vector2.Zero,

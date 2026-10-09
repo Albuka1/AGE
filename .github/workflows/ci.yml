@@ -7,6 +7,10 @@ on:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+permissions:
+  # Every job below only reads the repository. Asking for that once, at the top, means a job cannot quietly use the wider
+  # default permissions of the workflow token.
+  contents: read
 jobs:
   # Every job below stands on its own: it checks the repository out, restores and builds what it needs, and waits for no
   # other job. That is what makes a job that failed re-runnable on its own from the Actions page, instead of running the
@@ -20,6 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The tree is built and tested and never pushed to, so the token of the checkout does not have to stay in the git
+          # configuration of the runner.
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.100
@@ -31,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.100
@@ -43,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.100
@@ -55,6 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.100

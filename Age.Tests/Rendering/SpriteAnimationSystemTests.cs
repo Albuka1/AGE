@@ -138,6 +138,38 @@ public sealed class SpriteAnimationSystemTests : IDisposable
         _finished.Should().BeEmpty();
     }
 
+    [Fact]
+    public void SpriteAnimationSystem_AnotherState_IsDrawnFromItsFirstFrame()
+    {
+        // The prototype of the goblin names one state for what the sprite draws and another for what it plays: what plays is
+        // what is drawn, and a state that takes over starts at its own first frame.
+        Entity entity = _world.CreateEntity();
+        _world.Set(entity, new SpriteComponent { SheetPath = "goblin.yml", State = "walk", Color = Color.White });
+        _world.Set(entity, new SpriteAnimationComponent { State = "attack" });
+
+        Step(0.1f);
+
+        SpriteComponent sprite = _world.Get<SpriteComponent>(entity);
+
+        sprite.State.Should().Be("attack", "the state that plays is the state that is drawn");
+        sprite.Frame.Should().Be(1, "and it plays from the first frame of the state it took over");
+
+        SpriteRegion region = _sheets.Resolve("goblin.yml", sprite.State!, sprite.Frame);
+
+        region.Source.Y.Should().Be(0.5f, "the frame that is drawn lies on the row of the state of the attack");
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateThatDoesNotChange_KeepsItsProgress()
+    {
+        Entity entity = Animate("walk");
+
+        Step(0.1f);
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(2, "the play is only started over when the state changes");
+    }
+
     /// <summary>Puts a sprite of the sheet and an animation of it on a new entity.</summary>
     private Entity Animate(string state)
     {

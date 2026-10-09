@@ -316,7 +316,7 @@ A sprite names the document, the state and the frame; an animation plays a state
 
 ```csharp
 world.Set(goblin, new SpriteComponent { SheetPath = "Textures/Entities/goblin.yml", State = "idle", Color = Color.White });
-world.Set(goblin, new SpriteAnimationComponent { State = "walk" });
+world.Set(goblin, new SpriteAnimationComponent { State = "attack" });
 ```
 
 `SpriteAnimationSystem` runs in the fixed step next to the timers, writes the frame that is on screen into the

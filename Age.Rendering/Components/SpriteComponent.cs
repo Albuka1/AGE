@@ -31,7 +31,9 @@ public struct SpriteComponent : IComponent
     /// <remarks>
     /// This is the handle of a texture that a game loaded itself, and it is state of a run rather than data of content, so
     /// it is not part of what a scene or a prototype carries: a document that writes this field is read without it, and a
-    /// sprite that content describes names its image with <see cref="TexturePath"/>.
+    /// sprite that content describes names its image with <see cref="TexturePath"/>. A handle that the texture service no
+    /// longer holds — one from before everything was unloaded, or one a renderer made itself — gives way to the path, which
+    /// the renderer resolves again; a game that wants its own handle to win leaves the path unset.
     /// </remarks>
     [JsonIgnore]
     public TextureHandle Texture;

@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of YAML as the rest of the content and refuses a state that does not fit the grid with the file and the line.
   `ISpriteSheetService` answers a renderer with the texture and the region of a frame — a document, a state or an image that
   is not there is the placeholder and one line in the log rather than an exception in the middle of a frame — and
-  `SpriteAnimationSystem` plays a state on the time of the simulation, writes the frame into the sprite and raises
-  `SpriteAnimationFinishedEvent` once for a state that does not repeat. A layer of a character is an entity of its own,
+  `SpriteAnimationSystem` plays a state on the time of the simulation, writes the state that plays and its frame into the
+  sprite, and raises `SpriteAnimationFinishedEvent` once for a state that does not repeat. A layer of a character is an
+  entity of its own,
   because the engine draws in `ZOrder`, and a direction is a state of its own. The repository now ships an animated goblin:
   `Textures/Entities/goblin.tga` with the document beside it, which the prototype of the goblin names, so the content of the
   engine animates without one line of code about frames.

@@ -11,7 +11,8 @@ namespace Age.Rendering;
 /// What a state holds belongs to the document of the sheet, so this system asks the sheet for the row, the number of frames
 /// and the length of one frame rather than reading a copy of them out of the component: a change in the document changes
 /// what plays without a change in a game. The frame that is on screen is written into the <see cref="SpriteComponent"/> of
-/// the same entity, which is the one place a renderer reads it.
+/// the same entity, which is the one place a renderer reads it, and so is the state that plays: what plays is what is drawn,
+/// and a state that takes over starts at its first frame.
 /// </para>
 /// <para>
 /// The animated entities are read into a buffer before anything is written, because the world must not change while its
@@ -77,14 +78,25 @@ public sealed class SpriteAnimationSystem : ISystem
             }
 
             float speed = animation.Speed > 0f ? animation.Speed : 1f;
-            animation.Time += (float)time.Delta * speed;
-
             int frame = sprite.Frame;
+            float elapsed = animation.Time;
+
+            if (!string.Equals(sprite.State, state, StringComparison.Ordinal))
+            {
+                // What plays is what is drawn: a game that changes the state of an animation does not have to change the
+                // state of the sprite of the same entity too, and a state that takes over starts at its first frame.
+                world.GetRef<SpriteComponent>(entity).State = state;
+                frame = 0;
+                elapsed = 0f;
+            }
+
+            elapsed += (float)time.Delta * speed;
+
             var finished = false;
 
-            while (animation.Time >= declared.Delay)
+            while (elapsed >= declared.Delay)
             {
-                animation.Time -= declared.Delay;
+                elapsed -= declared.Delay;
                 frame++;
 
                 if (frame < declared.Frames)
@@ -106,6 +118,7 @@ public sealed class SpriteAnimationSystem : ISystem
                 break;
             }
 
+            animation.Time = elapsed;
             world.Set(entity, animation);
 
             if (frame != sprite.Frame)

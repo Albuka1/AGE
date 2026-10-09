@@ -18,7 +18,7 @@ A path is written the same way everywhere: in the engine, in a document of conte
 | Folder | Contents | Used by |
 | --- | --- | --- |
 | `Audio/Effects` | `click.wav`, the short sound effect a press plays | `Age.Sample` |
-| `Audio/Samples` | `sample.ogg` and `sample.mp3`, two seconds of two real recordings, for the decoders | `Age.Tests` |
+| `Audio/Samples` | `sample.ogg` and `sample.mp3`, two seconds of two real recordings that the decoders read, with a `README.md` that says where they come from | `Age.Tests` |
 | `Fonts` | `Cousine-Regular.ttf`, the TrueType font the text tests bake and the sample draws with, with its `OFL.txt` license and its own `README.md` | `Age.Sample`, `Age.Tests` |
 | `Prototypes/Entities` | `base.yml`, which declares `CreatureBase`, and `goblin.yml`, which declares `Goblin` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Prototypes/Items` | `base.yml`, which declares `ItemBase`, and `sword.yml`, which declares `Sword` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
