@@ -78,7 +78,7 @@ ITextureService textures = provider.GetRequiredService<ITextureService>();
 const string TilePath = "Textures/Tiles/tiles.bmp";
 
 IFontService fonts = provider.GetRequiredService<IFontService>();
-FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f);
+FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04FF');
 
 ISoundService sounds = provider.GetRequiredService<ISoundService>();
 SoundHandle click = sounds.Load("Audio/Effects/click.wav");

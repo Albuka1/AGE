@@ -48,6 +48,30 @@ public sealed class FontServiceTests : IDisposable
     }
 
     [Fact]
+    public void FontService_Load_BakesTheRangeThatWasAskedFor()
+    {
+        // The default range is the printable ASCII one, and a game that writes a language with a script of its own asks for the
+        // range that holds that script: its letters are then drawn, where the default atlas draws each of them as a space.
+        FontHandle ascii = _fonts.Load(FontPath, 24f);
+        FontHandle cyrillic = _fonts.Load(FontPath, 24f, ' ', '\u04FF');
+
+        cyrillic.Should().NotBe(ascii);
+        _fonts.Count.Should().Be(2, "a font is cached by its path, its height and its range");
+        _renderer.Created[1].Pixels.Count(value => value != 0).Should().BeGreaterThan(
+            _renderer.Created[0].Pixels.Count(value => value != 0),
+            "the font this game ships covers the Cyrillic letters, so the atlas of the wider range holds their glyphs as well");
+    }
+
+    [Fact]
+    public void FontService_Load_RefusesARangeThatEndsBeforeItStarts()
+    {
+        Action bake = () => _fonts.Load(FontPath, 24f, '~', ' ');
+
+        bake.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("last");
+        _fonts.Count.Should().Be(0);
+    }
+
+    [Fact]
     public void FontService_Measure_AddsUpTheAdvances()
     {
         FontHandle font = _fonts.Load(FontPath, 24f);
@@ -184,7 +208,7 @@ public sealed class FontServiceTests : IDisposable
 
     private sealed class RecordingRenderer : IRenderer
     {
-        public List<(int Id, int Width, int Height)> Created { get; } = [];
+        public List<(int Id, int Width, int Height, byte[] Pixels)> Created { get; } = [];
         public List<int> Released { get; } = [];
         public List<Region> Regions { get; } = [];
 
@@ -224,7 +248,7 @@ public sealed class FontServiceTests : IDisposable
         public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height)
         {
             int id = Created.Count + 1;
-            Created.Add((id, width, height));
+            Created.Add((id, width, height, pixels.ToArray()));
             return new TextureHandle(id);
         }
 

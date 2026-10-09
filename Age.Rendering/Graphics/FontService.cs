@@ -10,8 +10,9 @@ namespace Age.Rendering;
 /// <see cref="IRenderer.DrawTextureRegion"/>.
 /// </summary>
 /// <remarks>
-/// The slot of every baked font lives in a <see cref="ResourcePool{TKey, T}"/>, keyed by the pair of the path and the height, so a handle
-/// from before an unload stops resolving instead of pointing at the atlas that replaced it. The service owns the device
+/// The slot of every baked font lives in a <see cref="ResourcePool{TKey, T}"/>, keyed by the path of the file, the height of a
+/// line and the range of characters it was baked for, so a handle from before an unload stops resolving instead of pointing at
+/// the atlas that replaced it. The service owns the device
 /// textures of the atlases: disposing it releases them all, and a disposed service refuses to load another font while
 /// <see cref="UnloadAll"/> stays available for what a renderer refused to release. It is not thread-safe, so call it
 /// from the thread that owns the renderer's context. An atlas whose release the renderer refused stays loaded, so a
@@ -21,7 +22,7 @@ public sealed class FontService : IFontService, IDisposable
 {
     private readonly IAssetLoader _assets;
     private readonly IRenderer _renderer;
-    private readonly ResourcePool<(string Path, float Height), FontData> _fonts = new();
+    private readonly ResourcePool<(string Path, float Height, char First, char Last), FontData> _fonts = new();
     private bool _disposed;
 
     /// <summary>Initializes the service with the loader of the font files and the renderer it draws through.</summary>
@@ -40,7 +41,7 @@ public sealed class FontService : IFontService, IDisposable
     public int Count => _fonts.Count;
 
     /// <inheritdoc />
-    public FontHandle Load(string relativePath, float pixelHeight)
+    public FontHandle Load(string relativePath, float pixelHeight, char first = ' ', char last = '~')
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
@@ -51,16 +52,21 @@ public sealed class FontService : IFontService, IDisposable
             throw new ArgumentOutOfRangeException(nameof(pixelHeight), pixelHeight, "The height of a line has to be a finite number of pixels.");
         }
 
-        // The key of a baked font is the pair of what it was baked from: the path of the file and the height of a line.
-        // A string that joins them would have to be unambiguous, which is a property a tuple has and a string does not.
-        var key = (Path: relativePath, Height: pixelHeight);
+        if (last < first)
+        {
+            throw new ArgumentOutOfRangeException(nameof(last), last, "The last character of the range to bake cannot be before the first one.");
+        }
+
+        // The key of a baked font is what it was baked from: the path of the file, the height of a line and the range of
+        // characters. A string that joins them would have to be unambiguous, which is a property a tuple has and a string does not.
+        var key = (Path: relativePath, Height: pixelHeight, First: first, Last: last);
 
         if (_fonts.TryGetHandle(key, out ResourceHandle slot) && _fonts.TryGet(slot, out FontData? cached) && cached is not null)
         {
             return new FontHandle(slot, cached.Texture.Id);
         }
 
-        FontAtlas atlas = TrueTypeFontBake.Bake(_assets.Load<byte[]>(relativePath), pixelHeight, TrueTypeFontBake.AsciiCharacters);
+        FontAtlas atlas = TrueTypeFontBake.Bake(_assets.Load<byte[]>(relativePath), pixelHeight, TrueTypeFontBake.Characters(first, last));
         TextureHandle texture = _renderer.CreateTexture(atlas.Pixels, atlas.Width, atlas.Height);
 
         try

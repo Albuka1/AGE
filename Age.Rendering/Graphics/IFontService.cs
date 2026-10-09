@@ -27,16 +27,29 @@ public interface IFontService
     /// <summary>Gets the number of fonts that are currently loaded.</summary>
     int Count { get; }
 
-    /// <summary>Returns the font at the given path, baking it on the first call for that height.</summary>
+    /// <summary>Returns the font at the given path, baking it on the first call for that height and that range of characters.</summary>
     /// <param name="relativePath">The path of the font file, relative to the game root.</param>
     /// <param name="pixelHeight">The height of a line, in pixels.</param>
+    /// <param name="first">The first character of the range to bake, which is the space when a caller does not say.</param>
+    /// <param name="last">The last character of the range to bake, which is the tilde when a caller does not say: the printable ASCII range.</param>
     /// <returns>The handle of the baked font.</returns>
-    /// <remarks>The bake covers the printable ASCII range, which is the range that the built-in bitmap font covers.</remarks>
+    /// <remarks>
+    /// <para>
+    /// The bake covers one range of characters, and a character outside it is drawn as a space, so a line keeps its layout.
+    /// The range is a pair of characters rather than a list of them, because an atlas finds the glyph of a character by
+    /// arithmetic: a game that writes a language with a script of its own asks for the range that holds that script, such as
+    /// the space to the end of the Cyrillic block for the Latin and Cyrillic letters of the font this repository ships.
+    /// </para>
+    /// <para>
+    /// A wide range costs little: a character that the font has no glyph for takes no room in the atlas, so a range that spans
+    /// the letters of two scripts holds the glyphs of both and nothing else.
+    /// </para>
+    /// </remarks>
     /// <exception cref="ArgumentException">The path is null, empty or whitespace, or the file does not hold a font that can be read.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelHeight"/> is zero, negative or not a finite number, or a glyph of the font does not fit in an atlas at that size.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The height is zero, negative or not a finite number, the last character is before the first one, or a glyph of the font does not fit in an atlas at that size.</exception>
     /// <exception cref="FileNotFoundException">No file exists at that path.</exception>
     /// <exception cref="InvalidOperationException">The renderer has not been attached to a window.</exception>
-    FontHandle Load(string relativePath, float pixelHeight);
+    FontHandle Load(string relativePath, float pixelHeight, char first = ' ', char last = '~');
 
     /// <summary>Determines whether the handle still refers to a font that this service loaded.</summary>
     /// <param name="font">The handle to check.</param>

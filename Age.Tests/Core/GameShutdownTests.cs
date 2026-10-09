@@ -121,7 +121,7 @@ public sealed class GameShutdownTests
 
         public int Count => 0;
 
-        public FontHandle Load(string relativePath, float pixelHeight) => default;
+        public FontHandle Load(string relativePath, float pixelHeight, char first = ' ', char last = '~') => default;
 
         public bool IsAlive(FontHandle font) => false;
 
