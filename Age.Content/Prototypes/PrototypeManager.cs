@@ -45,6 +45,10 @@ public sealed class PrototypeManager : IPrototypeManager
     public IEnumerable<string> Ids => [.. _built.Select(prototype => prototype.Id)];
 
     /// <inheritdoc />
+    public IEnumerable<Prototype> Prototypes =>
+        [.. _order.Select(prototype => _resolved.TryGetValue(prototype.Id, out Prototype? resolved) ? resolved : prototype)];
+
+    /// <inheritdoc />
     public int Count => _built.Count;
 
     /// <summary>Registers a kind of prototype, which is what the <c>type</c> field of a document names.</summary>
@@ -72,15 +76,25 @@ public sealed class PrototypeManager : IPrototypeManager
     /// <param name="text">The text of the document.</param>
     /// <exception cref="ArgumentException">The name is null, empty or whitespace.</exception>
     /// <exception cref="ArgumentNullException">The text is null.</exception>
-    /// <exception cref="YamlException">The text is not a document this engine reads.</exception>
-    /// <exception cref="PrototypeException">The document does not describe a prototype, and the error names the line.</exception>
+    /// <exception cref="PrototypeException">The text does not describe a prototype, and the error names the file and the line.</exception>
     /// <remarks>A document holds a list of prototypes, one after another, so that a folder of them reads like a catalogue.</remarks>
     public void Add(string name, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(text);
 
-        YamlValue document = YamlReader.Read(text, name);
+        YamlValue document;
+
+        try
+        {
+            document = YamlReader.Read(text, name);
+        }
+        catch (YamlException exception)
+        {
+            // The reader knows the line and the column of the mistake and not the file it was reading, and a person who is
+            // told to open a document has to be told which one: the name the text came from leaves with the error.
+            throw new PrototypeException(exception.Message, name, exception.Line);
+        }
 
         if (document is not YamlSequence sequence)
         {
@@ -100,8 +114,7 @@ public sealed class PrototypeManager : IPrototypeManager
     /// <exception cref="ArgumentNullException">The loader is null.</exception>
     /// <exception cref="ArgumentException">The folder is null, empty or whitespace.</exception>
     /// <exception cref="InvalidOperationException">The loader has not been initialized, or the folder escapes the game root.</exception>
-    /// <exception cref="YamlException">A document is not one this engine reads.</exception>
-    /// <exception cref="PrototypeException">A document does not describe a prototype, and the error names the file and the line.</exception>
+    /// <exception cref="PrototypeException">A document is broken, and the error names the file and the line.</exception>
     /// <remarks>
     /// <para>
     /// Every file of the folder is read before any of them is resolved, because a prototype may inherit from one that

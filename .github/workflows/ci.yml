@@ -18,4 +18,5 @@ jobs:
       - run: dotnet restore Age.slnx
       - run: dotnet build Age.slnx --no-restore -c Release
       - run: dotnet test --project Age.Tests/Age.Tests.csproj --no-build -c Release
+      - run: dotnet run --project Age.Content.Lint/Age.Content.Lint.csproj -c Release --no-build -- Resources Prototypes
       - run: dotnet format Age.slnx --verify-no-changes

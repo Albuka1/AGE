@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Age.Content.Lint`, a tool that reads the content of a game the way a build does and exits with a non-zero code when
+  anything is wrong, so a broken prototype fails a build rather than a fight. It wraps the reader — which now names the
+  file of a document in every refusal, because the YAML reader knows the line and not the file it was reading — and adds
+  the two checks a reader cannot make: a field that the format does not carry (the state of a run, such as the handle of a
+  texture, is read and dropped in silence) and a path that a `[ResourcePath]` field names, which is checked against the
+  files of the build. `IPrototypeManager.Load` and `IPrototypeManager.Prototypes` are the content side of it: a tool reads
+  the data of every prototype without knowing what a game reads them as. CI runs the tool over the content the engine
+  ships, and a game with kinds of its own reads `ContentLinter` from its own host.
 - A sprite names its image by path: `SpriteComponent.TexturePath` is what a prototype or a scene writes, and the texture
   service resolves it the first time the sprite is drawn, so a scene that was loaded draws without a game putting device
   handles back by hand — the last piece of code that a game had to write around a save is gone from the sample. The handle

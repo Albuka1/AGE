@@ -8,6 +8,7 @@
   <Project Path="Age.UI/Age.UI.csproj" />
   <Project Path="Age.Sample/Age.Sample.csproj" />
   <Project Path="Age.Content/Age.Content.csproj" />
+  <Project Path="Age.Content.Lint/Age.Content.Lint.csproj" />
   <Project Path="Age.SourceGen/Age.SourceGen.csproj" />
   <Project Path="Age.Tests/Age.Tests.csproj" />
 </Solution>

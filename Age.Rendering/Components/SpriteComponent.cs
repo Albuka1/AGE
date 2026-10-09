@@ -27,8 +27,10 @@ public struct SpriteComponent : IComponent
     /// <remarks>
     /// The field a document writes, so a prototype or a scene names a sprite the way a game loads an asset. An image that
     /// is not there is drawn as the placeholder of the texture service and reported once, which makes a mistake in the
-    /// content of a game visible rather than fatal.
+    /// content of a game visible rather than fatal. <c>Age.Content.Lint</c> checks it against the files of a build, so a
+    /// path that is wrong fails a build rather than reaching the placeholder at all.
     /// </remarks>
+    [ResourcePath]
     public string? TexturePath;
 
     /// <summary>Gets or sets the base size, in pixels, before the transform scale is applied.</summary>

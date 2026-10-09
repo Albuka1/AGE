@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Age.Assets;
 
 namespace Age.Content.Prototypes;
 
@@ -28,6 +29,25 @@ public interface IPrototypeManager
 
     /// <summary>Gets the number of prototypes that were built.</summary>
     int Count { get; }
+
+    /// <summary>Gets the data of every prototype that was built, in the order the documents declared them.</summary>
+    /// <remarks>
+    /// A game reads its content through the kind it registered, and a tool that works on the content rather than on one kind
+    /// of it reads this: it is what lets a linter check every document of a folder without knowing what a game reads them
+    /// as. A component of a prototype carries the file and the line it came from, so a mistake has a place to name.
+    /// </remarks>
+    IEnumerable<Prototype> Prototypes { get; }
+
+    /// <summary>Reads every document that a folder of the content holds, and builds what they declare.</summary>
+    /// <param name="assets">The loader of the assets, which resolves the folder inside the game root.</param>
+    /// <param name="folder">The folder to read, relative to the game root, such as <c>Prototypes</c>.</param>
+    /// <returns>The number of prototypes that were built, which is zero when the folder holds nothing.</returns>
+    /// <exception cref="PrototypeException">A document is broken, and the error names the file and the line.</exception>
+    /// <remarks>
+    /// This is the one call that fills a manager, and it is what a game makes once at startup: see
+    /// <see cref="PrototypeManager.Load"/> for what it does with the manager it is called on.
+    /// </remarks>
+    int Load(IAssetLoader assets, string folder);
 
     /// <summary>Determines whether the content holds a prototype of that kind under that identifier.</summary>
     /// <typeparam name="T">The kind of the prototype.</typeparam>
