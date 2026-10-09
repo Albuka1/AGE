@@ -59,9 +59,11 @@ assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
 
 // The content of a game is data: a document under Resources/Prototypes declares a prototype by its identifier, names the
 // components it carries with the values they start with, and inherits the rest from a parent. The manager reads every
-// file first and then resolves them, so a mistake in a document is a message here rather than a surprise in a fight.
+// file first and then resolves them, so a mistake in a document is a message here rather than a surprise in a fight. A
+// document whose type is `entity` is read as an entity, which is what a spawn makes out of it.
 PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
-prototypes.Register<Prototype>("entity", prototype => prototype);
+SpawnService spawner = provider.GetRequiredService<SpawnService>();
+prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
 Console.WriteLine($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
 
 ITextureService textures = provider.GetRequiredService<ITextureService>();
@@ -177,6 +179,10 @@ lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
 console.Register("spawn", "Puts a sprite on screen, the same as pressing E.", _ => lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime")));
 console.Register("stats", "Reports what the world holds and what the clock does.", _ => console.Write(
     $"entities {world.Enumerate().Count()}, tick {timestep.Tick}, {(timestep.Paused ? "paused" : "running")}, {collisions.LastPairs.Count} contacts"));
+
+// A goblin of the content: the world receives exactly the components that the document declares, and this game names none
+// of them. Where it stands is the one thing a spawn takes from the caller, because a map is what decides that.
+console.Register("goblin", "Puts a goblin of the content in the world, at 320 by 240.", _ => spawner.Spawn(world, "Goblin", new Vector2(320f, 240f)));
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation

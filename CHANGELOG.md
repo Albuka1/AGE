@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `EntityPrototype` and `SpawnService`: content that becomes entities, which is what makes a map, an enemy or an item a
+  document rather than a class. A document whose `type` is `entity` declares what a thing is made of, and
+  `Spawn(world, "Goblin", position)` creates an entity and attaches exactly those components, with the values the
+  document declares, read by the same contract that reads a scene — so what a document of content says and what a saved
+  map says reach an entity the same way. A spawn places what carries a transform, `TrySpawn` reports a prototype that the
+  content does not hold, a component that nothing registered is refused with the file and the line that named it, and a
+  map of a hundred units of one prototype is a hundred calls rather than a hundred copies. `AddAgeContent` registers the
+  service over the manager and the component registry, and the sample puts a goblin of the content in the world from its
+  console.
 - `IAssetLoader.Enumerate`, which returns the files of a folder in it and below it, ordered by ordinal and written with a
   forward slash whatever the platform uses, so a folder of content is read the same way on every machine; a folder that
   cannot be walked is refused by name. `PrototypeManager.Load(IAssetLoader, folder)` reads every `*.yml` and `*.yaml` of a

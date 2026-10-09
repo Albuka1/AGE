@@ -184,6 +184,29 @@ deserializes every other type from JSON, so a component authored as
 stays inside the game root that `Initialize` was given, and an escaping path
 throws.
 
+## Load content and spawn
+
+```csharp
+PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+SpawnService spawner = provider.GetRequiredService<SpawnService>();
+
+prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+prototypes.Load(assets, "Prototypes");
+
+Entity goblin = spawner.Spawn(world, "Goblin", new Vector2(320f, 240f));
+```
+
+`AddAgeContent()` registers both. A spawn is where the content of a game becomes
+entities: the manager reads every `*.yml` under `Resources/Prototypes` before it
+resolves any of them, so a document that names a component nothing registered, a
+parent that no file declares, or a field the component does not have is refused
+at startup with the file and the line of the mistake. A document whose `type` is
+`entity` declares what a thing is made of, and a spawn creates an entity and
+attaches exactly those components, with the values the document declares — a map
+of a hundred units of one prototype is a hundred calls rather than a hundred
+copies. Where a spawn puts the entity is the one thing it takes from the caller,
+and a prototype that carries no transform is placed nowhere.
+
 ## Load an image
 
 ```csharp

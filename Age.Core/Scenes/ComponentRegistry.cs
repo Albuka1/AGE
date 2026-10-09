@@ -127,6 +127,30 @@ public sealed class ComponentRegistry
         component = null;
         return false;
     }
+
+    /// <summary>Attaches a component that was read from a document to an entity of a world.</summary>
+    /// <param name="name">The name the component is registered under.</param>
+    /// <param name="world">The world that holds the entity.</param>
+    /// <param name="entity">The entity to attach the component to.</param>
+    /// <param name="component">The value that <see cref="TryDeserialize"/> read, which is of the type the name is registered under.</param>
+    /// <returns><see langword="true"/> when the name is registered and the component was attached.</returns>
+    /// <exception cref="ArgumentNullException">The name, the world or the component is null.</exception>
+    /// <exception cref="InvalidOperationException">The entity is not alive, or the component is not of the type the name is registered under.</exception>
+    /// <remarks>A prototype and a scene attach a component with one call, so what a document of content says and what a saved map says reach an entity the same way.</remarks>
+    public bool TryApply(string name, World world, Entity entity, object component)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(component);
+
+        if (_byName.TryGetValue(name, out ComponentRegistration? registration))
+        {
+            registration.Apply(world, entity, component);
+            return true;
+        }
+
+        return false;
+    }
 }
 
 /// <summary>

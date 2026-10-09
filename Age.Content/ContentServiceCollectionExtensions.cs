@@ -9,15 +9,20 @@ namespace Age.Content;
 /// </summary>
 public static class ContentServiceCollectionExtensions
 {
-    /// <summary>Registers the <see cref="PrototypeManager"/>, which a game fills with the content of its own.</summary>
+    /// <summary>
+    /// Registers the <see cref="PrototypeManager"/>, which a game fills with the content of its own, and the
+    /// <see cref="SpawnService"/>, which makes entities out of it.
+    /// </summary>
     /// <remarks>
-    /// The manager is built over the <see cref="ComponentRegistry"/> of the container, so a game registers the kinds it
-    /// reads and then loads its content. Call it after <c>AddAgeCore</c>, which registers that registry.
+    /// Both are built over the <see cref="ComponentRegistry"/> of the container, so a game registers the kinds it reads,
+    /// loads its content, and spawns what the content holds. Call it after <c>AddAgeCore</c>, which registers that
+    /// registry.
     /// </remarks>
     public static IServiceCollection AddAgeContent(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton(provider => new PrototypeManager(provider.GetRequiredService<ComponentRegistry>()));
+        services.AddSingleton(provider => new SpawnService(provider.GetRequiredService<PrototypeManager>(), provider.GetRequiredService<ComponentRegistry>()));
         return services;
     }
 }
