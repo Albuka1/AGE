@@ -27,7 +27,12 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<ISpriteSheetService, SpriteSheetService>();
         services.AddSingleton<SpriteAnimationSystem>();
         services.AddSingleton<IFontService, FontService>();
-        services.AddSingleton<TextRenderer>();
+        services.AddSingleton(provider => new TextRenderer(
+            provider.GetRequiredService<IRenderer>(),
+            provider.GetService<IFontService>(),
+            provider.GetService<ITextSource>(),
+            provider.GetService<Microsoft.Extensions.Logging.ILogger<TextRenderer>>(),
+            TextDefaults.Fonts));
         services.AddSingleton<SplashScreen>();
         services.AddSingleton<DevOverlay>();
         services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();

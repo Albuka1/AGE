@@ -85,6 +85,24 @@ public sealed class TextRenderSystemTests
         fonts.Requests.Should().ContainSingle().Which.Should().Be("Fonts/Missing.ttf");
     }
 
+    [Fact]
+    public void TextRenderSystem_TextThatNamesNoFont_IsDrawnWithTheFontOfTheEngine()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var fonts = new RecordingFontService();
+        var system = new TextRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer, fonts, null, null, TextDefaults.Fonts));
+        CreateLine(world, "Hello AGE", zOrder: 0);
+
+        system.Render(world, Camera());
+
+        fonts.Requests.Should().Equal(
+            ("Fonts/Cousine-Regular.ttf", 16f, ' ', '\u04FF'),
+            ("Fonts/Cousine-Regular.ttf", 16f, '\u2000', '\u22FF'));
+        fonts.Drawn.Should().Equal("Hello AGE");
+        renderer.BuiltIn.Should().BeEmpty();
+    }
+
     private static Entity CreateLine(World world, string text, int zOrder, string? key = null, TextStyle style = default)
     {
         Entity entity = world.CreateEntity();
@@ -132,6 +150,36 @@ public sealed class TextRenderSystemTests
         public FontMetrics Metrics(FontHandle font) => default;
 
         public void Draw(FontHandle font, ReadOnlySpan<char> text, Vector2 position, Color color) { }
+    }
+
+    private sealed class RecordingFontService : IFontService
+    {
+        public List<(string Path, float Height, char First, char Last)> Requests { get; } = [];
+
+        public List<string> Drawn { get; } = [];
+
+        public int Count => 0;
+
+        public FontHandle Load(string relativePath, float pixelHeight, char first = ' ', char last = '~')
+        {
+            Requests.Add((relativePath, pixelHeight, first, last));
+
+            return new FontHandle(default, 7);
+        }
+
+        public bool IsAlive(FontHandle font) => font.Atlas == 7;
+
+        public bool Unload(FontHandle font) => false;
+
+        public void UnloadAll()
+        {
+        }
+
+        public Vector2 Measure(FontHandle font, ReadOnlySpan<char> text) => new(text.Length * 8f, 16f);
+
+        public FontMetrics Metrics(FontHandle font) => new(12f, 16f);
+
+        public void Draw(FontHandle font, ReadOnlySpan<char> text, Vector2 position, Color color) => Drawn.Add(new string(text));
     }
 
     private sealed class RecordingRenderer : IRenderer

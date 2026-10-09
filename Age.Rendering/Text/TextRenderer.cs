@@ -49,6 +49,7 @@ public sealed class TextRenderer
     private readonly IFontService? _fonts;
     private readonly ITextSource _text;
     private readonly ILogger<TextRenderer>? _logger;
+    private readonly FontStyle[] _defaults;
     private readonly Dictionary<Entity, LaidOut> _remembered = new();
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
 
@@ -57,14 +58,20 @@ public sealed class TextRenderer
     /// <param name="fonts">The service that bakes the fonts of a style, or null to draw every text with the built-in font.</param>
     /// <param name="text">The source of the strings of a game, or null to answer every key with the key itself.</param>
     /// <param name="logger">The log of the game, or null to report nothing.</param>
+    /// <param name="defaults">The fonts that a text which names none of its own is drawn with, or null for the built-in font.</param>
     /// <exception cref="ArgumentNullException"><paramref name="renderer"/> is null.</exception>
-    public TextRenderer(IRenderer renderer, IFontService? fonts = null, ITextSource? text = null, ILogger<TextRenderer>? logger = null)
+    /// <remarks>
+    /// A container passes <see cref="TextDefaults.Fonts"/> as the defaults, which is what makes a text of a game readable
+    /// without the game naming a font.
+    /// </remarks>
+    public TextRenderer(IRenderer renderer, IFontService? fonts = null, ITextSource? text = null, ILogger<TextRenderer>? logger = null, FontStyle[]? defaults = null)
     {
         ArgumentNullException.ThrowIfNull(renderer);
         _renderer = renderer;
         _fonts = fonts;
         _text = text ?? KeyTextSource.Instance;
         _logger = logger;
+        _defaults = defaults ?? [];
     }
 
     /// <summary>Draws the text of an entity into a box whose top-left corner is at a position.</summary>
@@ -148,10 +155,16 @@ public sealed class TextRenderer
     /// <summary>Returns the measurer of a style, baking the fonts of its stack.</summary>
     /// <param name="style">The style whose fonts are baked.</param>
     /// <returns>The measurer of the text and the font that draws its first line, which is a default handle for the built-in font.</returns>
-    /// <remarks>A font that cannot be baked is reported once and left out of the stack, so the characters it covers fall to the font below it, or to the built-in font when nothing is left.</remarks>
+    /// <remarks>
+    /// A style that names no font is drawn with the defaults of this renderer, which is what makes a text of a game readable
+    /// without the game naming a font, and a font that cannot be baked is reported once and left out of the stack, so the
+    /// characters it covers fall to the font below it, or to the built-in font when nothing is left.
+    /// </remarks>
     private (ITextMeasurer Measurer, FontHandle Font) Measurer(in TextStyle style)
     {
-        if (_fonts is null || style.Fonts is not { Length: > 0 } fonts)
+        FontStyle[] fonts = style.Fonts is { Length: > 0 } named ? named : _defaults;
+
+        if (_fonts is null || fonts.Length == 0)
         {
             return (BitmapTextMeasurer.Instance, default);
         }
