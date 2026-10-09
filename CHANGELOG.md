@@ -20,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line and the range of characters it covers, so a label of a button is drawn in the font of the game and in the script of
   its language, and a label that names none keeps drawing with the built-in bitmap font.
 
+### Changed
+
+- **Breaking:** the text of a world and the text of an interface are one component, and `TextLabelComponent` is gone. A label
+  is a `TextComponent` on an entity that has a `RectTransformComponent`, and its text is laid out into the box of that
+  rectangle, where a line of an entity with a `TransformComponent` stands at the transform. The component names a `Key` of the
+  strings of the game with the `Count` its plural form is written by, or holds a `Text` of its own, and its `Style` says which
+  fonts may draw it, in which order, how tall a line of each of them is and which block of characters each is baked for, and
+  how its lines fit the box: wrapping at a space or anywhere, alignment across and down it, an ellipsis where the text does not
+  fit, an extra distance between two lines and the characters that mark a shortened one. A line that mixes the scripts of two
+  languages is drawn in one run per font, a font that cannot be baked is dropped from the stack so the characters it covers
+  fall to the font below it, and the `MeasuredSize` and `Font` that were resolved are written back for a game to read, which
+  is what a panel that follows its title or a button as wide as its word needs. The text is laid out again when the language
+  of the game changes and not on every frame, and the built-in bitmap font is measured through the same seam as any other
+  font, so text with no font of its own can be wrapped and aligned like one.
+
 ### Fixed
 
 - A language whose documents cannot be read is no longer kept as an empty one, so a caller that fixed the content reads it
