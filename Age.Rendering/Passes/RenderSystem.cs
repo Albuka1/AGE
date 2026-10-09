@@ -16,15 +16,24 @@ public sealed class RenderSystem : IRenderPass
 {
     private readonly IRenderer _renderer;
     private readonly SpriteSorter _sorter;
+    private readonly ITextureService? _textures;
+    private readonly ISpriteSheetService? _sheets;
     private readonly List<Entity> _sprites = new();
 
     /// <summary>Initializes the system with a renderer and a sorter.</summary>
-    public RenderSystem(IRenderer renderer, SpriteSorter sorter)
+    /// <param name="renderer">The renderer that draws the sprites.</param>
+    /// <param name="sorter">The sorter that puts them in the order of their <see cref="SpriteComponent.ZOrder"/>.</param>
+    /// <param name="textures">The service that resolves the image a sprite names, or null to draw only the handles a game set.</param>
+    /// <param name="sheets">The service that resolves the frame a sprite names, or null to draw only whole images.</param>
+    /// <remarks>A container passes both services, which is what lets a sprite of a prototype or a scene name its image and the part of it to draw.</remarks>
+    public RenderSystem(IRenderer renderer, SpriteSorter sorter, ITextureService? textures = null, ISpriteSheetService? sheets = null)
     {
         ArgumentNullException.ThrowIfNull(renderer);
         ArgumentNullException.ThrowIfNull(sorter);
         _renderer = renderer;
         _sorter = sorter;
+        _textures = textures;
+        _sheets = sheets;
     }
 
     /// <inheritdoc />
@@ -42,16 +51,65 @@ public sealed class RenderSystem : IRenderPass
         {
             SpriteComponent sprite = world.Get<SpriteComponent>(entity);
             TransformComponent transform = world.Get<TransformComponent>(entity);
-            Vector2 size = sprite.Size * transform.Scale;
+            SpriteRegion region = Region(world, entity, sprite);
+            Vector2 size = (sprite.Size == Vector2.Zero ? region.Cell : sprite.Size) * transform.Scale;
             if (size == Vector2.Zero)
             {
                 continue;
             }
 
-            _renderer.DrawSprite(sprite.Texture, transform.Position, size, sprite.Color, transform.Rotation);
+            _renderer.DrawTextureRegion(region.Texture, region.Source, transform.Position, size, sprite.Color, transform.Rotation);
         }
 
         _renderer.EndFrame();
+    }
+
+    /// <summary>Returns the texture to draw for a sprite and the part of it that is drawn.</summary>
+    /// <param name="world">The world that holds the sprite, which a resolved handle is written back into.</param>
+    /// <param name="entity">The entity that carries the sprite.</param>
+    /// <param name="sprite">The sprite that is being drawn.</param>
+    /// <returns>The region, which is the whole image for a sprite that names no sheet.</returns>
+    /// <remarks>
+    /// A handle that was resolved is written back into the component, so an image is asked for once and every frame after
+    /// the first draws what it resolved. A sprite without a path and without a handle is drawn as a solid color quad,
+    /// which is what the renderer draws for a zero identifier, and one whose image or state is missing is drawn as the
+    /// placeholder of the texture service.
+    /// </remarks>
+    private SpriteRegion Region(World world, Entity entity, in SpriteComponent sprite)
+    {
+        if (sprite.SheetPath is string sheetPath && _sheets is not null)
+        {
+            SpriteRegion region = _sheets.Resolve(sheetPath, sprite.State ?? string.Empty, sprite.Frame);
+            world.GetRef<SpriteComponent>(entity).Texture = region.Texture;
+            return region;
+        }
+
+        return SpriteRegion.Whole(Texture(world, entity, sprite), sprite.Size);
+    }
+
+    /// <summary>Returns the texture to draw for a sprite, resolving the image that content named.</summary>
+    /// <param name="world">The world that holds the sprite, which the resolved handle is written back into.</param>
+    /// <param name="entity">The entity that carries the sprite.</param>
+    /// <param name="sprite">The sprite that is being drawn.</param>
+    /// <returns>The handle of the image, or the placeholder when the image is not there.</returns>
+    /// <remarks>
+    /// The path of the component is what content says the image is, so it is resolved whenever it is set: the handle of the
+    /// component is a copy of what the last frame resolved, and a game that changes the path of a sprite gets the image of the
+    /// new one without clearing that copy itself. The service answers a path with what it already resolved, so the image is
+    /// uploaded once however many frames ask for it, and the handle that was resolved is written back into the component for a
+    /// game to read. A sprite without a path and without a handle is drawn as a solid color quad, which is what the renderer
+    /// draws for a zero identifier, and one whose image is missing is drawn as the placeholder of the texture service.
+    /// </remarks>
+    private TextureHandle Texture(World world, Entity entity, in SpriteComponent sprite)
+    {
+        if (_textures is null || sprite.TexturePath is not string path)
+        {
+            return sprite.Texture;
+        }
+
+        TextureHandle resolved = _textures.Resolve(path);
+        world.GetRef<SpriteComponent>(entity).Texture = resolved;
+        return resolved;
     }
 
     /// <summary>

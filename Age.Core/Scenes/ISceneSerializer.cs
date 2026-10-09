@@ -28,7 +28,7 @@ public interface ISceneSerializer
     /// <param name="json">The scene text that <see cref="Save"/> produced.</param>
     /// <exception cref="ArgumentNullException">The world is null.</exception>
     /// <exception cref="ArgumentException">The text is null, empty or whitespace.</exception>
-    /// <exception cref="InvalidDataException">The text is not a scene, it holds a component that is not registered, or it was written in a version this build does not read.</exception>
+    /// <exception cref="InvalidDataException">The text is not a scene, it holds a component that is not registered or a field that the format of a component does not carry, or it was written in a version this build does not read.</exception>
     /// <remarks>
     /// <para>
     /// Every entity of the scene becomes a new entity, so the slots of the loaded world differ from the ones the scene
@@ -40,6 +40,11 @@ public interface ISceneSerializer
     /// that uses one of them is given a fresh identifier. A reference that a component of that world already holds to
     /// such an entity does not follow it, which is why a scene is best loaded into a world of its own: a game that keeps
     /// entities across a load either writes them into the same scene or keeps its own way of finding them.
+    /// </para>
+    /// <para>
+    /// An entity that was saved from a prototype is made again through the content of the game, so the container has to
+    /// hold the prototypes the scene names: <c>AddAgeContent</c> registers them, and a scene that names one without any
+    /// content is refused rather than loaded empty.
     /// </para>
     /// </remarks>
     void Load(World world, string json);

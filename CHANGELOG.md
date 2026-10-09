@@ -9,6 +9,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A state of a sheet gives the length of every frame of it with `delay`, or the length of each frame with `delays`, which is
+  what an attack needs: a wind-up, a strike and a recovery are three different lengths, and `SpriteAnimationSystem` takes
+  the length of the frame that is on screen. A state that plays evenly keeps its one number rather than a copy of it for
+  every frame of the grid. `SpriteComponent.State` and `SpriteAnimationComponent.State` say which member of which component
+  names the sheet that the state belongs to, so `Age.Content.Lint` reads that document and refuses a state it does not
+  declare, naming the states it does, and reads every document under the textures of a build rather than the ones an image
+  happens to stand beside. The developer overlay names the sheets and the states behind the placeholders of a build, next to
+  the images that are missing.
+- A sprite sheet says which version of the format it is written in with `version`, and a document of a version this build
+  does not read is refused with a message rather than read as if it were this one, so the format can move later without
+  silently drawing the wrong cell. The document may also say where its art comes from with `license` and `copyright`, and
+  `Age.Content.Lint` now reads the sheets of a build along with its prototypes: a sheet without a licence or a copyright, a
+  sheet whose declared grid is not the size of the image beside it, and a sheet of a version this build does not read all
+  fail a build, which catches art metadata going wrong before a frame is drawn crooked.
+
+- A sprite sheet is data: the document next to an image declares the grid (`cell`, `columns`, `rows`) and the states over it
+  (the row a state lies on, the frames at the start of it, the length of a frame and whether it repeats), and
+  `SpriteComponent.SheetPath` together with `State` and `Frame` picks one frame of it, so a game never writes a normalized
+  coordinate and a region is arithmetic over the declared grid. `SpriteSheetReader` reads that document in the same subset
+  of YAML as the rest of the content and refuses a state that does not fit the grid with the file and the line.
+  `ISpriteSheetService` answers a renderer with the texture and the region of a frame — a document, a state or an image that
+  is not there is the placeholder and one line in the log rather than an exception in the middle of a frame — and
+  `SpriteAnimationSystem` plays a state on the time of the simulation, writes the state that plays and its frame into the
+  sprite, and raises `SpriteAnimationFinishedEvent` once for a state that does not repeat. A layer of a character is an
+  entity of its own,
+  because the engine draws in `ZOrder`, and a direction is a state of its own. The repository now ships an animated goblin:
+  `Textures/Entities/goblin.tga` with the document beside it, which the prototype of the goblin names, so the content of the
+  engine animates without one line of code about frames.
+- The `Resources` folder is a catalogue rather than a pile: `Resources/README.md` says where a file goes
+  (`<Section>/<Subsection>/<file>`, the same path in the engine, in a document of content and in the table), lists every
+  file the folder holds and who uses it, and names the sections that arrive with a later step (`Locale` with F2, `Maps`,
+  `Ui` with B6, `Shaders`), so nothing is committed as an empty promise. Two tests walk the folder and check both
+  directions: a file that no line of the catalogue names fails the build, and a path that a line names but the folder does
+  not hold fails it too.
+- The format of a component is what a document may write: the registrations that the source generator writes carry the names
+  of the fields of a component, and reading a document refuses a field that is not one of them. That closes the case the
+  contract used to ignore in silence, where a document that named the handle of a texture rather than the path of an image
+  was read without the field: a prototype refuses it as content that is wrong, and a scene refuses it as a file that cannot
+  be read. A registration written by hand passes no names and leaves the decision to its own contract, and the content
+  linter keeps its check for that case.
+- `Age.Content.Lint`, a tool that reads the content of a game the way a build does and exits with a non-zero code when
+  anything is wrong, so a broken prototype fails a build rather than a fight. It wraps the reader — which now names the
+  file of a document in every refusal, because the YAML reader knows the line and not the file it was reading — and adds
+  the check a reader cannot make: a path that a `[ResourcePath]` field names is a well-formed word whether or not a file
+  stands behind it, so a build that ships a typo fails rather than drawing the placeholder.
+  `IPrototypeManager.Load` and `IPrototypeManager.Prototypes` are the content side of it: a tool reads
+  the data of every prototype without knowing what a game reads them as. CI runs the tool over the content the engine
+  ships, and a game with kinds of its own reads `ContentLinter` from its own host.
+- A sprite names its image by path: `SpriteComponent.TexturePath` is what a prototype or a scene writes, and the texture
+  service resolves it by path whenever the sprite is drawn, so a scene that was loaded draws without a game putting device
+  handles back by hand — the last piece of code that a game had to write around a save is gone from the sample. The handle
+  belongs to the device and is no longer part of a scene (`SpriteComponent.Texture` is not written), which also means a
+  document that writes a number for it is refused rather than silently saved.
+- An image that content names and a build does not ship is drawn as a placeholder instead of taking the frame down:
+  `ITextureService.Error` is a built-in checkerboard that spells out ERROR and needs no file, `Resolve` answers with it for
+  a path that cannot be loaded, reports that path once in the log and counts it (`MissingCount`, `Missing`), and the
+  developer overlay names the images that are missing next to the numbers of the frame. The sample puts one on screen from
+  its console with `broken`.
+- A scene stores an entity that came from a prototype as a reference to it plus only the components that differ from what
+  the prototype declares: `SpawnService` records the prototype when it makes an entity, `World.PrototypeOf` reports it, and
+  `World.AssignPrototype` is how a game says that an entity it built by hand belongs to a kind. A map of a hundred units
+  of one kind is therefore a hundred references rather than a hundred copies of the same components, and one of them being
+  bigger than its kind is written as the difference that it is. Reading such a scene makes the entities again through the
+  content (`IPrototypeSource`, which the serializer takes from the container), so a scene that names a prototype while no
+  content is loaded is refused rather than loaded empty, and every component that the prototype declares is read through the
+  contract of the component before the world is touched: content that this build cannot read — a component that nothing
+  registers, values that its contract refuses, or a field that the format of the component does not carry — is a scene that
+  is refused rather than a load that stops with half of its entities in the world. A component that matches its prototype in every field is left
+  out, which is measured through the contract of the component: the fields that a document leaves out count as the values
+  the component starts with, whatever the order of the fields. An entity that lost a component of its prototype is written
+  in full, because a scene has no way to say that, and so is an entity whose prototype this build does not hold: a scene
+  that a build writes is a scene that build reads, rather than a reference that nothing can resolve. The format is version
+  two now, and a scene of version one reads as it did.
+- `EntityPrototype` and `SpawnService`: content that becomes entities, which is what makes a map, an enemy or an item a
+  document rather than a class. A document whose `type` is `entity` declares what a thing is made of, and
+  `Spawn(world, "Goblin", position)` creates an entity and attaches exactly those components, with the values the
+  document declares, read by the same contract that reads a scene — so what a document of content says and what a saved
+  map says reach an entity the same way. A spawn places what carries a transform, `TrySpawn` reports a prototype that the
+  content does not hold, a component that nothing registered is refused with the file and the line that named it, and a
+  map of a hundred units of one prototype is a hundred calls rather than a hundred copies, and a spawn that fails leaves
+  the world as it was, because every component of a prototype is read before anything of it reaches an entity.
+  `AddAgeContent` registers the service over the manager and the component registry, and the sample puts a goblin of the
+  content in the world from its console.
+- `IAssetLoader.Enumerate`, which returns the files of a folder in it and below it, ordered by ordinal and written with a
+  forward slash whatever the platform uses, so a folder of content is read the same way on every machine, and a link is
+  not followed, so walking the content of a game never leaves the game root; a folder that cannot be walked is refused by
+  name. `PrototypeManager.Load(IAssetLoader, folder)` reads every `*.yml` and `*.yaml` of a folder before it resolves any
+  of them, because a prototype may inherit from one that another file declares, leaves files
+  that are not documents alone, and treats a folder that is not there as content that holds nothing. `AddAgeContent`
+  registers the manager over the component registry of the container. `Resources/Prototypes` now ships the first content
+  of the engine: a `CreatureBase` with the goblin that inherits it, and an `ItemBase` with the sword that inherits it,
+  which the tests load, inherit and validate, and which the sample reads and counts at startup.
+- `ProtoId<T>`, `IPrototype`, `Prototype` and `PrototypeManager`: the content of a game as data. A document declares a
+  prototype by an identifier, names the components it carries and the values they start with, and can inherit from
+  another prototype with `parent`; the manager reads every document first and then builds, which is the point where the
+  mistakes of a whole content are reported at once: an identifier that two files declare, a component that nothing
+  registered, values that the contract of a component cannot read, a field the component does not have, a parent that no
+  document declares, a kind that nothing reads, and prototypes that inherit from each other in a circle. Every refusal
+  names the file and the line, so a broken document is a message at the start of a game rather than a surprise in the
+  middle of a fight. `ProtoId<T>` is how a component refers to a prototype, and a scene writes it as a plain word, so a
+  map refers to the data of an enemy rather than carrying a copy of it.
+- `YamlJson`, which hands the values of a document to the contract a scene uses: a prototype and a scene describe one
+  component with one reader, and the registry gained `TryDeserialize` and `Has` for exactly that, so a component that a
+  prototype names is read by the code that reads a scene.
+- `Age.Content`, the assembly that holds the content of a game, with its `YamlReader` first: the subset of YAML that the
+  content of the engine is written in — scalars, lists, dictionaries and the nesting of them, with comments, empty lines
+  and quotes — read into a tree where every value remembers the line it came from. The subset is fixed on purpose
+  (ADR-8): a document that asks for anchors, aliases, tags, flow style or block scalars is refused with the line and the
+  column of the mistake, and so is a name that appears twice, a line that does not line up with its block, and a value
+  that is both a word and a block.
 - `Age.SourceGen`, a source generator that writes the `IComponentRegistrations` of an assembly from its `[Component]`
   attributes, so a component is declared once and its registration follows. The hand-written registration classes of
   `Age.Core`, `Age.UI`, `Age.Physics` and `Age.Rendering` are gone. A type that is named as a component but is not a
@@ -158,6 +268,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A prototype that declared the same component twice was read with whichever declaration came first, because nothing
+  refused the duplicate: the manager refuses it now and names the component together with the line of both declarations.
+- A word of a document that parses as a number only to end up as `NaN`, an infinity or a value too large for a double was
+  handed to the writer of JSON, which refuses such a value and stopped the reading of a whole content with an error about
+  the writer rather than about the document. Such a word goes on as the word it is, so `Rotation: NaN` is refused at load
+  with the file and the line of the document that holds it.
 - `World.AssignSceneId` refused to name an entity only after the entity had already given up the identifier it held, which
   left the world unable to resolve that identifier in the one case that reaches the refusal, a world that ran out of them:
   the refusal comes first now, and a creation whose identifier cannot be claimed gives its slot back and reports the

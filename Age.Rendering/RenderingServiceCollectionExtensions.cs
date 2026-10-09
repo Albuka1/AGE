@@ -24,6 +24,8 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<IWindowService, SilkWindowService>();
         services.AddSingleton<IRenderer, SilkRenderer>();
         services.AddSingleton<ITextureService, TextureService>();
+        services.AddSingleton<ISpriteSheetService, SpriteSheetService>();
+        services.AddSingleton<SpriteAnimationSystem>();
         services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<SplashScreen>();
         services.AddSingleton<DevOverlay>();

@@ -57,6 +57,37 @@ public sealed class NullAssetLoader : IAssetLoader
     }
 
     /// <inheritdoc />
+    public IEnumerable<string> Enumerate(string relativeFolder)
+    {
+        string folder = Resolve(relativeFolder);
+
+        if (!Directory.Exists(folder))
+        {
+            _logger?.LogError("The folder '{Path}' does not exist under the game root.", relativeFolder);
+            throw new DirectoryNotFoundException($"The folder '{relativeFolder}' does not exist under the game root.");
+        }
+
+        string root = _root!;
+
+        // The paths are materialized here rather than lazily, so that a folder that cannot be walked says so where the call
+        // was made, and so that the order of the files is the order of their names on every machine. The attributes that
+        // are skipped hold one entry of the enumeration back, and it is the link: a folder of a game is walked inside the
+        // game root, while a link is a way out of it. Every other attribute is left alone, so a file whose name looks
+        // hidden is still content.
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+        };
+
+        return Directory
+            .EnumerateFiles(folder, "*", options)
+            .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <inheritdoc />
     public T Load<T>(string relativePath)
     {
         using Stream stream = OpenRead(relativePath);

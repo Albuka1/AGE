@@ -438,6 +438,41 @@ public sealed class SceneSerializerTests
         world.Enumerate().Should().ContainSingle();
     }
 
+    [Fact]
+    public void SceneSerializer_ASprite_KeepsThePathOfItsImageAndNotTheHandleOfTheDevice()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new SpriteComponent { TexturePath = "Textures/Tiles/tiles.bmp", Texture = new TextureHandle(7), Size = new Vector2(64f, 64f), Color = Color.White });
+
+        string json = serializer.Save(world);
+
+        json.Should().Contain("Textures/Tiles/tiles.bmp");
+        json.Should().NotContain("\"Texture\":", "the handle belongs to the device of this run, and a device is not saved");
+
+        var loaded = new World();
+        serializer.Load(loaded, json);
+
+        SpriteComponent sprite = loaded.Get<SpriteComponent>(loaded.Enumerate().Single());
+
+        sprite.TexturePath.Should().Be("Textures/Tiles/tiles.bmp");
+        sprite.Texture.Id.Should().Be(0, "the renderer resolves the path again, which is what makes a loaded scene draw");
+    }
+
+    [Fact]
+    public void SceneSerializer_AFieldThatTheComponentDoesNotCarry_IsRefused()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+        const string Scene = """{ "Entities": [ { "Id": 1, "Components": { "Sprite": { "Texture": 7 } } } ] }""";
+
+        Action load = () => serializer.Load(world, Scene);
+
+        load.Should().Throw<InvalidDataException>().WithMessage("*'Sprite'*cannot be read*", "a field that the format does not carry is refused rather than read and dropped");
+        world.Enumerate().Should().BeEmpty("a scene that is refused leaves the world as it was");
+    }
+
     /// <summary>Keeps what was logged, which is how a test reads the record of a scene that was refused.</summary>
     private sealed class RecordingLogger<T> : ILogger<T>
     {

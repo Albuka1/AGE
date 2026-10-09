@@ -1,0 +1,16 @@
+# What every creature of the game has, and what the creatures below inherit. A root prototype of a group lives in the
+# base.yml of its folder, so the folder of a kind of content reads like the catalogue of that kind.
+- type: entity
+  id: CreatureBase
+  components:
+    - type: Transform
+      Position:
+        X: 0
+        Y: 0
+      Scale:
+        X: 1
+        Y: 1
+    - type: Collider
+      Size:
+        X: 32
+        Y: 32

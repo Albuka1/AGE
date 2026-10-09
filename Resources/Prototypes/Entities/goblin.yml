@@ -1,0 +1,22 @@
+# A goblin is a creature like any other: it declares what it changes and inherits the rest, which is what keeps the file
+# of a unit about the unit rather than about everything it shares with its kind.
+- type: entity
+  id: Goblin
+  parent: CreatureBase
+  components:
+    - type: Collider
+      Size:
+        X: 24
+        Y: 24
+    # What the goblin draws: the sheet next to its image says how the frames of a state lie on it, so this file names a
+    # state rather than a rectangle of an image.
+    - type: Sprite
+      SheetPath: Textures/Entities/goblin.yml
+      State: idle
+      Color:
+        R: 255
+        G: 255
+        B: 255
+        A: 255
+    - type: SpriteAnimation
+      State: walk

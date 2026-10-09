@@ -150,6 +150,14 @@ public sealed class GameShutdownTests
 
         public int Count => 0;
 
+        public TextureHandle Error => default;
+
+        public int MissingCount => 0;
+
+        public IEnumerable<string> Missing => [];
+
+        public TextureHandle Resolve(string relativePath) => default;
+
         public TextureHandle Load(string relativePath) => default;
 
         public bool IsAlive(TextureHandle texture) => false;

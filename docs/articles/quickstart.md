@@ -140,9 +140,37 @@ services:
 services.AddSingleton<IComponentRegistrations, GameComponentRegistrations>();
 ```
 
-A component that refers to a device resource, such as the texture of a `SpriteComponent`, is written
-as the identifier it carried, and that identifier does not survive a reload: load the texture again
-and set it on the component after the scene was loaded.
+An entity that a spawn made is written as the prototype it came from plus only the components that differ from what that
+prototype declares, so a map of a hundred units of one kind holds a hundred references rather than a hundred copies:
+
+```csharp
+Entity goblin = spawner.Spawn(world, "Goblin", new Vector2(320f, 240f));
+world.GetRef<TransformComponent>(goblin).Scale = new Vector2(2f, 2f);
+
+// the scene keeps { "Prototype": "Goblin", "Components": { "Transform": ... } } and nothing of the collider
+string map = scenes.Save(world);
+```
+
+`World.PrototypeOf` reports what an entity was made from, and `World.AssignPrototype` says the same for an entity that a
+game built by hand. Reading such a scene needs the content of the game, because the entities are made again from it: a
+scene that names a prototype while no content is loaded is refused rather than loaded empty.
+
+A sprite names its image by path, and the path is what a scene keeps:
+
+```csharp
+world.Set(entity, new SpriteComponent
+{
+    TexturePath = "Textures/Tiles/tiles.bmp",
+    Size = new Vector2(64f, 64f),
+    Color = Color.White,
+});
+```
+
+The renderer resolves the path the first time the sprite is drawn, so a loaded scene draws without a
+game putting device handles back by hand. An image that is not there is drawn as the placeholder of
+`ITextureService` — a built-in checkerboard that spells out ERROR — counted by `MissingCount` and
+reported once per path, which turns a typo in a path into something a person sees rather than a frame
+that fails.
 
 A scene keeps the identifier of every entity, so a component that refers to another entity survives the save: write the
 reference as `EntityRef`, which a world makes with `World.Reference` and reads back with `World.Resolve`.
@@ -184,6 +212,64 @@ deserializes every other type from JSON, so a component authored as
 stays inside the game root that `Initialize` was given, and an escaping path
 throws.
 
+## Load content and spawn
+
+```csharp
+PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+SpawnService spawner = provider.GetRequiredService<SpawnService>();
+
+prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+prototypes.Load(assets, "Prototypes");
+
+Entity goblin = spawner.Spawn(world, "Goblin", new Vector2(320f, 240f));
+```
+
+`AddAgeContent()` registers both. A spawn is where the content of a game becomes
+entities: the manager reads every `*.yml` under `Resources/Prototypes` before it
+resolves any of them, so a document that names a component nothing registered, a
+parent that no file declares, or a field the component does not have is refused
+at startup with the file and the line of the mistake. A document whose `type` is
+`entity` declares what a thing is made of, and a spawn creates an entity and
+attaches exactly those components, with the values the document declares — a map
+of a hundred units of one prototype is a hundred calls rather than a hundred
+copies. Where a spawn puts the entity is the one thing it takes from the caller,
+and a prototype that carries no transform is placed nowhere.
+
+Content lives under `Resources`, and that folder is a catalogue: a path is `<Section>/<Subsection>/<file>`, written the
+same way in the engine, in a document and in `Resources/README.md`, which a test keeps in step with the files it lists.
+
+## Check the content of a build
+
+```bash
+dotnet run --project Age.Content.Lint -- Resources Prototypes
+```
+
+`Age.Content.Lint` reads the content of a game the way a build does and exits with a non-zero code
+when anything is wrong, so a mistake in a document fails a build rather than a fight: a document that
+is not a prototype, a component that nothing registered, values that its contract cannot read, a field
+that the format of the component does not carry — which is how a field that belongs to a run rather
+than to content, such as the handle of a texture, is refused instead of being dropped — a parent that
+no file declares, a kind that nothing reads, a circle of inheritance, and a path that a
+`[ResourcePath]` field names, which is checked against the files of the build. The sheets of a build are read
+too: a sheet says which version of the format it is written in and where its art comes from with `license` and
+`copyright`, and the grid it declares is checked against the size of the image beside it.
+
+The tool knows the kinds and the components the engine ships. A game with kinds of its own reads the
+same check from its own host:
+
+```csharp
+var linter = new ContentLinter(prototypes, provider.GetRequiredService<ComponentRegistry>(), assets, provider.GetRequiredService<IImageLoader>());
+LintReport report = linter.Lint("Prototypes");
+LintReport sheets = linter.LintSheets("Textures");   // the grid of a sheet against the image beside it, its version and its licence
+
+foreach (LintProblem problem in report.Problems.Concat(sheets.Problems))
+{
+    Console.Error.WriteLine(problem);   // Prototypes/Entities/goblin.yml(7): ...
+}
+
+return report.IsClean && sheets.IsClean ? 0 : 1;
+```
+
 ## Load an image
 
 ```csharp
@@ -205,6 +291,65 @@ world.Set(sprite, new SpriteComponent { Texture = playerTexture, Size = new Vect
 
 `ITextureService` decodes the file once, uploads it and caches it by path, so loading the same
 image twice returns the same texture. Release it with `Unload` when the level that used it ends.
+
+## Draw an animated character
+
+The frames of a character live in an image and a document beside it, which says where each state lies on the grid:
+
+```yaml
+version: 1
+license: MIT
+copyright: AGE, drawn for this repository
+image: Textures/Entities/goblin.tga
+cell:
+  X: 16
+  Y: 16
+columns: 4
+rows: 2
+states:
+  idle:
+    row: 0
+    frames: 2
+    delay: 0.4
+  attack:
+    row: 1
+    frames: 3
+    delays:
+      - 0.18
+      - 0.08
+      - 0.15
+    loop: false
+```
+
+A state gives one length for every frame with `delay`, or the length of each frame with `delays` — a wind-up, a strike
+and a recovery are not the same length. A sprite names the document, the state and the frame; an animation plays a state
+on the time of the simulation:
+
+```csharp
+world.Set(goblin, new SpriteComponent { SheetPath = "Textures/Entities/goblin.yml", State = "idle", Color = Color.White });
+world.Set(goblin, new SpriteAnimationComponent { State = "attack" });
+```
+
+`SpriteAnimationSystem` runs in the fixed step next to the timers, writes the frame that is on screen into the
+`SpriteComponent` of the same entity, and raises `SpriteAnimationFinishedEvent` once when a state that does not loop
+reaches its last frame:
+
+```csharp
+world.Events.Subscribe<SpriteAnimationFinishedEvent>((entity, @event) =>
+{
+    ref SpriteAnimationComponent animation = ref world.GetRef<SpriteAnimationComponent>(entity);
+    animation.State = "idle";
+    animation.Paused = false;
+});
+```
+
+No coordinate of an image is written in a game: the region of a frame is arithmetic over the grid that the document
+declares. A layer of a character is an entity of its own with a higher `ZOrder`, and a direction is a state of its own. A
+document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once — the
+overlay of a build names the sheets and the states behind those placeholders — and `Age.Content.Lint` reads every document
+under the textures of a build: it checks the paths a prototype names against the files a build ships, the grid of a sheet
+against the image it names, that every sheet says which licence its art comes with and who it belongs to, and that every
+state a prototype names — on the sprite or on its animation — is one the sheet it names declares.
 
 ## Draw text
 

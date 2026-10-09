@@ -195,6 +195,55 @@ public sealed class AssetLoaderTests : IDisposable
         settings.Count.Should().Be(7);
     }
 
+    [Fact]
+    public void AssetLoader_Enumerate_ReturnsEveryFileOfAFolderBelowItInOrder()
+    {
+        Write("art/tiles/floor.txt", Text);
+        Write("art/tiles/wall.txt", Text);
+        Write("art/sprite.json", "{}");
+        Write("elsewhere.txt", Text);
+
+        _loader.Enumerate("art").Should().Equal("art/sprite.json", "art/tiles/floor.txt", "art/tiles/wall.txt");
+    }
+
+    [Fact]
+    public void AssetLoader_Enumerate_KeepsAFileWhoseNameLooksHidden()
+    {
+        Write("art/.keep", Text);
+
+        _loader.Enumerate("art").Should().ContainSingle().Which.Should().Be("art/.keep");
+    }
+
+    [Fact]
+    public void AssetLoader_Enumerate_DoesNotFollowADirectoryLink()
+    {
+        string outside = Path.Combine(Path.GetTempPath(), "age-assets-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "secret.txt"), Text);
+        Directory.CreateDirectory(Path.Combine(_root, "art"));
+
+        try
+        {
+            Directory.CreateSymbolicLink(Path.Combine(_root, "art", "link"), outside);
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+        {
+            Directory.Delete(outside, recursive: true);
+            Assert.Skip("Creating symbolic links is not permitted here.");
+        }
+
+        try
+        {
+            _loader.Enumerate("art").Should().BeEmpty("a folder is walked inside the game root, and a link is not a way out of it");
+        }
+        finally
+        {
+            // The link goes before the tree it was made in: deleting a root that holds one recursively does not remove it.
+            Directory.Delete(Path.Combine(_root, "art", "link"));
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
     private void Write(string relativePath, string content) => Write(relativePath, Encoding.UTF8.GetBytes(content));
 
     private void Write(string relativePath, byte[] content)

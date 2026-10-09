@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Age.Content.Lint</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
+    <ProjectReference Include="..\Age.Content\Age.Content.csproj" />
+    <ProjectReference Include="..\Age.Assets\Age.Assets.csproj" />
+    <ProjectReference Include="..\Age.Audio\Age.Audio.csproj" />
+    <ProjectReference Include="..\Age.Input\Age.Input.csproj" />
+    <ProjectReference Include="..\Age.Physics\Age.Physics.csproj" />
+    <ProjectReference Include="..\Age.Rendering\Age.Rendering.csproj" />
+    <ProjectReference Include="..\Age.UI\Age.UI.csproj" />
+  </ItemGroup>
+
+</Project>
