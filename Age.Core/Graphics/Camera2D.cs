@@ -50,7 +50,7 @@ public struct Camera2D
     /// <param name="designSize">The area of the world that the game is authored against, in world units.</param>
     /// <param name="windowSize">The size of the window, in pixels.</param>
     /// <param name="fit">Which part of the design area stays in view when the window has another shape than the area does.</param>
-    /// <returns>A camera at the origin of the world, which measures the window and carries the zoom that fits the area to it.</returns>
+    /// <returns>A camera that measures the window and carries the zoom that fits the area to it.</returns>
     /// <exception cref="ArgumentOutOfRangeException">The design size or the window size is zero, negative or not a number.</exception>
     /// <remarks>
     /// A camera that leaves the zoom at one shows one unit of the world per pixel of the window, so a larger window shows more
@@ -59,7 +59,10 @@ public struct Camera2D
     /// and whatever the shape of the window are, so a game that lays its map out for a window of 1280 by 720 looks the same at
     /// 3840 by 2160 and at 1280 by 800. The zoom is the ratio of the design area to the window, because the world is scaled by
     /// one over it: what the returned camera covers is <see cref="VisibleWorld"/>, which is the area a game reads when it lays a
-    /// map out or places an interface of the world.
+    /// map out or places an interface of the world. A camera that covers the window crops the area, and the crop is shared by
+    /// both of the opposite sides of it, so what a game places at the middle of the area is at the middle of the window at any
+    /// shape of it; a camera that contains the area shows the whole of it from the origin of the world, with the room that is
+    /// left over below and to the right of the area.
     /// </remarks>
     /// <example>
     /// <code>
@@ -82,12 +85,18 @@ public struct Camera2D
 
         float byWidth = designSize.X / windowSize.X;
         float byHeight = designSize.Y / windowSize.Y;
+        bool covers = fit == CameraFit.Cover;
+        float zoom = covers ? MathF.Min(byWidth, byHeight) : MathF.Max(byWidth, byHeight);
 
         return new Camera2D
         {
-            Position = Vector2.Zero,
+            // A camera that covers the window crops the design area, so the camera is moved by half of what the crop takes off
+            // and what a game places at the middle of the area stays at the middle of the window. A camera that contains the
+            // area stands at the origin, because the whole of the area is in view: the room that is left over is outside of it
+            // and is not part of the world the game was authored against.
+            Position = covers ? (designSize - (windowSize * zoom)) * 0.5f : Vector2.Zero,
             ViewportSize = windowSize,
-            Zoom = fit == CameraFit.Cover ? MathF.Min(byWidth, byHeight) : MathF.Max(byWidth, byHeight),
+            Zoom = zoom,
         };
     }
 }

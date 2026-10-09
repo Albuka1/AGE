@@ -13,22 +13,34 @@ namespace Age.Tests;
 public sealed class RenderTargetTests
 {
     [Fact]
-    public void RenderTargetHandle_CarriesTheTextureAndTheSizeOfTheSurface()
+    public void RenderTargetHandle_CarriesTheTextureTheSizeAndTheAttachmentOfTheSurface()
     {
-        var target = new RenderTargetHandle(framebuffer: 7, texture: 42, size: new Vector2(320f, 200f));
+        var target = new RenderTargetHandle(framebuffer: 7, texture: 42, size: new Vector2(320f, 200f), generation: 3);
 
         target.Texture.Id.Should().Be(42);
         target.Size.Should().Be(new Vector2(320f, 200f));
+        target.Generation.Should().Be(3, "the handle says which attachment of the renderer created the target");
     }
 
     [Fact]
     public void RenderTargetHandle_TwoHandlesOfOneTarget_AreEqual()
     {
-        var target = new RenderTargetHandle(7, 42, new Vector2(320f, 200f));
+        var target = new RenderTargetHandle(7, 42, new Vector2(320f, 200f), 3);
 
-        target.Should().Be(new RenderTargetHandle(7, 42, new Vector2(320f, 200f)));
-        target.Should().NotBe(new RenderTargetHandle(7, 43, new Vector2(320f, 200f)));
-        target.Should().NotBe(new RenderTargetHandle(8, 42, new Vector2(320f, 200f)));
+        target.Should().Be(new RenderTargetHandle(7, 42, new Vector2(320f, 200f), 3));
+        target.Should().NotBe(new RenderTargetHandle(7, 43, new Vector2(320f, 200f), 3));
+        target.Should().NotBe(new RenderTargetHandle(8, 42, new Vector2(320f, 200f), 3));
+    }
+
+    [Fact]
+    public void RenderTargetHandle_AHandleOfAnEarlierAttachment_IsNotTheTargetThatTookItsNumbers()
+    {
+        // A renderer that was attached to another window let go of the device of the first one, and the device that is there now
+        // hands the same numbers out again: the attachment is what tells a handle of the one from a target of the other.
+        var before = new RenderTargetHandle(7, 42, new Vector2(320f, 200f), 1);
+        var now = new RenderTargetHandle(7, 42, new Vector2(320f, 200f), 2);
+
+        before.Should().NotBe(now);
     }
 
     [Fact]

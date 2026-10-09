@@ -16,11 +16,13 @@ public readonly struct RenderTargetHandle : IEquatable<RenderTargetHandle>
     /// <param name="framebuffer">The identifier of the framebuffer of the device.</param>
     /// <param name="texture">The identifier of the texture that holds what was drawn.</param>
     /// <param name="size">The size of the target, in pixels.</param>
-    internal RenderTargetHandle(uint framebuffer, uint texture, Vector2 size)
+    /// <param name="generation">The attachment of the renderer that created the target, as <see cref="IRenderer.DeviceGeneration"/> reports it.</param>
+    internal RenderTargetHandle(uint framebuffer, uint texture, Vector2 size, uint generation)
     {
         Framebuffer = framebuffer;
         Texture = new TextureHandle((int)texture);
         Size = size;
+        Generation = generation;
     }
 
     /// <summary>Gets the identifier of the framebuffer that the device draws into.</summary>
@@ -32,6 +34,15 @@ public readonly struct RenderTargetHandle : IEquatable<RenderTargetHandle>
 
     /// <summary>Gets the size of the target, in pixels.</summary>
     public Vector2 Size { get; }
+
+    /// <summary>Gets the attachment of the renderer that created the target, which is the number <see cref="IRenderer.DeviceGeneration"/> had at that moment.</summary>
+    /// <remarks>
+    /// A renderer that is attached to another window lets go of the device of the first one, so a target of the attachment before is gone, and the
+    /// device that is there now hands the same numbers out again: a framebuffer and a texture that a handle carries can name two different targets
+    /// of two attachments. This is what tells them apart, and a game that keeps a handle across an attachment compares it with the number of the
+    /// renderer to see that the target it names is not one of the device that is there now.
+    /// </remarks>
+    public uint Generation { get; }
 
     /// <summary>Determines whether two handles refer to the same target.</summary>
     /// <param name="left">The first handle.</param>
@@ -48,11 +59,12 @@ public readonly struct RenderTargetHandle : IEquatable<RenderTargetHandle>
     /// <summary>Determines whether this handle equals another handle.</summary>
     /// <param name="other">The handle to compare with.</param>
     /// <returns><see langword="true"/> when both refer to the same target.</returns>
-    public bool Equals(RenderTargetHandle other) => Framebuffer == other.Framebuffer && Texture.Id == other.Texture.Id;
+    /// <remarks>Two handles are equal only when they name the same attachment as well, because a device hands the numbers of a framebuffer and a texture out again.</remarks>
+    public bool Equals(RenderTargetHandle other) => Framebuffer == other.Framebuffer && Texture.Id == other.Texture.Id && Generation == other.Generation;
 
     /// <inheritdoc />
     public override bool Equals(object? obj) => obj is RenderTargetHandle other && Equals(other);
 
     /// <inheritdoc />
-    public override int GetHashCode() => HashCode.Combine(Framebuffer, Texture.Id);
+    public override int GetHashCode() => HashCode.Combine(Framebuffer, Texture.Id, Generation);
 }

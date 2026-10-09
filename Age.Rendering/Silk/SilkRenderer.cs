@@ -93,14 +93,17 @@ public sealed class SilkRenderer : IRenderer
     /// <summary>The size the texture of the screen was allocated with, which is what a copy into it compares against.</summary>
     private Vector2 _screenTextureSize;
 
-    /// <summary>The surface that was cleared in this frame, which the window is while it holds the default framebuffer.</summary>
-    private uint _clearedSurface;
+    /// <summary>The surfaces that were cleared in this frame, which holds the framebuffer of the window while it is drawn into.</summary>
+    private readonly HashSet<uint> _clearedSurfaces = new();
 
-    /// <summary>Whether the surface in <see cref="_clearedSurface"/> was cleared in this frame.</summary>
-    private bool _clearedInFrame;
+    /// <summary>The attachment that the targets of <see cref="_renderTargets"/> were created under.</summary>
+    private uint _targetGeneration;
 
     /// <inheritdoc />
     public Vector2 ViewportSize { get; private set; }
+
+    /// <inheritdoc />
+    public uint DeviceGeneration { get; private set; }
 
     /// <inheritdoc />
     public void Attach(IWindowService window)
@@ -112,6 +115,11 @@ public sealed class SilkRenderer : IRenderer
 
         _windowService = window;
         _gl = GL.GetApi(window.Window);
+
+        // The device of another window knows nothing of the programs and the targets of the one before, and it hands the same
+        // numbers out again, so the attachment is a new generation of them: a handle that a game kept is refused by this
+        // renderer, and a service that caches a program compiles it again for the window that is here now.
+        DeviceGeneration++;
         CreateResources();
 
         // The device of a window that has just been attached draws into a viewport of its own.
@@ -258,8 +266,8 @@ public sealed class SilkRenderer : IRenderer
         gl.BindVertexArray(0);
         gl.UseProgram(0);
 
-        // The next frame clears the surface it draws into again, whichever surface that is.
-        _clearedInFrame = false;
+        // The next frame clears every surface it draws into again.
+        _clearedSurfaces.Clear();
     }
 
     /// <inheritdoc />
@@ -298,7 +306,7 @@ public sealed class SilkRenderer : IRenderer
             gl.BindFramebuffer(FramebufferTarget.Framebuffer, _surface);
         }
 
-        var target = new RenderTargetHandle(framebuffer, texture, new Vector2(width, height));
+        var target = new RenderTargetHandle(framebuffer, texture, new Vector2(width, height), _targetGeneration);
         _renderTargets.Add(framebuffer, target);
 
         return target;
@@ -344,11 +352,15 @@ public sealed class SilkRenderer : IRenderer
     public void ReleaseRenderTarget(RenderTargetHandle target)
     {
         // Only a target that this renderer created is one of this device: a handle of a device that is gone, and a handle
-        // that never named a target, are left alone rather than deleted by number.
-        if (!_renderTargets.Remove(target.Framebuffer))
+        // that never named a target, are left alone rather than deleted by number. The whole handle is compared and not just
+        // the framebuffer, because the device of a later attachment hands the same numbers out again and one of them can name
+        // a target that is alive: what a game kept from the attachment before belongs to nothing that is here now.
+        if (!_renderTargets.TryGetValue(target.Framebuffer, out RenderTargetHandle known) || known != target)
         {
             return;
         }
+
+        _renderTargets.Remove(target.Framebuffer);
 
         if (_surface == target.Framebuffer)
         {
@@ -415,22 +427,20 @@ public sealed class SilkRenderer : IRenderer
     /// <param name="surface">The framebuffer of the surface: zero is the window, and any other number is a target.</param>
     /// <param name="clear">Whether the caller asked for a clear.</param>
     /// <remarks>
-    /// A surface is cleared at most once in a frame, which is what lets a pass that clears the window and a pass that draws
-    /// over it both open a frame without the second one wiping the first. A target is a surface of its own, so a round trip
-    /// through one leaves the clear of the window alone.
+    /// A surface is cleared at most once in a frame, and every surface that was cleared is remembered rather than the last one,
+    /// which is what lets a pass that clears the window and a pass that draws over it both open a frame without the second one
+    /// wiping the first. A target is a surface of its own, so a round trip through one leaves the clear of the window alone,
+    /// and a frame that comes back to a target it drew into earlier finds it cleared already, so what it drew stays there.
     /// </remarks>
     private void ClearIfNeeded(GL gl, uint surface, bool clear)
     {
-        if (!clear || (_clearedInFrame && _clearedSurface == surface))
+        if (!clear || !_clearedSurfaces.Add(surface))
         {
             return;
         }
 
         gl.ClearColor(Color.Black.R / 255f, Color.Black.G / 255f, Color.Black.B / 255f, Color.Black.A / 255f);
         gl.Clear(ClearBufferMask.ColorBufferBit);
-
-        _clearedSurface = surface;
-        _clearedInFrame = true;
     }
 
     private void CreateResources()
@@ -605,9 +615,23 @@ public sealed class SilkRenderer : IRenderer
     }
 
     /// <inheritdoc />
+    public void ReleaseShader(ShaderHandle shader)
+    {
+        // A handle of an attachment that is gone names a program that was deleted with the device of it, and the device that is
+        // here now hands those numbers out again: the number is left alone rather than deleted, which would delete the program
+        // that the device gave it to.
+        if (shader.Generation == DeviceGeneration)
+        {
+            ReleaseShader(shader.Program);
+        }
+    }
+
+    /// <inheritdoc />
     public void UseShader(ShaderHandle shader)
     {
-        if (shader.Program == 0 || !_gamePrograms.Contains(shader.Program))
+        // The attachment is compared as well as the identity of the program, because a device that is attached again hands the
+        // same numbers out: a program of the window before is refused rather than drawn with whatever holds its number now.
+        if (shader.Program == 0 || shader.Generation != DeviceGeneration || !_gamePrograms.Contains(shader.Program))
         {
             throw new ArgumentException("The handle is not a shader that this renderer compiled, or it belongs to a device it is no longer attached to.", nameof(shader));
         }
@@ -893,12 +917,15 @@ public sealed class SilkRenderer : IRenderer
 
         _renderTargets.Clear();
 
+        // The targets that are made next belong to another device, which hands the same numbers out again, so they are of
+        // another attachment: a handle of the one that is being let go of names nothing of what comes after it.
+        _targetGeneration++;
+
         _gl = null;
         _surface = 0;
         _surfacePixels = Vector2.Zero;
         _screenTextureSize = Vector2.Zero;
-        _clearedSurface = 0;
-        _clearedInFrame = false;
+        _clearedSurfaces.Clear();
         ViewportSize = Vector2.Zero;
         _viewportPixels = Vector2.Zero;
     }

@@ -15,10 +15,12 @@ public readonly struct ShaderHandle : IEquatable<ShaderHandle>
     /// <summary>Initializes a handle. Only the engine creates handles.</summary>
     /// <param name="resource">The slot the shader occupies in the service that compiled it.</param>
     /// <param name="program">The identifier of the program of the device that the shader was compiled into.</param>
-    internal ShaderHandle(ResourceHandle resource, uint program)
+    /// <param name="generation">The attachment of the renderer that compiled the program, as <see cref="IRenderer.DeviceGeneration"/> reports it.</param>
+    internal ShaderHandle(ResourceHandle resource, uint program, uint generation)
     {
         Resource = resource;
         Program = program;
+        Generation = generation;
     }
 
     /// <summary>Gets the slot that the shader occupies in the service that compiled it.</summary>
@@ -26,6 +28,14 @@ public readonly struct ShaderHandle : IEquatable<ShaderHandle>
 
     /// <summary>Gets the identifier of the program that the renderer draws with.</summary>
     internal uint Program { get; }
+
+    /// <summary>Gets the attachment of the renderer that compiled the program, which is the number <see cref="IRenderer.DeviceGeneration"/> had at that moment.</summary>
+    /// <remarks>
+    /// A renderer that is attached to another window lets go of the device of the first one, so the program of the attachment before is gone, and the
+    /// device that is there now hands the same numbers out again: the identifier of a program names two programs of two attachments. This is what tells
+    /// the two apart, which is what keeps <see cref="IRenderer.UseShader"/> from drawing with whatever took the number.
+    /// </remarks>
+    public uint Generation { get; }
 
     /// <summary>Determines whether two handles refer to the same shader.</summary>
     /// <param name="left">The first handle.</param>
@@ -42,11 +52,12 @@ public readonly struct ShaderHandle : IEquatable<ShaderHandle>
     /// <summary>Determines whether this handle equals another handle.</summary>
     /// <param name="other">The handle to compare with.</param>
     /// <returns><see langword="true"/> when both refer to the same shader.</returns>
-    public bool Equals(ShaderHandle other) => Program == other.Program && Resource == other.Resource;
+    /// <remarks>Two handles are equal only when they were issued by one attachment of the renderer, because a device hands the number of a program out again.</remarks>
+    public bool Equals(ShaderHandle other) => Program == other.Program && Resource == other.Resource && Generation == other.Generation;
 
     /// <inheritdoc />
     public override bool Equals(object? obj) => obj is ShaderHandle other && Equals(other);
 
     /// <inheritdoc />
-    public override int GetHashCode() => HashCode.Combine(Program, Resource);
+    public override int GetHashCode() => HashCode.Combine(Program, Resource, Generation);
 }

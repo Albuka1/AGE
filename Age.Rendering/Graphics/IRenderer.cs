@@ -16,11 +16,26 @@ public interface IRenderer : IDisposable
     /// <summary>Gets the current viewport size, in pixels.</summary>
     Vector2 ViewportSize { get; }
 
+    /// <summary>Gets a number that changes when the renderer is attached to a window, which is what tells the objects of one device from the objects of another.</summary>
+    /// <remarks>
+    /// <para>
+    /// A renderer that is attached to another window lets go of the device of the first one: the programs, the targets and the textures of it are gone, and
+    /// the device that is there now hands the same numbers out again. A handle that carries the number of its attachment is therefore refused by the
+    /// renderer rather than resolved against whatever holds that number now, and a service that caches a device object builds it again when the number
+    /// changed.
+    /// </para>
+    /// <para>
+    /// A renderer that owns no device of its own keeps the number at zero, so a handle of one and the current number always agree.
+    /// </para>
+    /// </remarks>
+    uint DeviceGeneration => 0;
+
     /// <summary>Binds the renderer to a window and creates its device resources.</summary>
     /// <remarks>
     /// The programs that a game compiled through <see cref="CompileShader"/> are objects of the device as well, so they are
     /// deleted when the renderer lets go of it, and a handle of the window before is refused by <see cref="UseShader"/> rather
-    /// than handed to a device that has never seen it: load the shaders again for the new window.
+    /// than handed to a device that has never seen it. <see cref="DeviceGeneration"/> changes with the attachment, which is what
+    /// an <c>IShaderService</c> reads to compile the stages again for the window that is there now.
     /// </remarks>
     void Attach(IWindowService window);
 
@@ -133,7 +148,7 @@ public interface IRenderer : IDisposable
     /// <summary>Compiles a program from the two stages of a shader.</summary>
     /// <param name="vertexSource">The vertex stage, in the OpenGL Shading Language.</param>
     /// <param name="fragmentSource">The fragment stage, in the OpenGL Shading Language.</param>
-    /// <returns>The identifier of the program, for <see cref="UseShader"/> and <see cref="ReleaseShader"/>.</returns>
+    /// <returns>The identifier of the program, for <see cref="UseShader"/> and <see cref="ReleaseShader(uint)"/>.</returns>
     /// <exception cref="InvalidOperationException">The renderer has not been attached to a window, or a stage does not compile.</exception>
     /// <remarks>
     /// A renderer that draws without shaders of its own refuses this. A game does not compile a shader itself: it asks
@@ -148,12 +163,22 @@ public interface IRenderer : IDisposable
     {
     }
 
+    /// <summary>Deletes a program that <see cref="CompileShader"/> created, through the handle of the shader it belongs to.</summary>
+    /// <param name="shader">The handle of the shader to delete.</param>
+    /// <remarks>
+    /// A handle that names another attachment than <see cref="DeviceGeneration"/> is ignored rather than deleted by number, because the program it names
+    /// went away with the device that compiled it and the number of it belongs to whatever the device that is there now gave it to. A renderer that draws
+    /// without shaders of its own ignores this, as it ignores <see cref="ReleaseShader(uint)"/>.
+    /// </remarks>
+    void ReleaseShader(ShaderHandle shader) => ReleaseShader(shader.Program);
+
     /// <summary>Draws every quad after this call with a shader.</summary>
     /// <param name="shader">The shader to draw with, which the renderer drew no quad of yet or drew quads of already.</param>
     /// <remarks>
     /// What a caller collected before this call is drawn first, because one draw call samples one program: the quads that are
     /// gathered under the shader that is being replaced are a batch of their own. A renderer that draws without shaders of its
-    /// own refuses this, and so does a handle that belongs to a device the renderer is no longer attached to.
+    /// own refuses this, and so does a handle that belongs to a device the renderer is no longer attached to, which is a handle
+    /// whose <see cref="ShaderHandle.Generation"/> is not <see cref="DeviceGeneration"/>.
     /// </remarks>
     void UseShader(ShaderHandle shader) =>
         throw new NotSupportedException("This renderer draws without shaders of their own.");

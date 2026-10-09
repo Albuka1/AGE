@@ -479,9 +479,10 @@ the window, one matches the height, and a value between the two blends the ratio
 
 The world has the same choice, in one call: `Camera2D.Fit` builds a camera that shows a design area of the world in a window
 of any size, so a game that lays its map out for 1280 by 720 draws the same view on a display of 3840 by 2160 and in a
-window of another shape, with `CameraFit.Contain` keeping the whole area in view and `CameraFit.Cover` filling the window
-and cropping the edges. A camera that leaves the zoom at one is the other way round and is the default of the engine: one
-unit of the world per pixel of the window, so a larger window shows more of the world.
+window of another shape, with `CameraFit.Contain` keeping the whole area in view and `CameraFit.Cover` filling the window and
+cropping the edges around the middle of the area, so what a game places at that middle stays at the middle of the window. A
+camera that leaves the zoom at one is the other way round and is the default of the engine: one unit of the world per pixel of
+the window, so a larger window shows more of the world.
 
 ## Draw with a shader
 

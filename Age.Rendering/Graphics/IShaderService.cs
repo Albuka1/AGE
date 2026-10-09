@@ -22,9 +22,10 @@ namespace Age.Rendering;
 /// shader runs.
 /// </para>
 /// <para>
-/// A renderer that was attached to another window compiles against another device, so the handles of the window before are
-/// refused: <see cref="UnloadAll"/> forgets them without touching a device that is gone, and the shaders are loaded again,
-/// which compiles them for the window that is there now.
+/// A renderer that was attached to another window compiles against another device, so a program of the window before is gone
+/// and a handle of it is refused by <see cref="IRenderer.UseShader"/>. Loading a shader whose program belongs to that earlier
+/// attachment compiles the stages again for the device that is there now, and <see cref="UnloadAll"/> forgets such a program
+/// without touching the device of the attachment that is gone.
 /// </para>
 /// </remarks>
 /// <example>
@@ -49,7 +50,7 @@ public interface IShaderService
     /// <exception cref="ArgumentException">A path is null, empty or whitespace.</exception>
     /// <exception cref="FileNotFoundException">No file exists at a path.</exception>
     /// <exception cref="InvalidOperationException">The renderer has not been attached to a window, or the device refused to compile a stage.</exception>
-    /// <remarks>The stages are compiled and linked once, so loading the same pair of paths twice returns the same shader.</remarks>
+    /// <remarks>The stages are compiled and linked once, so loading the same pair of paths twice returns the same shader. A renderer that was attached to another window since is another device, so a shader that was compiled for the window before is compiled again rather than resolved to the program of a device that is gone.</remarks>
     ShaderHandle Load(string fragmentPath, string? vertexPath = null);
 
     /// <summary>Determines whether the handle still refers to a shader that this service compiled.</summary>
@@ -59,7 +60,8 @@ public interface IShaderService
 
     /// <summary>Deletes the program behind the handle and forgets its paths, so loading them again compiles it anew.</summary>
     /// <param name="shader">The handle of the shader to delete.</param>
-    /// <returns><see langword="true"/> when a shader was deleted, <see langword="false"/> when the handle was stale or not owned by this service.</returns>
+    /// <returns><see langword="true"/> when the service still held the shader, <see langword="false"/> when the handle was stale or not owned by this service.</returns>
+    /// <remarks>A shader whose program was compiled for a window that the renderer was attached to before is forgotten without a call to the device, because the program went away with the device of that window.</remarks>
     bool Unload(ShaderHandle shader);
 
     /// <summary>Deletes every shader that this service compiled.</summary>

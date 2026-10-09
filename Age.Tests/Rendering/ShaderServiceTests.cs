@@ -81,6 +81,41 @@ public sealed class ShaderServiceTests : IDisposable
     }
 
     [Fact]
+    public void ShaderService_Load_AfterAnotherAttachment_CompilesTheStagesAgain()
+    {
+        ShaderHandle first = _shaders.Load(FragmentPath);
+
+        // Another window is another device, so the program of the first one is gone with it and the numbers of it are handed
+        // out again: a handle of the attachment before names nothing of the device that is there now.
+        _renderer.DeviceGeneration = 1;
+
+        ShaderHandle again = _shaders.Load(FragmentPath);
+
+        _renderer.Compiled.Should().HaveCount(2, "the stages are compiled for the device that is there now");
+        again.Should().NotBe(first);
+        again.Generation.Should().Be(1);
+        _shaders.Count.Should().Be(1, "the entry of the attachment before is forgotten rather than kept beside the new one");
+        _shaders.IsAlive(first).Should().BeFalse();
+        _shaders.IsAlive(again).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShaderService_Unload_AProgramOfAnEarlierAttachment_IsNotReleasedByNumber()
+    {
+        ShaderHandle first = _shaders.Load(FragmentPath);
+        _renderer.DeviceGeneration = 1;
+
+        // The device that is there now gave the number of that program to a program of its own, so releasing it by number would
+        // delete the wrong one: the entry is forgotten and the device is left alone.
+        _shaders.Unload(first).Should().BeTrue();
+        _renderer.Released.Should().BeEmpty();
+
+        ShaderHandle again = _shaders.Load(FragmentPath);
+        _shaders.Unload(again).Should().BeTrue();
+        _renderer.Released.Should().ContainSingle().Which.Should().Be(again.Program, "a program of the attachment that is there is released");
+    }
+
+    [Fact]
     public void ShaderService_TheHeaderIsWhatACompileErrorCountsFrom()
     {
         string[] lines = ShaderSource.Fragment("void main() { }").Split('\n');
@@ -114,6 +149,8 @@ public sealed class ShaderServiceTests : IDisposable
         public List<(string Vertex, string Fragment)> Compiled { get; } = [];
 
         public List<uint> Released { get; } = [];
+
+        public uint DeviceGeneration { get; set; }
 
         private uint _next;
 

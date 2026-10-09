@@ -82,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is what a panel that follows its title or a button as wide as its word needs. The text is laid out again when the language
   of the game changes and not on every frame, and the built-in bitmap font is measured through the same seam as any other
   font, so text with no font of its own can be wrapped and aligned like one.
+- `Camera2D.Fit` with `CameraFit.Cover` crops the design area around its middle rather than taking the crop off the right and
+  the bottom, so what a game places at the middle of its area is at the middle of the window at any shape of it — a game that
+  wants the area at another place sets `Position` of the camera it was given. `CameraFit.Contain` is what it was: the whole of
+  the area is in view from the origin of the world.
 
 ### Fixed
 
@@ -100,6 +104,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   twice. `Age.Content.Lint` refuses a locale document that is written outside the folder of a language rather than taking its
   file name for one, and the comments about the Russian plural forms say what the rule does: everything that is not one or
   few takes `many`, and `other` belongs to a count that is not whole, which a rule of whole numbers never sees.
+- A frame that drew into a target, drew into the window and came back to the target cleared it a second time, because only the
+  surface of the last call was remembered: every surface that a frame cleared is remembered now, so what a pass drew into a
+  target is still there when a later pass of the same frame draws into it again.
+- A shader that a renderer compiled for a window it was attached to before is no longer handed out after another attachment: a
+  handle carries the attachment that compiled its program as `ShaderHandle.Generation`, `UseShader` and `ReleaseShader` refuse a
+  handle of an attachment that is gone — even when the device gave the number of that program to a program of its own — and
+  `IShaderService` compiles the stages again for the window that is there now, so a game that loads a shader after a window was
+  attached keeps drawing with it. `IRenderer.DeviceGeneration` is the number that tells the two attachments apart, and a render
+  target is released and refused in the same way: a handle carries the attachment that created it, and `ReleaseRenderTarget`
+  compares the whole handle before it deletes anything by number.
 
 ## [0.3.0] - 2026-10-09
 
