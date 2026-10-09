@@ -35,7 +35,7 @@ namespace Age.Content.Lint;
 /// LintReport report = linter.Lint("Prototypes");
 /// LintReport sheets = linter.LintSheets("Textures");
 ///
-/// return report.IsClean ? 0 : 1;
+/// return report.IsClean &amp;&amp; sheets.IsClean ? 0 : 1;
 /// </code>
 /// </example>
 public sealed class ContentLinter
@@ -49,6 +49,7 @@ public sealed class ContentLinter
     private readonly ComponentRegistry _components;
     private readonly IAssetLoader _assets;
     private readonly IImageLoader _images;
+    private readonly Dictionary<string, SpriteSheet?> _sheets = new(StringComparer.Ordinal);
 
     /// <summary>Initializes the linter with the content, the registry that names its components and the files of the game.</summary>
     /// <param name="prototypes">The content, which the linter reads.</param>
@@ -280,6 +281,93 @@ public sealed class ContentLinter
 
             CheckResource(component, member, field.Value.GetString()!, problems);
         }
+
+        CheckState(component, type, problems);
+    }
+
+    /// <summary>Checks that a state a component names is one the sheet it names declares, which is what a game would find out at the first frame instead.</summary>
+    /// <remarks>
+    /// A member that carries <see cref="SheetStateAttribute"/> points at the member of the same component that holds the path
+    /// of the sheet, and both are read out of the document: a document that writes one of them and not the other has nothing
+    /// to check here, and a sheet that cannot be read is what the pass over the sheets of a build reports.
+    /// </remarks>
+    private void CheckState(PrototypeComponent component, Type type, List<LintProblem> problems)
+    {
+        foreach (MemberInfo member in Members(type))
+        {
+            if (member.GetCustomAttribute<SheetStateAttribute>() is not SheetStateAttribute marked)
+            {
+                continue;
+            }
+
+            if (Value(component, member) is not string state || Value(component, type, marked.Sheet) is not string path)
+            {
+                continue;
+            }
+
+            if (SheetAt(path) is not SpriteSheet sheet || sheet.TryGetState(state, out SpriteSheetState? _))
+            {
+                continue;
+            }
+
+            problems.Add(new LintProblem(
+                component.File,
+                component.Line,
+                $"the state '{state}' of the component '{component.Name}' is not one that the sheet '{path}' declares: it holds {string.Join(", ", sheet.States.Keys)}"));
+        }
+    }
+
+    /// <summary>Returns the sheet of a document, reading it once, or null when it cannot be read.</summary>
+    private SpriteSheet? SheetAt(string relativePath)
+    {
+        if (_sheets.TryGetValue(relativePath, out SpriteSheet? read))
+        {
+            return read;
+        }
+
+        SpriteSheet? sheet = null;
+
+        try
+        {
+            sheet = SpriteSheetReader.Read(_assets.Load<string>(relativePath), relativePath);
+        }
+        catch (Exception exception) when (exception is IOException or SpriteSheetException or InvalidOperationException or ArgumentException)
+        {
+            // What is wrong with a document of a sheet is reported by the pass over the sheets of a build, which is where
+            // every one of them is read: this only answers whether a state is one that the sheet declares.
+            sheet = null;
+        }
+
+        _sheets[relativePath] = sheet;
+
+        return sheet;
+    }
+
+    /// <summary>Returns the value that a document writes for a member of a component, or null when it writes none.</summary>
+    private static string? Value(PrototypeComponent component, Type type, string member) =>
+        Declared(type, member) is MemberInfo declared ? Value(component, declared) : null;
+
+    /// <summary>Returns the value that a document writes for a member of a component, or null when it writes none.</summary>
+    private static string? Value(PrototypeComponent component, MemberInfo member)
+    {
+        if (component.Values.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        string name = member.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? member.Name;
+
+        foreach (JsonProperty field in component.Values.EnumerateObject())
+        {
+            if (!string.Equals(field.Name, name, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return field.Value.ValueKind == JsonValueKind.String ? field.Value.GetString() : null;
+        }
+
+        return null;
     }
 
     /// <summary>Checks that the file behind a path is one the build ships.</summary>
@@ -314,26 +402,18 @@ public sealed class ContentLinter
     /// one of its own, and a member that the format leaves out — the state of a run, such as the handle of a texture — is not
     /// one a document may write at all.
     /// </remarks>
-    private static MemberInfo? Member(Type type, string name)
-    {
-        foreach (FieldInfo field in type.GetFields(MembersOfAComponent))
-        {
-            if (Written(field, name))
-            {
-                return field;
-            }
-        }
+    private static MemberInfo? Member(Type type, string name) =>
+        Members(type).FirstOrDefault(member => Written(member, name));
 
-        foreach (PropertyInfo property in type.GetProperties(MembersOfAComponent))
-        {
-            if (property.SetMethod?.IsPublic is true && property.GetIndexParameters().Length == 0 && Written(property, name))
-            {
-                return property;
-            }
-        }
+    /// <summary>Returns the member of a component type that it declares under a name, or null when it declares none.</summary>
+    private static MemberInfo? Declared(Type type, string name) =>
+        Members(type).FirstOrDefault(member => string.Equals(member.Name, name, StringComparison.Ordinal));
 
-        return null;
-    }
+    /// <summary>Enumerates what a document may write for a component: its fields, and its properties with a public setter.</summary>
+    private static IEnumerable<MemberInfo> Members(Type type) =>
+        type.GetFields(MembersOfAComponent)
+            .Cast<MemberInfo>()
+            .Concat(type.GetProperties(MembersOfAComponent).Where(property => property.SetMethod?.IsPublic is true && property.GetIndexParameters().Length == 0));
 
     /// <summary>Determines whether a document writes a member under a name, which is the name the member declares when it has one of its own.</summary>
     private static bool Written(MemberInfo member, string name) =>

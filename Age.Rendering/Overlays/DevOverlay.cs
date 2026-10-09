@@ -47,6 +47,7 @@ public sealed class DevOverlay : IRenderPass
     private readonly FixedTimestep _timestep;
     private readonly IRenderer _renderer;
     private readonly ITextureService? _textures;
+    private readonly ISpriteSheetService? _sheets;
 
     private double _seconds;
     private double _framesPerSecond;
@@ -62,8 +63,9 @@ public sealed class DevOverlay : IRenderPass
     /// <param name="timestep">The clock, which stands still while the console is open.</param>
     /// <param name="renderer">The renderer that the overlay draws with.</param>
     /// <param name="textures">The texture service, whose images that are not there are reported, or null to report none.</param>
+    /// <param name="sheets">The sheet service, whose sheets and states that did not resolve are reported, or null to report none.</param>
     /// <exception cref="ArgumentNullException">One of the arguments is null.</exception>
-    public DevOverlay(IConsoleService console, IInputService input, ITextInputService text, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer, ITextureService? textures = null)
+    public DevOverlay(IConsoleService console, IInputService input, ITextInputService text, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer, ITextureService? textures = null, ISpriteSheetService? sheets = null)
     {
         ArgumentNullException.ThrowIfNull(console);
         ArgumentNullException.ThrowIfNull(input);
@@ -75,6 +77,7 @@ public sealed class DevOverlay : IRenderPass
         _console = console;
         _input = input;
         _textures = textures;
+        _sheets = sheets;
         _text = text;
         _pipeline = pipeline;
         _timestep = timestep;
@@ -259,6 +262,20 @@ public sealed class DevOverlay : IRenderPass
         {
             _renderer.DrawText($"{_textures.MissingCount} missing images: {string.Join(", ", _textures.Missing)}", new Vector2(8f, y), ErrorColour);
             y += line;
+        }
+
+        // A sheet that content names and the build does not have, and a state that a sheet does not declare, are drawn as the
+        // placeholder as well, and this is where they are named: an entry of a sheet reads as 'Textures/Entities/goblin.yml'
+        // or as 'Textures/Entities/goblin.yml:idle', a document and a state of it.
+        if (_sheets is not null)
+        {
+            string unresolved = string.Join(", ", _sheets.Missing);
+
+            if (unresolved.Length > 0)
+            {
+                _renderer.DrawText($"{_sheets.Missing.Count()} sheets that did not resolve: {unresolved}", new Vector2(8f, y), ErrorColour);
+                y += line;
+            }
         }
 
         y = DrawTimings(_pipeline.StepTimings, "step", y);

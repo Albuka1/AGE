@@ -159,6 +159,94 @@ public sealed class ContentLinterTests
         + "    row: 0\n"
         + "    frames: 2\n";
 
+    [Fact]
+    public void ContentLinter_AStateThatTheSheetDoesNotDeclare_IsReported()
+    {
+        LintReport report = LintWith(
+            "- type: entity\n  id: Broken\n  components:\n    - type: Sprite\n      SheetPath: Textures/Entities/goblin.yml\n      State: flying\n",
+            ("Textures/Entities/goblin.yml", Sheet));
+
+        report.Problems.Should().ContainSingle().Which.Message
+            .Should().Contain("'flying'")
+            .And.Contain("Textures/Entities/goblin.yml")
+            .And.Contain("idle", "a message says which states the sheet does declare");
+    }
+
+    [Fact]
+    public void ContentLinter_AStateThatTheSheetDeclares_IsNotReported()
+    {
+        LintReport report = LintWith(
+            "- type: entity\n  id: Fine\n  components:\n    - type: Sprite\n      SheetPath: Textures/Entities/goblin.yml\n      State: idle\n",
+            ("Textures/Entities/goblin.yml", Sheet));
+
+        report.IsClean.Should().BeTrue("the state is one the document of the sheet declares");
+        report.Count.Should().Be(1);
+    }
+
+    [Fact]
+    public void ContentLinter_ASheetsFolderThatIsNotThere_IsReportedWithItsName()
+    {
+        // A build that is pointed at a folder which is not there hears about it: the tool names the folder rather than
+        // reading nothing in silence, which is what a typo in the arguments looks like.
+        LintReport report = LintSheets(_ => { });
+
+        report.Count.Should().Be(0);
+        report.Problems.Should().ContainSingle().Which.Message.Should().Contain("Textures").And.Contain("does not exist");
+    }
+
+    /// <summary>Lints one document that is written into a game root of its own, together with files that hold content.</summary>
+    private static LintReport LintWith(string document, params (string Path, string Content)[] files)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-lint-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Prototypes"));
+
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "Prototypes", "thing.yml"), document);
+
+            foreach ((string path, string content) in files)
+            {
+                string file = Path.Combine(root, path);
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.WriteAllText(file, content);
+            }
+
+            using ServiceProvider provider = Create();
+            var assets = new NullAssetLoader();
+            assets.Initialize(root);
+            var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+            return linter.Lint("Prototypes");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>Lints the sheets of a game root that a test fills in itself, which is how the folder that is not there is tested.</summary>
+    private static LintReport LintSheets(Action<string> fill)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-lint-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            fill(root);
+
+            using ServiceProvider provider = Create();
+            var assets = new NullAssetLoader();
+            assets.Initialize(root);
+            var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+            return linter.LintSheets("Textures");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>Lints one document that is written into a game root of its own, together with the files it may name.</summary>
     private static LintReport Lint(string document, params string[] files)
     {

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using Age.Content.Sheets;
 using Age.Core;
 using Age.Input;
 using Age.Rendering;
@@ -144,8 +146,10 @@ public sealed class DevOverlayTests
         ConsoleService console,
         FakeInputService input,
         FixedTimestep? timestep = null,
-        FakeTextInputService? text = null) =>
-        new(console, input, text ?? new FakeTextInputService(), new SystemPipeline(), timestep ?? new FixedTimestep(FixedTimestep.DefaultStep), new FakeRenderer());
+        FakeTextInputService? text = null,
+        IRenderer? renderer = null,
+        ISpriteSheetService? sheets = null) =>
+        new(console, input, text ?? new FakeTextInputService(), new SystemPipeline(), timestep ?? new FixedTimestep(FixedTimestep.DefaultStep), renderer ?? new FakeRenderer(), sheets: sheets);
 
     /// <summary>Reports a pointer at the origin and the key that a test pressed for one frame.</summary>
     private sealed class FakeInputService : IInputService
@@ -185,6 +189,75 @@ public sealed class DevOverlayTests
                 return typed;
             }
         }
+    }
+
+    [Fact]
+    public void DevOverlay_Render_NamesTheSheetsThatDidNotResolve()
+    {
+        var renderer = new RecordingRenderer();
+        var sheets = new FakeSheetService("Textures/Entities/goblin.yml:idle");
+
+        DevOverlay overlay = Create(new ConsoleService(), new FakeInputService(), renderer: renderer, sheets: sheets);
+
+        overlay.Render(new World(), new Camera2D());
+
+        renderer.Texts.Should().Contain(text =>
+            text.Contains("1 sheets that did not resolve", StringComparison.Ordinal)
+            && text.Contains("goblin.yml:idle", StringComparison.Ordinal));
+    }
+
+    /// <summary>A renderer that keeps the lines that were drawn on it, which is what the numbers of the overlay are.</summary>
+    private sealed class RecordingRenderer : IRenderer
+    {
+        public List<string> Texts { get; } = [];
+
+        public Vector2 ViewportSize => new(1280f, 720f);
+
+        public void Attach(IWindowService window) => throw new NotSupportedException();
+
+        public void SetCamera(Camera2D camera)
+        {
+        }
+
+        public void BeginFrame(bool clear)
+        {
+        }
+
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f) => throw new NotSupportedException();
+
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f) => throw new NotSupportedException();
+
+        public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => throw new NotSupportedException();
+
+        public void ReleaseTexture(TextureHandle texture) => throw new NotSupportedException();
+
+        public void DrawRectangle(Rect rect, Color color)
+        {
+        }
+
+        public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color) => Texts.Add(text.ToString());
+
+        public void EndFrame()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>A sheet service that reports what a test says did not resolve, which is what the overlay names for a build.</summary>
+    private sealed class FakeSheetService(params string[] missing) : ISpriteSheetService
+    {
+        public int Count => 0;
+
+        public IEnumerable<string> Missing => missing;
+
+        public SpriteSheet Load(string relativePath) => throw new NotSupportedException();
+
+        public SpriteRegion Resolve(string relativePath, string state, int frame) => throw new NotSupportedException();
+
+        public bool TryState(string relativePath, string state, [NotNullWhen(true)] out SpriteSheetState? declared) => throw new NotSupportedException();
     }
 
     /// <summary>The renderer the overlay is built with, which the tests of the keys never draw through.</summary>

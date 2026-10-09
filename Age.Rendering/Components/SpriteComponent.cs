@@ -58,7 +58,8 @@ public struct SpriteComponent : IComponent
     public string? SheetPath;
 
     /// <summary>Gets or sets the name of the state of the sheet that is drawn.</summary>
-    /// <remarks>A state that the sheet does not declare is drawn as the placeholder and reported once.</remarks>
+    /// <remarks>A state that the sheet does not declare is drawn as the placeholder and reported once, and a build hears about it earlier: the linter reads the sheet that this field belongs to and refuses a state it does not declare.</remarks>
+    [SheetState(nameof(SheetPath))]
     public string? State;
 
     /// <summary>Gets or sets the frame of the state that is drawn, counting from zero.</summary>
