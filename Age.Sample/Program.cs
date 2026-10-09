@@ -67,7 +67,11 @@ prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
 Console.WriteLine($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
 
 ITextureService textures = provider.GetRequiredService<ITextureService>();
-TextureHandle tiles = textures.Load("Textures/Tiles/tiles.bmp");
+
+// A sprite names its image by path, which is the one thing about a sprite that survives a save: the handle of a device
+// texture is never written to a scene. An image that a build does not ship is drawn as the placeholder of the texture
+// service and reported once, rather than taking the frame down with it.
+const string TilePath = "Textures/Tiles/tiles.bmp";
 
 IFontService fonts = provider.GetRequiredService<IFontService>();
 FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f);
@@ -84,7 +88,7 @@ var camera = new Camera2D
 
 Entity first = world.CreateEntity();
 world.Set(first, new TransformComponent { Position = new Vector2(400f, 300f), Scale = new Vector2(1f, 1f) });
-world.Set(first, new SpriteComponent { Texture = tiles, Size = new Vector2(64f, 64f), Color = Color.White, ZOrder = 0 });
+world.Set(first, new SpriteComponent { TexturePath = TilePath, Size = new Vector2(64f, 64f), Color = Color.White, ZOrder = 0 });
 world.Set(first, new ColliderComponent { Size = new Vector2(64f, 64f) });
 
 Entity second = world.CreateEntity();
@@ -124,7 +128,7 @@ string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
 if (File.Exists(scenePath))
 {
     world = LoadScene(scenes, scenePath);
-    first = MoveTarget(world, tiles);
+    first = FirstSprite(world);
     Console.WriteLine($"Loaded the scene from {scenePath}.");
 }
 
@@ -177,8 +181,9 @@ string version = typeof(World).Assembly.GetName().Version?.ToString(3) ?? "0.0.0
 lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
 
 console.Register("spawn", "Puts a sprite on screen, the same as pressing E.", _ => lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime")));
-console.Register("stats", "Reports what the world holds and what the clock does.", _ => console.Write(
-    $"entities {world.Enumerate().Count()}, tick {timestep.Tick}, {(timestep.Paused ? "paused" : "running")}, {collisions.LastPairs.Count} contacts"));
+console.Register("broken", "Puts a sprite whose image is not there on screen, which is what the ERROR placeholder is for.", _ => lastSpawned = SpawnMissing(world));
+console.Register("stats", "Reports what the world holds, what it is missing and what the clock does.", _ => console.Write(
+    $"entities {world.Enumerate().Count()}, tick {timestep.Tick}, {(timestep.Paused ? "paused" : "running")}, {collisions.LastPairs.Count} contacts, {textures.MissingCount} missing images"));
 
 // A goblin of the content: the world receives exactly the components that the document declares, and this game names none
 // of them. Where it stands is the one thing a spawn takes from the caller, because a map is what decides that.
@@ -243,7 +248,7 @@ gameLoop.Run(
         if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
         {
             world = LoadScene(scenes, scenePath);
-            first = MoveTarget(world, tiles);
+            first = FirstSprite(world);
             SubscribeEvents(world);
             Console.WriteLine("Loaded the scene again.");
         }
@@ -276,7 +281,7 @@ gameLoop.Run(
             : $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x";
 
         fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
-        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
+        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open.
@@ -331,22 +336,10 @@ static World LoadScene(ISceneSerializer scenes, string path)
     return loaded;
 }
 
-// The entity that the keyboard moves: the first sprite of the world, which is the one the demo creates first and the
-// one a loaded scene brings back. A texture handle does not survive a save, so the sprite is pointed at the texture
-// that this run loaded; a scene without a sprite leaves nothing to point.
-static Entity MoveTarget(World world, TextureHandle texture)
-{
-    Entity entity = world.Enumerate<SpriteComponent>().FirstOrDefault();
-
-    if (!world.IsAlive(entity) || !world.Has<SpriteComponent>(entity))
-    {
-        return entity;
-    }
-
-    ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
-    sprite.Texture = texture;
-    return entity;
-}
+// The entity that the keyboard moves: the first sprite of the world, which is the one the demo creates first and the one
+// a loaded scene brings back. Nothing of a loaded sprite is put back by hand, because a sprite carries the path of its
+// image and the renderer asks the texture service for it.
+static Entity FirstSprite(World world) => world.Enumerate<SpriteComponent>().FirstOrDefault();
 
 // Puts a short-lived sprite on screen, with a timer that destroys it when the time is up. This game does not count the
 // seconds of a spawned sprite and does not keep a list of them: the timer system advances every timer of the world, and
@@ -359,6 +352,20 @@ static Entity Spawn(World world, float lifetime)
     world.Set(entity, new TransformComponent { Position = new Vector2(200f + ((entity.Id * 37f) % 800f), 560f), Scale = new Vector2(1f, 1f) });
     world.Set(entity, new SpriteComponent { Size = new Vector2(32f, 32f), Color = Color.Blue, ZOrder = 2 });
     world.Set(entity, TimerComponent.For(lifetime));
+
+    return entity;
+}
+
+// Puts a sprite whose image is not there on screen. Content that names an image a build does not ship is exactly the
+// mistake that the placeholder exists for: the sprite is drawn as a bright ERROR checkerboard, one line of the log names
+// the file, the number of missing images stays visible in the HUD, and the game keeps running.
+static Entity SpawnMissing(World world)
+{
+    Entity entity = world.CreateEntity();
+
+    world.Set(entity, new TransformComponent { Position = new Vector2(640f, 200f), Scale = new Vector2(1f, 1f) });
+    world.Set(entity, new SpriteComponent { TexturePath = "Textures/Nowhere/gone.png", Size = new Vector2(96f, 96f), Color = Color.White, ZOrder = 3 });
+    world.Set(entity, TimerComponent.For(6f));
 
     return entity;
 }

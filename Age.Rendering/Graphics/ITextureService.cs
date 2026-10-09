@@ -21,6 +21,32 @@ public interface ITextureService
     /// <summary>Gets the number of textures that are currently loaded.</summary>
     int Count { get; }
 
+    /// <summary>Gets the texture that stands in for an image that is not there.</summary>
+    /// <value>A built-in checkerboard that needs no file and has the word ERROR written on it.</value>
+    /// <remarks>A game does not have to draw it: <see cref="Resolve"/> answers with it for a path that cannot be loaded.</remarks>
+    TextureHandle Error { get; }
+
+    /// <summary>Gets the number of paths that could not be resolved.</summary>
+    /// <remarks>This is the number a developer looks at when something in the game is drawn as the placeholder.</remarks>
+    int MissingCount { get; }
+
+    /// <summary>Gets the paths that could not be resolved, in the order they were first asked about.</summary>
+    IEnumerable<string> Missing { get; }
+
+    /// <summary>Returns the texture of the image at the given path, or the placeholder when the image is not there.</summary>
+    /// <param name="relativePath">The path of the image, relative to the game root.</param>
+    /// <returns>The texture of the image, or <see cref="Error"/> when the file is missing or is not an image.</returns>
+    /// <exception cref="ArgumentException">The path is null, empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The renderer has not been attached to a window, or the path escapes the game root.</exception>
+    /// <remarks>
+    /// This is how content reaches a sprite: a prototype or a scene names an image by path, and the image is decoded and
+    /// uploaded the first time something asks for it. A path that cannot be loaded is reported once rather than on every
+    /// frame, and the sprite is drawn as <see cref="Error"/>, because an image that is not there is a mistake in the
+    /// content of a game rather than a reason for a frame to fail. A path that escapes the game root is refused by the
+    /// loader rather than drawn as the placeholder, because that is a mistake in a game rather than in its content.
+    /// </remarks>
+    TextureHandle Resolve(string relativePath);
+
     /// <summary>Returns the texture of the image at the given path, decoding and uploading it on the first call.</summary>
     /// <param name="relativePath">The path of the image, relative to the game root.</param>
     /// <returns>The texture of the image.</returns>

@@ -10,7 +10,8 @@ namespace Age.Rendering;
 /// <para>
 /// The overlay is a render pass, so it draws inside the frame of the game rather than next to it and is added after the
 /// passes it covers. It draws with the built-in bitmap font, which every build has, so a game does not have to load a
-/// font before it can look at itself.
+/// font before it can look at itself. It also names the images that content asked for and the build does not have, which
+/// is what makes a path with a typo in it visible without reading the log.
 /// </para>
 /// <para>
 /// The stats key, F1 by default, shows and hides the numbers, and the console key, Tab by default, opens and closes the
@@ -45,6 +46,7 @@ public sealed class DevOverlay : IRenderPass
     private readonly SystemPipeline _pipeline;
     private readonly FixedTimestep _timestep;
     private readonly IRenderer _renderer;
+    private readonly ITextureService? _textures;
 
     private double _seconds;
     private double _framesPerSecond;
@@ -59,8 +61,9 @@ public sealed class DevOverlay : IRenderPass
     /// <param name="pipeline">The pipeline whose step and frame times are printed.</param>
     /// <param name="timestep">The clock, which stands still while the console is open.</param>
     /// <param name="renderer">The renderer that the overlay draws with.</param>
+    /// <param name="textures">The texture service, whose images that are not there are reported, or null to report none.</param>
     /// <exception cref="ArgumentNullException">One of the arguments is null.</exception>
-    public DevOverlay(IConsoleService console, IInputService input, ITextInputService text, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer)
+    public DevOverlay(IConsoleService console, IInputService input, ITextInputService text, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer, ITextureService? textures = null)
     {
         ArgumentNullException.ThrowIfNull(console);
         ArgumentNullException.ThrowIfNull(input);
@@ -71,6 +74,7 @@ public sealed class DevOverlay : IRenderPass
 
         _console = console;
         _input = input;
+        _textures = textures;
         _text = text;
         _pipeline = pipeline;
         _timestep = timestep;
@@ -248,6 +252,15 @@ public sealed class DevOverlay : IRenderPass
             TextColour);
 
         y += line;
+
+        // A sprite whose image is not there is drawn as the placeholder, and this is where the reason is named: the paths
+        // that could not be resolved, in the order the game asked for them.
+        if (_textures?.MissingCount > 0)
+        {
+            _renderer.DrawText($"{_textures.MissingCount} missing images: {string.Join(", ", _textures.Missing)}", new Vector2(8f, y), ErrorColour);
+            y += line;
+        }
+
         y = DrawTimings(_pipeline.StepTimings, "step", y);
         y = DrawTimings(_pipeline.FrameTimings, "frame", y);
         _renderer.DrawText($"{StatsKey} numbers  {ConsoleKey} console", new Vector2(8f, y), HintColour);

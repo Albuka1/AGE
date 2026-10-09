@@ -438,6 +438,28 @@ public sealed class SceneSerializerTests
         world.Enumerate().Should().ContainSingle();
     }
 
+    [Fact]
+    public void SceneSerializer_ASprite_KeepsThePathOfItsImageAndNotTheHandleOfTheDevice()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new SpriteComponent { TexturePath = "Textures/Tiles/tiles.bmp", Texture = new TextureHandle(7), Size = new Vector2(64f, 64f), Color = Color.White });
+
+        string json = serializer.Save(world);
+
+        json.Should().Contain("Textures/Tiles/tiles.bmp");
+        json.Should().NotContain("\"Texture\":", "the handle belongs to the device of this run, and a device is not saved");
+
+        var loaded = new World();
+        serializer.Load(loaded, json);
+
+        SpriteComponent sprite = loaded.Get<SpriteComponent>(loaded.Enumerate().Single());
+
+        sprite.TexturePath.Should().Be("Textures/Tiles/tiles.bmp");
+        sprite.Texture.Id.Should().Be(0, "the renderer resolves the path again, which is what makes a loaded scene draw");
+    }
+
     /// <summary>Keeps what was logged, which is how a test reads the record of a scene that was refused.</summary>
     private sealed class RecordingLogger<T> : ILogger<T>
     {

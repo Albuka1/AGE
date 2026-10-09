@@ -123,6 +123,58 @@ public sealed class SpawnServiceTests
         world.Enumerate().Should().BeEmpty("half of a creature is worse than none of it");
     }
 
+    [Fact]
+    public void SpawnService_Spawn_APrototypeWithASprite_GivesTheEntityThePathOfItsImage()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-content-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Prototypes", "Entities"));
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(root, "Prototypes", "Entities", "goblin.yml"),
+                "- type: entity\n"
+                + "  id: Goblin\n"
+                + "  components:\n"
+                + "    - type: Transform\n"
+                + "      Position:\n"
+                + "        X: 0\n"
+                + "        Y: 0\n"
+                + "    - type: Sprite\n"
+                + "      TexturePath: Textures/Tiles/tiles.bmp\n"
+                + "      Size:\n"
+                + "        X: 32\n"
+                + "        Y: 32\n");
+
+            using ServiceProvider provider = new ServiceCollection()
+                .AddAgeCore()
+                .AddAgeContent()
+                .AddAgePhysics()
+                .AddAgeUI()
+                .AddAgeRendering()
+                .BuildServiceProvider();
+
+            PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+            prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+
+            var assets = new NullAssetLoader();
+            assets.Initialize(root);
+            prototypes.Load(assets, "Prototypes");
+
+            SpawnService spawner = provider.GetRequiredService<SpawnService>();
+            var world = new World();
+
+            Entity goblin = spawner.Spawn(world, "Goblin");
+
+            world.Get<SpriteComponent>(goblin).TexturePath.Should().Be("Textures/Tiles/tiles.bmp", "content names the image of a sprite by path, which is what survives a save");
+            world.Get<SpriteComponent>(goblin).Texture.Id.Should().Be(0, "the texture service resolves the path when the sprite is drawn for the first time");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>Builds a provider whose content is the one the engine ships.</summary>
     private static ServiceProvider Create()
     {

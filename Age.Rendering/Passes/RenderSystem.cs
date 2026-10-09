@@ -16,15 +16,21 @@ public sealed class RenderSystem : IRenderPass
 {
     private readonly IRenderer _renderer;
     private readonly SpriteSorter _sorter;
+    private readonly ITextureService? _textures;
     private readonly List<Entity> _sprites = new();
 
     /// <summary>Initializes the system with a renderer and a sorter.</summary>
-    public RenderSystem(IRenderer renderer, SpriteSorter sorter)
+    /// <param name="renderer">The renderer that draws the sprites.</param>
+    /// <param name="sorter">The sorter that puts them in the order of their <see cref="SpriteComponent.ZOrder"/>.</param>
+    /// <param name="textures">The service that resolves the image a sprite names, or null to draw only the handles a game set.</param>
+    /// <remarks>A container passes the texture service, which is what lets a sprite of a prototype or a scene name its image by path.</remarks>
+    public RenderSystem(IRenderer renderer, SpriteSorter sorter, ITextureService? textures = null)
     {
         ArgumentNullException.ThrowIfNull(renderer);
         ArgumentNullException.ThrowIfNull(sorter);
         _renderer = renderer;
         _sorter = sorter;
+        _textures = textures;
     }
 
     /// <inheritdoc />
@@ -48,10 +54,33 @@ public sealed class RenderSystem : IRenderPass
                 continue;
             }
 
-            _renderer.DrawSprite(sprite.Texture, transform.Position, size, sprite.Color, transform.Rotation);
+            _renderer.DrawSprite(Texture(world, entity, sprite), transform.Position, size, sprite.Color, transform.Rotation);
         }
 
         _renderer.EndFrame();
+    }
+
+    /// <summary>Returns the texture to draw for a sprite, resolving the image that content named.</summary>
+    /// <param name="world">The world that holds the sprite, which the resolved handle is written back into.</param>
+    /// <param name="entity">The entity that carries the sprite.</param>
+    /// <param name="sprite">The sprite that is being drawn.</param>
+    /// <returns>The handle of the image, or the placeholder when the image is not there.</returns>
+    /// <remarks>
+    /// The handle is written back into the component, so the image is asked for once and every frame after the first draws
+    /// what it resolved. A sprite without a path and without a handle is drawn as a solid color quad, which is what the
+    /// renderer draws for a zero identifier, and a sprite whose image is missing is drawn as the placeholder of the
+    /// texture service.
+    /// </remarks>
+    private TextureHandle Texture(World world, Entity entity, in SpriteComponent sprite)
+    {
+        if (sprite.Texture.Id != 0 || sprite.TexturePath is not string path || _textures is null)
+        {
+            return sprite.Texture;
+        }
+
+        TextureHandle resolved = _textures.Resolve(path);
+        world.GetRef<SpriteComponent>(entity).Texture = resolved;
+        return resolved;
     }
 
     /// <summary>

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A sprite names its image by path: `SpriteComponent.TexturePath` is what a prototype or a scene writes, and the texture
+  service resolves it the first time the sprite is drawn, so a scene that was loaded draws without a game putting device
+  handles back by hand — the last piece of code that a game had to write around a save is gone from the sample. The handle
+  belongs to the device and is no longer part of a scene (`SpriteComponent.Texture` is not written), which also means a
+  document that writes a number for it is refused rather than silently saved.
+- An image that content names and a build does not ship is drawn as a placeholder instead of taking the frame down:
+  `ITextureService.Error` is a built-in checkerboard that spells out ERROR and needs no file, `Resolve` answers with it for
+  a path that cannot be loaded, reports that path once in the log and counts it (`MissingCount`, `Missing`), and the
+  developer overlay names the images that are missing next to the numbers of the frame. The sample puts one on screen from
+  its console with `broken`.
 - A scene stores an entity that came from a prototype as a reference to it plus only the components that differ from what
   the prototype declares: `SpawnService` records the prototype when it makes an entity, `World.PrototypeOf` reports it, and
   `World.AssignPrototype` is how a game says that an entity it built by hand belongs to a kind. A map of a hundred units

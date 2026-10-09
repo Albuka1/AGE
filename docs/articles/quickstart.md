@@ -155,9 +155,22 @@ string map = scenes.Save(world);
 game built by hand. Reading such a scene needs the content of the game, because the entities are made again from it: a
 scene that names a prototype while no content is loaded is refused rather than loaded empty.
 
-A component that refers to a device resource, such as the texture of a `SpriteComponent`, is written
-as the identifier it carried, and that identifier does not survive a reload: load the texture again
-and set it on the component after the scene was loaded.
+A sprite names its image by path, and the path is what a scene keeps:
+
+```csharp
+world.Set(entity, new SpriteComponent
+{
+    TexturePath = "Textures/Tiles/tiles.bmp",
+    Size = new Vector2(64f, 64f),
+    Color = Color.White,
+});
+```
+
+The renderer resolves the path the first time the sprite is drawn, so a loaded scene draws without a
+game putting device handles back by hand. An image that is not there is drawn as the placeholder of
+`ITextureService` — a built-in checkerboard that spells out ERROR — counted by `MissingCount` and
+reported once per path, which turns a typo in a path into something a person sees rather than a frame
+that fails.
 
 A scene keeps the identifier of every entity, so a component that refers to another entity survives the save: write the
 reference as `EntityRef`, which a world makes with `World.Reference` and reads back with `World.Resolve`.
