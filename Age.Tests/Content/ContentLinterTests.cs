@@ -56,6 +56,18 @@ public sealed class ContentLinterTests
     }
 
     [Fact]
+    public void ContentLinter_AFieldThatIsAProperty_IsNotReported()
+    {
+        // A component whose data are properties is read by the same contract as one whose data are fields: the registrations
+        // carry the name of either, so a document that writes a property is read rather than dropped, and the linter has to
+        // look where the document writes.
+        LintReport report = Lint("- type: entity\n  id: Timed\n  components:\n    - type: Timer\n      Duration: 2\n      Repeat: true\n");
+
+        report.IsClean.Should().BeTrue("the document writes members that the component really carries");
+        report.Count.Should().Be(1);
+    }
+
+    [Fact]
     public void ContentLinter_ResourcesThatAreNotThere_AreReported()
     {
         LintReport report = Lint("- type: entity\n  id: Broken\n  components:\n    - type: Sprite\n      TexturePath: Textures/Nowhere/gone.png\n");

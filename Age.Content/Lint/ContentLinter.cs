@@ -40,7 +40,7 @@ namespace Age.Content.Lint;
 /// </example>
 public sealed class ContentLinter
 {
-    private const BindingFlags FieldsOfAComponent = BindingFlags.Public | BindingFlags.Instance;
+    private const BindingFlags MembersOfAComponent = BindingFlags.Public | BindingFlags.Instance;
 
     /// <summary>The extensions of the images that a sheet may name, which are the formats the loader of images reads.</summary>
     private static readonly string[] Images = [".png", ".bmp", ".tga", ".jpg", ".jpeg", ".gif"];
@@ -251,14 +251,14 @@ public sealed class ContentLinter
 
         foreach (JsonProperty field in component.Values.EnumerateObject())
         {
-            FieldInfo? member = Member(type, field.Name);
+            MemberInfo? member = Member(type, field.Name);
 
             if (member is null)
             {
                 problems.Add(new LintProblem(
                     component.File,
                     component.Line,
-                    $"the component '{component.Name}' has no field '{field.Name}', so the value is read and dropped; a document writes the fields of {type.Name} that are data rather than state of a run"));
+                    $"the component '{component.Name}' has no member '{field.Name}', so the value is read and dropped; a document writes the members of {type.Name} that are data rather than state of a run"));
 
                 continue;
             }
@@ -283,7 +283,7 @@ public sealed class ContentLinter
     }
 
     /// <summary>Checks that the file behind a path is one the build ships.</summary>
-    private void CheckResource(PrototypeComponent component, FieldInfo member, string path, List<LintProblem> problems)
+    private void CheckResource(PrototypeComponent component, MemberInfo member, string path, List<LintProblem> problems)
     {
         bool exists;
 
@@ -306,13 +306,37 @@ public sealed class ContentLinter
         }
     }
 
-    /// <summary>Returns the field of a component type that a document writes under a name, or null when it writes none.</summary>
+    /// <summary>Returns the member of a component type that a document writes under a name, or null when it writes none.</summary>
     /// <remarks>
-    /// A field is what a document writes unless it carries a name of its own, and a field that the format leaves out — the
-    /// state of a run, such as the handle of a texture — is not one a document may write at all.
+    /// A member is a field, or a property with a public setter, which is what the source generated registrations carry and what
+    /// the contract writes back: a document that writes a name the component carries is read, so a linter that looked at
+    /// fields alone would report a document that the reading accepts. A member is written under its own name unless it carries
+    /// one of its own, and a member that the format leaves out — the state of a run, such as the handle of a texture — is not
+    /// one a document may write at all.
     /// </remarks>
-    private static FieldInfo? Member(Type type, string name) =>
-        type.GetFields(FieldsOfAComponent).FirstOrDefault(field =>
-            field.GetCustomAttribute<JsonIgnoreAttribute>() is null
-            && string.Equals(field.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? field.Name, name, StringComparison.Ordinal));
+    private static MemberInfo? Member(Type type, string name)
+    {
+        foreach (FieldInfo field in type.GetFields(MembersOfAComponent))
+        {
+            if (Written(field, name))
+            {
+                return field;
+            }
+        }
+
+        foreach (PropertyInfo property in type.GetProperties(MembersOfAComponent))
+        {
+            if (property.SetMethod?.IsPublic is true && property.GetIndexParameters().Length == 0 && Written(property, name))
+            {
+                return property;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Determines whether a document writes a member under a name, which is the name the member declares when it has one of its own.</summary>
+    private static bool Written(MemberInfo member, string name) =>
+        member.GetCustomAttribute<JsonIgnoreAttribute>() is null
+        && string.Equals(member.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? member.Name, name, StringComparison.Ordinal);
 }
