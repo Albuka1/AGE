@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A scene stores an entity that came from a prototype as a reference to it plus only the components that differ from what
+  the prototype declares: `SpawnService` records the prototype when it makes an entity, `World.PrototypeOf` reports it, and
+  `World.AssignPrototype` is how a game says that an entity it built by hand belongs to a kind. A map of a hundred units
+  of one kind is therefore a hundred references rather than a hundred copies of the same components, and one of them being
+  bigger than its kind is written as the difference that it is. Reading such a scene makes the entities again through the
+  content (`IPrototypeSource`, which the serializer takes from the container), so a scene that names a prototype while no
+  content is loaded is refused rather than loaded empty. A component that matches its prototype in every field is left
+  out, which is measured through the contract of the component: the fields that a document leaves out count as the values
+  the component starts with, whatever the order of the fields. An entity that lost a component of its prototype is written
+  in full, because a scene has no way to say that. The format is version two now, and a scene of version one reads as it
+  did.
 - `EntityPrototype` and `SpawnService`: content that becomes entities, which is what makes a map, an enemy or an item a
   document rather than a class. A document whose `type` is `entity` declares what a thing is made of, and
   `Spawn(world, "Goblin", position)` creates an entity and attaches exactly those components, with the values the

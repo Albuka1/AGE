@@ -140,6 +140,21 @@ services:
 services.AddSingleton<IComponentRegistrations, GameComponentRegistrations>();
 ```
 
+An entity that a spawn made is written as the prototype it came from plus only the components that differ from what that
+prototype declares, so a map of a hundred units of one kind holds a hundred references rather than a hundred copies:
+
+```csharp
+Entity goblin = spawner.Spawn(world, "Goblin", new Vector2(320f, 240f));
+world.GetRef<TransformComponent>(goblin).Scale = new Vector2(2f, 2f);
+
+// the scene keeps { "Prototype": "Goblin", "Components": { "Transform": ... } } and nothing of the collider
+string map = scenes.Save(world);
+```
+
+`World.PrototypeOf` reports what an entity was made from, and `World.AssignPrototype` says the same for an entity that a
+game built by hand. Reading such a scene needs the content of the game, because the entities are made again from it: a
+scene that names a prototype while no content is loaded is refused rather than loaded empty.
+
 A component that refers to a device resource, such as the texture of a `SpriteComponent`, is written
 as the identifier it carried, and that identifier does not survive a reload: load the texture again
 and set it on the component after the scene was loaded.

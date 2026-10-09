@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Age.Core;
 
 namespace Age.Content.Prototypes;
@@ -16,13 +17,18 @@ namespace Age.Content.Prototypes;
 /// <para>
 /// The service holds no world of its own: a game may run more than one, and the world is what a spawn writes to.
 /// </para>
+/// <para>
+/// It is also what a scene asks about a prototype: the entity it made remembers what it was made from, and the scene
+/// writes that reference with only the components that differ from it, so a map keeps one description of a kind of
+/// creature instead of one per creature.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
 /// Entity goblin = spawner.Spawn(world, "Goblin", new Vector2(320f, 240f));
 /// </code>
 /// </example>
-public sealed class SpawnService
+public sealed class SpawnService : IPrototypeSource
 {
     private readonly IPrototypeManager _prototypes;
     private readonly ComponentRegistry _components;
@@ -103,6 +109,30 @@ public sealed class SpawnService
         return false;
     }
 
+    /// <summary>Returns the components that a prototype declares, keyed by the name they are registered under.</summary>
+    /// <param name="prototypeId">The identifier of the prototype.</param>
+    /// <returns>The components and the values they start with, or null when the content holds no such prototype.</returns>
+    /// <exception cref="ArgumentException">The identifier is null, empty or whitespace.</exception>
+    /// <remarks>A scene compares what an entity holds with this, which is how it keeps only the differences from the prototype.</remarks>
+    public IReadOnlyDictionary<string, JsonElement>? ComponentsOf(string prototypeId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prototypeId);
+
+        if (!_prototypes.TryGet(prototypeId, out EntityPrototype? prototype))
+        {
+            return null;
+        }
+
+        var components = new Dictionary<string, JsonElement>(prototype.Components.Count, StringComparer.Ordinal);
+
+        foreach (PrototypeComponent component in prototype.Components)
+        {
+            components[component.Name] = component.Values;
+        }
+
+        return components;
+    }
+
     /// <summary>Creates an entity and attaches the components of a prototype that was resolved already.</summary>
     /// <remarks>
     /// Every component of the prototype is read before anything of it reaches the world, and an entity that could not
@@ -124,6 +154,10 @@ public sealed class SpawnService
         }
 
         Entity entity = world.CreateEntity();
+
+        // The world keeps what the entity was made from, so a scene stores that reference instead of a copy of what the
+        // prototype already declares.
+        world.AssignPrototype(entity, prototype.Id);
 
         try
         {

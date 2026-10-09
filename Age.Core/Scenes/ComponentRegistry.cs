@@ -66,7 +66,8 @@ public sealed class ComponentRegistry
             typeof(T),
             (world, entity) => world.Has<T>(entity) ? JsonSerializer.SerializeToElement(world.Get<T>(entity), typeInfo) : null,
             json => JsonSerializer.Deserialize(json, typeInfo)!,
-            (world, entity, component) => world.Set(entity, (T)component));
+            (world, entity, component) => world.Set(entity, (T)component),
+            json => JsonSerializer.SerializeToElement(JsonSerializer.Deserialize(json, typeInfo)!, typeInfo));
 
         _byName[name] = registration;
         _byType[typeof(T)] = registration;
@@ -162,9 +163,16 @@ public sealed class ComponentRegistry
 /// <param name="TrySerialize">Writes the component of an entity as JSON, or returns null when the entity does not carry it.</param>
 /// <param name="Deserialize">Reads a value from JSON, which is what staging a scene does before a world is touched.</param>
 /// <param name="Apply">Applies a value that <paramref name="Deserialize"/> read to an entity.</param>
+/// <param name="Normalize">Reads a value from JSON and writes it again, so two values can be compared as they are rather than as they are written.</param>
+/// <remarks>
+/// <see cref="Normalize"/> is what lets a scene compare an entity with the prototype it was made from: the fields that a
+/// document leaves out are read as the values the component starts with, so a component that matches its prototype in
+/// every field is recognized as unchanged whatever the document wrote and whatever order it wrote it in.
+/// </remarks>
 internal sealed record ComponentRegistration(
     string Name,
     Type Type,
     Func<World, Entity, JsonElement?> TrySerialize,
     Func<JsonElement, object> Deserialize,
-    Action<World, Entity, object> Apply);
+    Action<World, Entity, object> Apply,
+    Func<JsonElement, JsonElement> Normalize);

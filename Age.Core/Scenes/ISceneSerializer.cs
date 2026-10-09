@@ -41,6 +41,11 @@ public interface ISceneSerializer
     /// such an entity does not follow it, which is why a scene is best loaded into a world of its own: a game that keeps
     /// entities across a load either writes them into the same scene or keeps its own way of finding them.
     /// </para>
+    /// <para>
+    /// An entity that was saved from a prototype is made again through the content of the game, so the container has to
+    /// hold the prototypes the scene names: <c>AddAgeContent</c> registers them, and a scene that names one without any
+    /// content is refused rather than loaded empty.
+    /// </para>
     /// </remarks>
     void Load(World world, string json);
 }

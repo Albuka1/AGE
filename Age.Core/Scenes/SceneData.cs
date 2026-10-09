@@ -21,8 +21,18 @@ namespace Age.Core;
 public sealed class SceneData
 {
     /// <summary>The version of the format that this build writes, which <see cref="Version"/> carries.</summary>
-    /// <remarks>Text without a version counts as this one, so a scene that was written by hand reads without it.</remarks>
-    public const int CurrentVersion = 1;
+    /// <remarks>
+    /// <para>
+    /// Text without a version counts as this one, so a scene that was written by hand reads without it.
+    /// </para>
+    /// <para>
+    /// Version two gave <see cref="SceneEntity.Prototype"/> its meaning: an entity of a prototype is written as that
+    /// reference and only as the components that differ from it, so a build that reads version one would apply no
+    /// components to such an entity and make it empty. A scene of version one still reads as it did, because a version
+    /// one scene carries every component of every entity.
+    /// </para>
+    /// </remarks>
+    public const int CurrentVersion = 2;
 
     /// <summary>Gets or sets the version of the format that the text was written in.</summary>
     /// <remarks>
@@ -51,10 +61,18 @@ public sealed class SceneEntity
     /// </remarks>
     public int Id { get; set; }
 
-    /// <summary>Gets or sets the prototype the entity was created from. Reserved for a later step.</summary>
+    /// <summary>Gets or sets the prototype the entity was created from, or null when the scene carries every component of it.</summary>
     /// <remarks>
-    /// The field is written and read, so a scene keeps it, but nothing in this build turns a prototype into an entity
-    /// yet: it is where an entity stops repeating the components of its kind and starts referring to them.
+    /// <para>
+    /// An entity that a spawn made is written as this reference and as the components that differ from what the prototype
+    /// declares, which is what keeps a map of a hundred units of one kind from repeating the same components a hundred
+    /// times. Reading the scene makes the entity again through the content of the game, so a scene that names a prototype
+    /// needs the content that declares it.
+    /// </para>
+    /// <para>
+    /// A scene has no way to say that an entity lost a component that its prototype declares, so such an entity is
+    /// written with every component and without a reference.
+    /// </para>
     /// </remarks>
     public string? Prototype { get; set; }
 

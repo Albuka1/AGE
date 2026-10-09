@@ -41,7 +41,14 @@ public static class CoreServiceCollectionExtensions
         services.AddSingleton(new FixedTimestep(FixedTimestep.DefaultStep));
         services.AddSingleton<IComponentRegistrations, CoreComponentRegistrations>();
         services.AddSingleton<ComponentRegistry>(CreateComponentRegistry);
-        services.AddSingleton<ISceneSerializer, SceneSerializer>();
+
+        // The serializer takes the content of the game when the container holds one, and a scene that was written from
+        // entities of a prototype then reads back: AddAgeContent registers the source, and a game that never registers it
+        // still reads a scene that carries every component of its entities.
+        services.AddSingleton<ISceneSerializer>(provider => new SceneSerializer(
+            provider.GetRequiredService<ComponentRegistry>(),
+            provider.GetRequiredService<ILogger<SceneSerializer>>(),
+            provider.GetService<IPrototypeSource>()));
         return services;
     }
 

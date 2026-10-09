@@ -29,6 +29,7 @@ public sealed class World
     private readonly HashSet<Entity> _pendingDestroy = new();
     private readonly HashSet<int> _reserved = new();
     private readonly List<int> _sceneIds = new();
+    private readonly List<string?> _prototypeIds = new();
     private readonly Dictionary<int, Entity> _bySceneId = new();
     private int _nextSceneId = 1;
     private int _structureVersion;
@@ -89,6 +90,7 @@ public sealed class World
         _structureVersion++;
         _bySceneId.Remove(_sceneIds[entity.Id]);
         _sceneIds[entity.Id] = 0;
+        _prototypeIds[entity.Id] = null;
 
         foreach (IComponentStore store in _stores.Values)
         {
@@ -199,6 +201,31 @@ public sealed class World
     /// </remarks>
     public int SceneIdOf(Entity entity) =>
         IsAlive(entity) && entity.Id < _sceneIds.Count ? _sceneIds[entity.Id] : 0;
+
+    /// <summary>Returns the prototype that an entity was created from, or null when it was not created from one.</summary>
+    /// <param name="entity">The entity to ask about.</param>
+    /// <returns>The identifier of the prototype, or null when the entity was not made from one.</returns>
+    /// <remarks>
+    /// A spawn records this for the entity it made, and the scene serializer writes it instead of the components that the
+    /// prototype already declares, which is what keeps a map of a hundred units of one kind from repeating the same
+    /// components a hundred times. The prototype of an entity is forgotten when the entity is destroyed.
+    /// </remarks>
+    public string? PrototypeOf(Entity entity) =>
+        IsAlive(entity) && entity.Id < _prototypeIds.Count ? _prototypeIds[entity.Id] : null;
+
+    /// <summary>Records the prototype that an entity was created from, which the scene serializer writes.</summary>
+    /// <param name="entity">The entity to record the prototype for.</param>
+    /// <param name="prototypeId">The identifier of the prototype, or null to forget the one the entity holds.</param>
+    /// <exception cref="InvalidOperationException">The entity is not alive.</exception>
+    /// <remarks>
+    /// A spawn calls this, and a game may call it for an entity it built by hand and wants a scene to keep as a reference
+    /// rather than as a copy. A scene writes the prototype and then only the components that differ from it.
+    /// </remarks>
+    public void AssignPrototype(Entity entity, string? prototypeId)
+    {
+        EnsureAlive(entity);
+        _prototypeIds[entity.Id] = prototypeId;
+    }
 
     /// <summary>Returns the entity that this world knows under an identifier of a scene.</summary>
     /// <param name="sceneId">The identifier to look up.</param>
@@ -541,6 +568,7 @@ public sealed class World
             _generations.Add(1);
             _alive.Add(false);
             _sceneIds.Add(0);
+            _prototypeIds.Add(null);
         }
 
         // Until Activate runs, the slot is handed out but is not part of the world, which is what keeps another
