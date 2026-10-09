@@ -1,5 +1,7 @@
 using Age.Assets;
 using Age.Audio;
+using Age.Content;
+using Age.Content.Prototypes;
 using Age.Core;
 using Age.Input;
 using Age.Physics;
@@ -20,6 +22,7 @@ services.AddLogging(builder =>
 });
 
 services.AddAgeCore();
+services.AddAgeContent();
 services.AddAgeAssets();
 services.AddAgeInput();
 services.AddAgeAudio();
@@ -53,6 +56,13 @@ renderer.Attach(windowService);
 
 IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
 assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+
+// The content of a game is data: a document under Resources/Prototypes declares a prototype by its identifier, names the
+// components it carries with the values they start with, and inherits the rest from a parent. The manager reads every
+// file first and then resolves them, so a mistake in a document is a message here rather than a surprise in a fight.
+PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+prototypes.Register<Prototype>("entity", prototype => prototype);
+Console.WriteLine($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
 
 ITextureService textures = provider.GetRequiredService<ITextureService>();
 TextureHandle tiles = textures.Load("Textures/Tiles/tiles.bmp");
@@ -260,7 +270,7 @@ gameLoop.Run(
             : $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x";
 
         fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
-        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
+        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
     });
 
 // The device objects live in the OpenGL context of the window, so the game releases them while the window is still open.

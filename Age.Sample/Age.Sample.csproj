@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
+    <ProjectReference Include="..\Age.Content\Age.Content.csproj" />
     <ProjectReference Include="..\Age.Assets\Age.Assets.csproj" />
     <ProjectReference Include="..\Age.Input\Age.Input.csproj" />
     <ProjectReference Include="..\Age.Audio\Age.Audio.csproj" />

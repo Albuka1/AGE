@@ -1,0 +1,10 @@
+# An item refers to what it shares with the items around it by inheriting from them, so a change to the way items lie on
+# the ground is a change in one file rather than one per item.
+- type: entity
+  id: Sword
+  parent: ItemBase
+  components:
+    - type: Collider
+      Size:
+        X: 16
+        Y: 16

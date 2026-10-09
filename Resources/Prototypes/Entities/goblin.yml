@@ -1,0 +1,10 @@
+# A goblin is a creature like any other: it declares what it changes and inherits the rest, which is what keeps the file
+# of a unit about the unit rather than about everything it shares with its kind.
+- type: entity
+  id: Goblin
+  parent: CreatureBase
+  components:
+    - type: Collider
+      Size:
+        X: 24
+        Y: 24

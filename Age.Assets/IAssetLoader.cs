@@ -39,6 +39,19 @@ public interface IAssetLoader
     /// <exception cref="FileNotFoundException">No file exists at that path.</exception>
     Stream OpenRead(string relativePath);
 
+    /// <summary>Returns the files that a folder holds, in it and below it, as paths relative to the game root.</summary>
+    /// <param name="relativeFolder">The folder, relative to the game root.</param>
+    /// <returns>The paths of the files, relative to the game root, ordered by ordinal.</returns>
+    /// <exception cref="ArgumentException">The path is null, empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The loader has not been initialized, or the path escapes the game root.</exception>
+    /// <exception cref="DirectoryNotFoundException">No folder exists at that path.</exception>
+    /// <remarks>
+    /// The paths are ordered, so a caller that reads every file of a folder reads them in the same order on every machine:
+    /// content that declares what another file declares would otherwise be read in whichever order the file system
+    /// happened to return it. A path is written with a forward slash, whatever the platform uses between directories.
+    /// </remarks>
+    IEnumerable<string> Enumerate(string relativeFolder);
+
     /// <summary>Reads the file at the given path relative to the game root and converts it to <typeparamref name="T"/>.</summary>
     /// <typeparam name="T">The type to produce. <c>string</c> and <c>byte[]</c> are handled directly, every other type is deserialized from JSON.</typeparam>
     /// <param name="relativePath">The path of the file, relative to the game root.</param>

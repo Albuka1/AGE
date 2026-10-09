@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using Age.Assets;
 using Age.Content.Yaml;
 using Age.Core;
 
@@ -90,6 +91,50 @@ public sealed class PrototypeManager : IPrototypeManager
         {
             Add(name, item);
         }
+    }
+
+    /// <summary>Reads every document that a folder of the content holds, and builds what they declare.</summary>
+    /// <param name="assets">The loader of the assets, which resolves the folder inside the game root.</param>
+    /// <param name="folder">The folder to read, relative to the game root, such as <c>Prototypes</c>.</param>
+    /// <returns>The number of prototypes that were built, which is zero when the folder holds nothing.</returns>
+    /// <exception cref="ArgumentNullException">The loader is null.</exception>
+    /// <exception cref="ArgumentException">The folder is null, empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The loader has not been initialized, or the folder escapes the game root.</exception>
+    /// <exception cref="YamlException">A document is not one this engine reads.</exception>
+    /// <exception cref="PrototypeException">A document does not describe a prototype, and the error names the file and the line.</exception>
+    /// <remarks>
+    /// Every file of the folder is read before any of them is resolved, because a prototype may inherit from one that
+    /// another file declares, and the files are read in the order the loader returns them, so a content is read the same
+    /// way everywhere. A file that is not a document of YAML is left alone, and a folder that is not there holds nothing
+    /// rather than being an error.
+    /// </remarks>
+    public int Load(IAssetLoader assets, string folder)
+    {
+        ArgumentNullException.ThrowIfNull(assets);
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+
+        IEnumerable<string> files;
+
+        try
+        {
+            files = assets.Enumerate(folder);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // A game without content of its own is a game, so a folder that is not there holds nothing rather than being
+            // an error: the loader has already named the folder it could not walk in its own record.
+            return 0;
+        }
+
+        foreach (string file in files)
+        {
+            if (file.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            {
+                Add(file, assets.Load<string>(file));
+            }
+        }
+
+        return Build();
     }
 
     /// <summary>Reads one prototype of a document, which is a set of fields with an identifier.</summary>

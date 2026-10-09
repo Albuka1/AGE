@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IAssetLoader.Enumerate`, which returns the files of a folder in it and below it, ordered by ordinal and written with a
+  forward slash whatever the platform uses, so a folder of content is read the same way on every machine; a folder that
+  cannot be walked is refused by name. `PrototypeManager.Load(IAssetLoader, folder)` reads every `*.yml` and `*.yaml` of a
+  folder before it resolves any of them, because a prototype may inherit from one that another file declares, leaves files
+  that are not documents alone, and treats a folder that is not there as content that holds nothing. `AddAgeContent`
+  registers the manager over the component registry of the container. `Resources/Prototypes` now ships the first content
+  of the engine: a `CreatureBase` with the goblin that inherits it, and an `ItemBase` with the sword that inherits it,
+  which the tests load, inherit and validate, and which the sample reads and counts at startup.
 - `ProtoId<T>`, `IPrototype`, `Prototype` and `PrototypeManager`: the content of a game as data. A document declares a
   prototype by an identifier, names the components it carries and the values they start with, and can inherit from
   another prototype with `parent`; the manager reads every document first and then builds, which is the point where the
