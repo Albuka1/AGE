@@ -176,7 +176,7 @@ public sealed class SpawnServiceTests
     }
 
     [Fact]
-    public void SpawnService_ContentThatNamesTheHandleOfATexture_LoadsWithoutIt()
+    public void SpawnService_ContentThatNamesTheHandleOfATexture_IsRefusedAtStartup()
     {
         string root = Path.Combine(Path.GetTempPath(), "age-content-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "Prototypes"));
@@ -204,16 +204,10 @@ public sealed class SpawnServiceTests
 
             var assets = new NullAssetLoader();
             assets.Initialize(root);
-            prototypes.Load(assets, "Prototypes").Should().Be(1);
 
-            SpawnService spawner = provider.GetRequiredService<SpawnService>();
-            var world = new World();
-            Entity sprite = spawner.Spawn(world, "Broken");
+            Action load = () => prototypes.Load(assets, "Prototypes");
 
-            // A handle belongs to the run that made it, so it is state rather than data and is not part of the format: a
-            // document that writes one is read without it, and content names an image with TexturePath instead.
-            world.Get<SpriteComponent>(sprite).TexturePath.Should().BeNull();
-            world.Get<SpriteComponent>(sprite).Texture.Id.Should().Be(0);
+            load.Should().Throw<PrototypeException>().WithMessage("*'Texture'*is not one that the component 'Sprite' carries*", "a handle belongs to the run that made it rather than to the format, so a document that writes one is refused instead of being read without it");
         }
         finally
         {

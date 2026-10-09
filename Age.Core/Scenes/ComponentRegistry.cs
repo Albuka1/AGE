@@ -43,13 +43,21 @@ public sealed class ComponentRegistry
     /// <typeparam name="T">The component type, which is a struct that implements <see cref="IComponent"/>.</typeparam>
     /// <param name="name">The name to store the component under. It has to be unique.</param>
     /// <param name="typeInfo">The serialization contract of the type, usually from a source generated context.</param>
+    /// <param name="fields">The names that a document may write for this component, which the generated registrations pass. An empty list leaves the decision to the contract.</param>
     /// <exception cref="ArgumentException">The name is null, empty or whitespace.</exception>
     /// <exception cref="ArgumentNullException">The contract is null.</exception>
     /// <exception cref="InvalidOperationException">The name or the type is already registered.</exception>
-    public void Register<T>(string name, JsonTypeInfo<T> typeInfo) where T : struct, IComponent
+    /// <remarks>
+    /// The contract refuses a field it does not know, but a field it *ignores* is not one it knows: without the names, a
+    /// document that writes the handle of a texture rather than the path of an image would be read and dropped in silence.
+    /// The list comes from the source generator, which reads it off the component, so the check costs no reflection and
+    /// survives an AOT build.
+    /// </remarks>
+    public void Register<T>(string name, JsonTypeInfo<T> typeInfo, params string[] fields) where T : struct, IComponent
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(typeInfo);
+        ArgumentNullException.ThrowIfNull(fields);
 
         if (_byName.ContainsKey(name))
         {
@@ -61,16 +69,42 @@ public sealed class ComponentRegistry
             throw new InvalidOperationException($"The component {typeof(T).Name} is already registered under the name '{existing.Name}'.");
         }
 
+        HashSet<string>? carried = fields.Length > 0 ? new HashSet<string>(fields, StringComparer.Ordinal) : null;
+
         var registration = new ComponentRegistration(
             name,
             typeof(T),
             (world, entity) => world.Has<T>(entity) ? JsonSerializer.SerializeToElement(world.Get<T>(entity), typeInfo) : null,
-            json => JsonSerializer.Deserialize(json, typeInfo)!,
+            json => Deserialize(json, typeInfo, name, carried),
             (world, entity, component) => world.Set(entity, (T)component),
             json => JsonSerializer.SerializeToElement(JsonSerializer.Deserialize(json, typeInfo)!, typeInfo));
 
         _byName[name] = registration;
         _byType[typeof(T)] = registration;
+    }
+
+    /// <summary>Reads the values of one component, refusing a field that the component does not carry.</summary>
+    /// <param name="values">The values of the component, written the way a scene writes them.</param>
+    /// <param name="typeInfo">The contract of the component.</param>
+    /// <param name="name">The name the component is registered under, which a refusal mentions.</param>
+    /// <param name="carried">The names that a document may write, or null when the contract decides on its own.</param>
+    /// <returns>The value that was read.</returns>
+    /// <exception cref="JsonException">A field is not one the component carries, or the values cannot be read at all.</exception>
+    private static object Deserialize<T>(JsonElement values, JsonTypeInfo<T> typeInfo, string name, HashSet<string>? carried)
+        where T : struct, IComponent
+    {
+        if (carried is not null && values.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty field in values.EnumerateObject())
+            {
+                if (!carried.Contains(field.Name))
+                {
+                    throw new JsonException($"The field '{field.Name}' is not one that the component '{name}' carries, so the value would be read and dropped: a document of it writes {string.Join(", ", carried.Order(StringComparer.Ordinal))}.");
+                }
+            }
+        }
+
+        return JsonSerializer.Deserialize(values, typeInfo)!;
     }
 
     /// <summary>Returns the component type that a name was registered under.</summary>

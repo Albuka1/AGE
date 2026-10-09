@@ -28,7 +28,7 @@ public interface ISceneSerializer
     /// <param name="json">The scene text that <see cref="Save"/> produced.</param>
     /// <exception cref="ArgumentNullException">The world is null.</exception>
     /// <exception cref="ArgumentException">The text is null, empty or whitespace.</exception>
-    /// <exception cref="InvalidDataException">The text is not a scene, it holds a component that is not registered, or it was written in a version this build does not read.</exception>
+    /// <exception cref="InvalidDataException">The text is not a scene, it holds a component that is not registered or a field that the format of a component does not carry, or it was written in a version this build does not read.</exception>
     /// <remarks>
     /// <para>
     /// Every entity of the scene becomes a new entity, so the slots of the loaded world differ from the ones the scene

@@ -247,10 +247,10 @@ dotnet run --project Age.Content.Lint -- Resources Prototypes
 `Age.Content.Lint` reads the content of a game the way a build does and exits with a non-zero code
 when anything is wrong, so a mistake in a document fails a build rather than a fight: a document that
 is not a prototype, a component that nothing registered, values that its contract cannot read, a field
-that it does not have, a parent that no file declares, a kind that nothing reads, a circle of
-inheritance, a field that the format does not carry (the state of a run, such as the handle of a
-texture, would be read and dropped in silence), and a path that a `[ResourcePath]` field names, which
-is checked against the files of the build.
+that the format of the component does not carry — which is how a field that belongs to a run rather
+than to content, such as the handle of a texture, is refused instead of being dropped — a parent that
+no file declares, a kind that nothing reads, a circle of inheritance, and a path that a
+`[ResourcePath]` field names, which is checked against the files of the build.
 
 The tool knows the kinds and the components the engine ships. A game with kinds of its own reads the
 same check from its own host:

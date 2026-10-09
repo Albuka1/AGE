@@ -93,7 +93,73 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
             scene,
             type.Locations.Length > 0 ? type.Locations[0] : Location.None,
             type.TypeKind,
-            type.AllInterfaces.Any(implemented => implemented.ToDisplayString() == "Age.Core.IComponent"));
+            type.AllInterfaces.Any(implemented => implemented.ToDisplayString() == "Age.Core.IComponent"),
+            Fields(type));
+    }
+
+    /// <summary>Returns the names that a document may write for a component, in the order the members are declared.</summary>
+    /// <remarks>
+    /// A name travels with the registration, which refuses a document that writes a field that is not one of them. A member
+    /// the contract ignores is not one of them either, and neither is a member the contract cannot write: a document that
+    /// writes such a field would be read and dropped in silence, which is what the refusal exists to prevent.
+    /// </remarks>
+    private static ImmutableArray<string> Fields(INamedTypeSymbol type)
+    {
+        ImmutableArray<string>.Builder fields = ImmutableArray.CreateBuilder<string>();
+
+        foreach (ISymbol member in type.GetMembers())
+        {
+            if (member.DeclaredAccessibility != Accessibility.Public || member.IsStatic)
+            {
+                continue;
+            }
+
+            if (member is IFieldSymbol field && !field.IsConst && !field.IsImplicitlyDeclared)
+            {
+                if (Name(field) is string written)
+                {
+                    fields.Add(written);
+                }
+
+                continue;
+            }
+
+            if (member is IPropertySymbol property
+                && property.Parameters.IsEmpty
+                && property.SetMethod is not null
+                && property.SetMethod.DeclaredAccessibility == Accessibility.Public
+                && Name(property) is string held)
+            {
+                fields.Add(held);
+            }
+        }
+
+        return fields.ToImmutable();
+    }
+
+    /// <summary>Returns the name that a document writes for a member, or null when the format does not carry it at all.</summary>
+    private static string? Name(ISymbol member)
+    {
+        string? declared = null;
+
+        foreach (AttributeData attribute in member.GetAttributes())
+        {
+            string? kind = attribute.AttributeClass?.ToDisplayString();
+
+            if (kind == "System.Text.Json.Serialization.JsonIgnoreAttribute")
+            {
+                return null;
+            }
+
+            if (kind == "System.Text.Json.Serialization.JsonPropertyNameAttribute"
+                && attribute.ConstructorArguments.Length > 0
+                && attribute.ConstructorArguments[0].Value is string name)
+            {
+                declared = name;
+            }
+        }
+
+        return declared ?? member.Name;
     }
 
     /// <summary>Writes the registrations and the context of an assembly, and reports a component that cannot be one.</summary>
@@ -144,7 +210,16 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
             registrations
                 .Append("            registry.Register(").Append(SymbolDisplay.FormatLiteral(component.Name, quote: true)).Append(", ")
                 .Append(options.Namespace).Append('.').Append(options.JsonContextName).Append(".Default.")
-                .Append(component.Symbol).AppendLine(");");
+                .Append(component.Symbol);
+
+            // The names that a document may write travel with the registration, so reading one refuses a field that the
+            // component does not carry rather than dropping it in silence.
+            foreach (string field in component.Fields)
+            {
+                registrations.Append(", ").Append(SymbolDisplay.FormatLiteral(field, quote: true));
+            }
+
+            registrations.AppendLine(");");
         }
 
         registrations.AppendLine("        }");
@@ -180,7 +255,7 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
     private readonly struct ComponentModel
     {
         /// <summary>Initializes what is known about a component.</summary>
-        public ComponentModel(string name, string type, string symbol, bool scene, Location location, TypeKind kind, bool implementsComponent)
+        public ComponentModel(string name, string type, string symbol, bool scene, Location location, TypeKind kind, bool implementsComponent, ImmutableArray<string> fields)
         {
             Name = name;
             Type = type;
@@ -189,6 +264,7 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
             Location = location;
             Kind = kind;
             ImplementsComponent = implementsComponent;
+            Fields = fields;
         }
 
         /// <summary>Gets the name that a scene file uses.</summary>
@@ -211,6 +287,9 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
 
         /// <summary>Gets a value indicating whether the type implements <c>IComponent</c>.</summary>
         public bool ImplementsComponent { get; }
+
+        /// <summary>Gets the names that a document may write for the component, in the order the members are declared.</summary>
+        public ImmutableArray<string> Fields { get; }
     }
 
     /// <summary>The names that the generated code uses, which the project of an assembly sets.</summary>

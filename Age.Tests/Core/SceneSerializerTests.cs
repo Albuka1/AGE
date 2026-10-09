@@ -460,6 +460,19 @@ public sealed class SceneSerializerTests
         sprite.Texture.Id.Should().Be(0, "the renderer resolves the path again, which is what makes a loaded scene draw");
     }
 
+    [Fact]
+    public void SceneSerializer_AFieldThatTheComponentDoesNotCarry_IsRefused()
+    {
+        SceneSerializer serializer = CreateSerializer();
+        var world = new World();
+        const string Scene = """{ "Entities": [ { "Id": 1, "Components": { "Sprite": { "Texture": 7 } } } ] }""";
+
+        Action load = () => serializer.Load(world, Scene);
+
+        load.Should().Throw<InvalidDataException>().WithMessage("*'Sprite'*cannot be read*", "a field that the format does not carry is refused rather than read and dropped");
+        world.Enumerate().Should().BeEmpty("a scene that is refused leaves the world as it was");
+    }
+
     /// <summary>Keeps what was logged, which is how a test reads the record of a scene that was refused.</summary>
     private sealed class RecordingLogger<T> : ILogger<T>
     {

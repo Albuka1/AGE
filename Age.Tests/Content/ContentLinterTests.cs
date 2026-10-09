@@ -31,18 +31,18 @@ public sealed class ContentLinterTests
     }
 
     [Fact]
-    public void ContentLinter_AFieldThatTheFormatDoesNotCarry_IsReported()
+    public void ContentLinter_AFieldThatTheFormatDoesNotCarry_IsRefusedByTheReader()
     {
-        // A handle of a texture is state of a run rather than data of content, so the contract drops it: a reader says
-        // nothing, and a build has to, because the content asks for something that never happens.
+        // A handle of a texture is state of a run rather than data of content, so the format does not carry it: the reading
+        // of the document refuses it, and the linter reports what the reader said, with the file and the line.
         LintReport report = Lint("- type: entity\n  id: Broken\n  components:\n    - type: Sprite\n      Texture: 7\n");
 
-        report.Count.Should().Be(1, "the document itself is read, and what it asks for is not");
+        report.Count.Should().Be(0, "a document that the reader refuses stops the reading");
         LintProblem problem = report.Problems.Should().ContainSingle().Subject;
 
         problem.File.Should().EndWith("thing.yml");
         problem.Line.Should().BeGreaterThan(0, "a problem says where a person has to open a file");
-        problem.Message.Should().Contain("Texture").And.Contain("no field");
+        problem.Message.Should().Contain("Texture").And.Contain("carries");
         problem.ToString().Should().Contain("thing.yml(", "the text of a problem is written the way a compiler writes one");
     }
 

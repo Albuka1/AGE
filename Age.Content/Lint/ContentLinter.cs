@@ -15,10 +15,12 @@ namespace Age.Content.Lint;
 /// <para>
 /// Reading is what <see cref="IPrototypeManager"/> does, and the mistakes it refuses are the ones this reports first: a
 /// document that is not a prototype, a component that nothing registered, values that the contract of a component cannot
-/// read, a field the component does not have, a parent that no file declares, a kind that nothing reads, and a circle of
-/// inheritance. Two mistakes that a reader cannot see on its own are what this adds: a field that the contract refuses to
-/// hold — state of a run rather than data of content, such as the handle of a texture — would be read silently and dropped,
-/// and a path that names a file a build does not ship is a well-formed word either way.
+/// read, a field that the format of a component does not carry — which is how a member that a scene leaves out, such as the
+/// handle of a texture, is refused rather than dropped in silence — a parent that no file declares, a kind that nothing
+/// reads, and a circle of inheritance. The mistake that no reader can see is the one this adds: a path that a
+/// <see cref="ResourcePathAttribute"/> field names is a well-formed word whether or not the file behind it exists. The
+/// reflection of <see cref="Check"/> is what still catches a field that a component does not carry when a registration was
+/// written by hand, because the names of the format travel with the registrations that the source generator writes.
 /// </para>
 /// <para>
 /// A linter is a tool rather than part of a game: it reads the types of the components with reflection, which an AOT build

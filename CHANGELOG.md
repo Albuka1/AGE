@@ -28,12 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Ui` with B6, `Shaders`), so nothing is committed as an empty promise. Two tests walk the folder and check both
   directions: a file that no line of the catalogue names fails the build, and a path that a line names but the folder does
   not hold fails it too.
+- The format of a component is what a document may write: the registrations that the source generator writes carry the names
+  of the fields of a component, and reading a document refuses a field that is not one of them. That closes the case the
+  contract used to ignore in silence, where a document that named the handle of a texture rather than the path of an image
+  was read without the field: a prototype refuses it as content that is wrong, and a scene refuses it as a file that cannot
+  be read. A registration written by hand passes no names and leaves the decision to its own contract, and the content
+  linter keeps its check for that case.
 - `Age.Content.Lint`, a tool that reads the content of a game the way a build does and exits with a non-zero code when
   anything is wrong, so a broken prototype fails a build rather than a fight. It wraps the reader — which now names the
   file of a document in every refusal, because the YAML reader knows the line and not the file it was reading — and adds
-  the two checks a reader cannot make: a field that the format does not carry (the state of a run, such as the handle of a
-  texture, is read and dropped in silence) and a path that a `[ResourcePath]` field names, which is checked against the
-  files of the build. `IPrototypeManager.Load` and `IPrototypeManager.Prototypes` are the content side of it: a tool reads
+  the check a reader cannot make: a path that a `[ResourcePath]` field names is a well-formed word whether or not a file
+  stands behind it, so a build that ships a typo fails rather than drawing the placeholder.
+  `IPrototypeManager.Load` and `IPrototypeManager.Prototypes` are the content side of it: a tool reads
   the data of every prototype without knowing what a game reads them as. CI runs the tool over the content the engine
   ships, and a game with kinds of its own reads `ContentLinter` from its own host.
 - A sprite names its image by path: `SpriteComponent.TexturePath` is what a prototype or a scene writes, and the texture
