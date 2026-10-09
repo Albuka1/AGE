@@ -132,7 +132,7 @@ public interface IRenderer : IDisposable
     /// <param name="name">The name of the sampler uniform, as the shader declares it.</param>
     /// <param name="texture">The texture to sample. A handle of zero binds no image.</param>
     /// <param name="unit">The texture unit to bind it to, which the sampler is told to read.</param>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="unit"/> is negative.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="unit"/> is below one, because the first unit is the one the engine binds the image that is being drawn to.</exception>
     void SetSampler(string name, TextureHandle texture, int unit) => throw new NotSupportedException("This renderer draws without shaders of their own.");
 
     /// <summary>Flushes pending draws and ends the frame.</summary>

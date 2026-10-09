@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call samples one program, one texture and one set of uniforms. A shader is written in the OpenGL Shading Language under the
   header of the engine, which names what a shader of a game reads and writes: `UV`, `COLOR`, `TEXTURE`,
   `TEXTURE_PIXEL_SIZE` and `TIME`. A fragment shader alone is the common case: the engine draws it with the vertex stage that
-  places the quad, and a game that writes a vertex stage of its own takes the placement over.
+  places the quad, and a game that writes a vertex stage of its own takes the placement over. The samplers of a game start at
+  the second texture unit, because the first one is where the engine binds the image that is being drawn.
 - A text that names no font is drawn with the font of the engine, so a game shows a word of its content without loading
   anything, and the console, the numbers of a frame and the lines a game holds without an entity are drawn with it as well:
   `TextDefaults` is the stack of the engine, which covers the Latin and Cyrillic letters and the punctuation a translation uses

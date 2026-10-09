@@ -246,6 +246,12 @@ public sealed class SilkRenderer : IRenderer
         _program = CreateProgram(gl, VertexShaderSource, FragmentShaderSource);
         _currentProgram = _program;
 
+        // The locations and the quads of another context say nothing about this one: a location belongs to the program that was
+        // compiled here, and a quad holds the identifier of a texture that a game released with the window it came from, so
+        // both start over rather than being used against objects that are gone.
+        _uniforms.Clear();
+        _batch.Clear();
+
         _vao = gl.GenVertexArray();
         gl.BindVertexArray(_vao);
         _vbo = gl.GenBuffer();
@@ -433,7 +439,13 @@ public sealed class SilkRenderer : IRenderer
     public void SetSampler(string name, TextureHandle texture, int unit)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentOutOfRangeException.ThrowIfNegative(unit);
+
+        // The first unit is the one the engine binds the image that is being drawn to, so a sampler of a game starts at the
+        // second: a sampler that took the first would read the image of the sprite rather than the one a game bound.
+        if (unit < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(unit), unit, "A sampler of a game starts at the second texture unit, because the first one is where the engine binds the image that is being drawn.");
+        }
 
         Flush();
 
@@ -664,6 +676,13 @@ public sealed class SilkRenderer : IRenderer
         }
 
         GL gl = RequireContext();
+
+        // The quads are drawn with the program, the vertex array and the buffer they were collected under, whichever of them is
+        // bound at this moment: ending a frame unbinds them, and so does a game that drew between two frames, so a batch binds
+        // what it needs rather than trusting what is left of the frame before it.
+        gl.UseProgram(_currentProgram);
+        gl.BindVertexArray(_vao);
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
 
         gl.ActiveTexture(TextureUnit.Texture0);
         gl.BindTexture(TextureTarget.Texture2D, _batch.Texture);
