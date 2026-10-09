@@ -183,6 +183,7 @@ public sealed class SceneSerializer : ISceneSerializer
         var staged = new List<StagedEntity>(scene.Entities.Count);
         var identifiers = new HashSet<int>();
         var displaced = new List<Entity>();
+        var checkedPrototypes = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (SceneEntity? saved in scene.Entities)
         {
@@ -244,8 +245,9 @@ public sealed class SceneSerializer : ISceneSerializer
                 components.Add((registration, value));
             }
 
-            // The prototype of an entity is checked here, before the world is touched: a scene that names one needs the
-            // content that declares it, and a load that cannot make the entity leaves the world as it was.
+            // The prototype of an entity is checked here, before the world is touched: a scene that names one needs the content
+            // that declares it, and every component of that content has to be one this build can read, so that making the
+            // entity cannot fail half way through the scene. One prototype is checked once however many entities it makes.
             if (saved.Prototype is string prototypeId)
             {
                 if (string.IsNullOrWhiteSpace(prototypeId))
@@ -253,16 +255,9 @@ public sealed class SceneSerializer : ISceneSerializer
                     throw new InvalidDataException("A scene entity names an empty prototype, and a prototype is named by its identifier.");
                 }
 
-                if (_prototypes is null)
+                if (checkedPrototypes.Add(prototypeId))
                 {
-                    throw new InvalidDataException(
-                        $"The scene holds an entity of the prototype '{prototypeId}' and no content is loaded, so the entity cannot be made. Load the content of the game before the scene.");
-                }
-
-                if (_prototypes.ComponentsOf(prototypeId) is null)
-                {
-                    throw new InvalidDataException(
-                        $"The scene names the prototype '{prototypeId}', and the content of the game does not hold it. Add the document that declares it, or write the entity with every component it needs.");
+                    CheckPrototype(prototypeId);
                 }
             }
 
@@ -301,6 +296,54 @@ public sealed class SceneSerializer : ISceneSerializer
             }
         }
     }
+
+    /// <summary>Checks that the content of a build can make an entity of a prototype, which is what keeps a refused load from touching the world.</summary>
+    /// <param name="prototypeId">The identifier of the prototype that a scene names.</param>
+    /// <exception cref="InvalidDataException">
+    /// No content is loaded, the content holds no such prototype, a component that it declares is not registered, or the values
+    /// of one of its components cannot be read.
+    /// </exception>
+    /// <remarks>
+    /// Every component that a prototype declares is read through the contract of the component here, which is the same check
+    /// that the writing of a scene makes before it compares an entity with its prototype: content that this build cannot read
+    /// is a scene that is refused rather than a load that stops with half of its entities in the world. The value is read
+    /// rather than compared, so what is refused here is exactly what the spawn that applies it would have refused.
+    /// </remarks>
+    private void CheckPrototype(string prototypeId)
+    {
+        if (_prototypes is null)
+        {
+            throw new InvalidDataException(
+                $"The scene holds an entity of the prototype '{prototypeId}' and no content is loaded, so the entity cannot be made. Load the content of the game before the scene.");
+        }
+
+        if (_prototypes.ComponentsOf(prototypeId) is not IReadOnlyDictionary<string, JsonElement> declared)
+        {
+            throw new InvalidDataException(
+                $"The scene names the prototype '{prototypeId}', and the content of the game does not hold it. Add the document that declares it, or write the entity with every component it needs.");
+        }
+
+        foreach ((string name, JsonElement values) in declared)
+        {
+            if (!_components.TryGet(name, out ComponentRegistration? registration))
+            {
+                throw new InvalidDataException(
+                    $"The prototype '{prototypeId}' of the scene declares the component '{name}', and nothing registers a component under that name, so the entity cannot be made. Register it before loading the scene.");
+            }
+
+            try
+            {
+                registration.Normalize(values);
+            }
+            catch (JsonException exception)
+            {
+                throw new InvalidDataException(
+                    $"The component '{name}' of the prototype '{prototypeId}' cannot be read by this build, so the entity cannot be made.",
+                    exception);
+            }
+        }
+    }
+
 
     /// <summary>One entity of a scene that was read and checked, and is about to be applied to a world.</summary>
     /// <param name="Id">The identifier the scene knows the entity by, or zero when it carried none.</param>

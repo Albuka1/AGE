@@ -245,6 +245,62 @@ public sealed class PrototypeSceneTests
         loaded.PrototypeOf(restored).Should().BeNull("and nothing names the kind it came from, so the file is read by a build without that kind");
     }
 
+    [Fact]
+    public void PrototypeScene_APrototypeWhoseComponentIsNotRegistered_IsRefusedAndLeavesTheWorldAsItWas()
+    {
+        using ServiceProvider provider = Create();
+        var world = new World();
+        Entity existing = world.CreateEntity();
+        var scenes = new SceneSerializer(provider.GetRequiredService<ComponentRegistry>(), prototypes: new UnregisteredComponent());
+
+        Action load = () => scenes.Load(world, Scene("Goblin"));
+
+        load.Should().Throw<InvalidDataException>().WithMessage("*'Goblin'*'Nope'*");
+        world.Enumerate().Should().ContainSingle().Which.Should().Be(existing, "content that cannot be made is refused before the world is touched");
+    }
+
+    [Fact]
+    public void PrototypeScene_APrototypeWhoseValuesCannotBeRead_IsRefusedAndLeavesTheWorldAsItWas()
+    {
+        using ServiceProvider provider = Create();
+        var world = new World();
+        Entity existing = world.CreateEntity();
+        var scenes = new SceneSerializer(provider.GetRequiredService<ComponentRegistry>(), prototypes: new UnreadableComponent());
+
+        Action load = () => scenes.Load(world, Scene("Goblin"));
+
+        load.Should().Throw<InvalidDataException>().WithMessage("*'Transform'*'Goblin'*cannot be read*");
+        world.Enumerate().Should().ContainSingle().Which.Should().Be(existing, "a value that the contract refuses is not a world that was changed half way");
+    }
+
+    /// <summary>Returns a scene of one entity that names a prototype and carries no component of its own.</summary>
+    private static string Scene(string prototypeId) => $$"""
+        {
+          "Version": 2,
+          "Entities": [
+            { "Id": 7, "Prototype": "{{prototypeId}}", "Components": {} }
+          ]
+        }
+        """;
+
+    /// <summary>A source whose prototype declares a component that nothing registers, which is content a build cannot read.</summary>
+    private sealed class UnregisteredComponent : IPrototypeSource
+    {
+        public Entity Spawn(World world, string prototypeId) => throw new NotSupportedException("a scene with such a prototype never reaches the spawn");
+
+        public IReadOnlyDictionary<string, JsonElement>? ComponentsOf(string prototypeId) =>
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal) { ["Nope"] = JsonDocument.Parse("{}").RootElement.Clone() };
+    }
+
+    /// <summary>A source whose prototype declares values that the contract of a component refuses.</summary>
+    private sealed class UnreadableComponent : IPrototypeSource
+    {
+        public Entity Spawn(World world, string prototypeId) => throw new NotSupportedException("a scene with such a prototype never reaches the spawn");
+
+        public IReadOnlyDictionary<string, JsonElement>? ComponentsOf(string prototypeId) =>
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal) { ["Transform"] = JsonDocument.Parse("""{ "Position": "nowhere" }""").RootElement.Clone() };
+    }
+
     /// <summary>Builds a provider whose content is the one the engine ships, read as entities.</summary>
     private static ServiceProvider Create()
     {
