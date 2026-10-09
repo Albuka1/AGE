@@ -130,8 +130,8 @@ public sealed class RenderSystemTests
         new RenderSystem(renderer, new SpriteSorter(), textures).Render(world, Camera(1280f, 720f));
 
         renderer.Textures.Should().ContainSingle().Which.Should().Be(textures.Error, "a sprite whose image is missing is drawn as the placeholder");
-        textures.MissingCount.Should().Be(1);
-        world.Get<SpriteComponent>(entity).Texture.Should().Be(textures.Error, "the placeholder stays in the sprite, so the path is not resolved again");
+        textures.MissingCount.Should().Be(1, "the same hole is reported once however many frames ask for the image of the path");
+        world.Get<SpriteComponent>(entity).Texture.Should().Be(textures.Error, "and the placeholder is what the sprite carries, so a game can read what it draws");
     }
 
     [Fact]
@@ -169,6 +169,26 @@ public sealed class RenderSystemTests
         renderer.Textures.Should().HaveCount(2);
         renderer.Textures[1].Should().NotBe(first);
         renderer.Textures[1].Id.Should().NotBe(0, "the sprite is drawn from a texture that is alive rather than from the one that was released");
+    }
+
+    [Fact]
+    public void RenderSystem_ASpriteWhosePathChanged_DrawsTheImageOfTheNewPath()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var textures = new TextureService(new CountingImageLoader(), renderer);
+        var system = new RenderSystem(renderer, new SpriteSorter(), textures);
+        Entity entity = CreateSprite(world, new Vector2(100f, 100f), path: "Textures/Tiles/one.bmp");
+
+        system.Render(world, Camera(1280f, 720f));
+
+        world.GetRef<SpriteComponent>(entity).TexturePath = "Textures/Tiles/two.bmp";
+        system.Render(world, Camera(1280f, 720f));
+
+        renderer.Textures.Should().HaveCount(2);
+        renderer.Textures[1].Should().NotBe(renderer.Textures[0], "the path is what the image is, so a game swaps the image of a sprite by changing the path rather than by hunting for a handle");
+        renderer.Textures[1].Id.Should().NotBe(0);
+        textures.MissingCount.Should().Be(0);
     }
 
     private static Camera2D Camera(float width, float height, float zoom = 1f) => new()

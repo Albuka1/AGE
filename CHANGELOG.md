@@ -58,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the data of every prototype without knowing what a game reads them as. CI runs the tool over the content the engine
   ships, and a game with kinds of its own reads `ContentLinter` from its own host.
 - A sprite names its image by path: `SpriteComponent.TexturePath` is what a prototype or a scene writes, and the texture
-  service resolves it the first time the sprite is drawn, so a scene that was loaded draws without a game putting device
+  service resolves it by path whenever the sprite is drawn, so a scene that was loaded draws without a game putting device
   handles back by hand — the last piece of code that a game had to write around a save is gone from the sample. The handle
   belongs to the device and is no longer part of a scene (`SpriteComponent.Texture` is not written), which also means a
   document that writes a number for it is refused rather than silently saved.

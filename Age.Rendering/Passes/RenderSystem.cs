@@ -93,21 +93,16 @@ public sealed class RenderSystem : IRenderPass
     /// <param name="sprite">The sprite that is being drawn.</param>
     /// <returns>The handle of the image, or the placeholder when the image is not there.</returns>
     /// <remarks>
-    /// A handle is written back into the component, so the image is asked for once and every frame after the first draws
-    /// what it resolved. A handle that the service does not hold any more is one from before everything was unloaded, and
-    /// the path is what the content of the game says the image is: it is resolved again rather than drawn from a texture
-    /// that is gone. A sprite without a path and without a handle is drawn as a solid color quad, which is what the
-    /// renderer draws for a zero identifier, and one whose image is missing is drawn as the placeholder of the texture
-    /// service.
+    /// The path of the component is what content says the image is, so it is resolved whenever it is set: the handle of the
+    /// component is a copy of what the last frame resolved, and a game that changes the path of a sprite gets the image of the
+    /// new one without clearing that copy itself. The service answers a path with what it already resolved, so the image is
+    /// uploaded once however many frames ask for it, and the handle that was resolved is written back into the component for a
+    /// game to read. A sprite without a path and without a handle is drawn as a solid color quad, which is what the renderer
+    /// draws for a zero identifier, and one whose image is missing is drawn as the placeholder of the texture service.
     /// </remarks>
     private TextureHandle Texture(World world, Entity entity, in SpriteComponent sprite)
     {
         if (_textures is null || sprite.TexturePath is not string path)
-        {
-            return sprite.Texture;
-        }
-
-        if (sprite.Texture.Id != 0 && _textures.IsAlive(sprite.Texture))
         {
             return sprite.Texture;
         }
