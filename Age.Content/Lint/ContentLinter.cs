@@ -411,6 +411,8 @@ public sealed class ContentLinter
                 continue;
             }
 
+            CheckNestedResources(component, member, MemberType(member), field.Value, problems);
+
             if (member.GetCustomAttribute<ResourcePathAttribute>() is null)
             {
                 continue;
@@ -431,6 +433,114 @@ public sealed class ContentLinter
 
         CheckState(component, type, components, problems);
     }
+
+    /// <summary>Checks the resource paths that a value holds inside the members of a struct, such as the stack of fonts of a style.</summary>
+    /// <param name="component">The component that the value belongs to.</param>
+    /// <param name="member">The member of the type that holds the value, which is what a problem names.</param>
+    /// <param name="type">The type of the value: the type of the member, or the type of the elements of a list of them.</param>
+    /// <param name="value">The value of that member in the document.</param>
+    /// <param name="problems">The problems that are collected.</param>
+    /// <param name="depth">How deep the walk already is, which bounds the types that hold one another.</param>
+    /// <remarks>
+    /// A path that a document writes inside a struct is checked the same way as one at the top of a component, so a font of a
+    /// stack is refused by a build rather than reaching a frame. The type of the value is carried along rather than read from
+    /// the member again, because the elements of a list are walked under the type of the member that holds the list, and a
+    /// name that a list does not have would end the walk in silence. Only a type that holds a path somewhere is walked, which
+    /// keeps the walk out of the types that are numbers, boxes and colors.
+    /// </remarks>
+    private void CheckNestedResources(PrototypeComponent component, MemberInfo member, Type type, JsonElement value, List<LintProblem> problems, int depth = 0)
+    {
+        if (depth > 2)
+        {
+            return;
+        }
+
+        if (value.ValueKind == JsonValueKind.Array)
+        {
+            if (type.GetElementType() is not Type element)
+            {
+                return;
+            }
+
+            foreach (JsonElement item in value.EnumerateArray())
+            {
+                CheckNestedResources(component, member, element, item, problems, depth + 1);
+            }
+
+            return;
+        }
+
+        if (value.ValueKind != JsonValueKind.Object || !HoldsResourcePath(type))
+        {
+            return;
+        }
+
+        foreach (JsonProperty field in value.EnumerateObject())
+        {
+            if (Member(type, field.Name) is not MemberInfo nested)
+            {
+                continue;
+            }
+
+            if (nested.GetCustomAttribute<ResourcePathAttribute>() is null)
+            {
+                CheckNestedResources(component, nested, MemberType(nested), field.Value, problems, depth + 1);
+
+                continue;
+            }
+
+            if (field.Value.ValueKind != JsonValueKind.String)
+            {
+                problems.Add(new LintProblem(
+                    component.File,
+                    component.Line,
+                    $"the field '{nested.Name}' of '{member.Name}' of the component '{component.Name}' holds the path of a resource, and this value is {field.Value.ValueKind}"));
+
+                continue;
+            }
+
+            CheckResource(component, nested, field.Value.GetString()!, problems);
+        }
+    }
+
+    /// <summary>Returns a value indicating whether a type holds a member that names the path of a resource.</summary>
+    /// <param name="type">The type to look through.</param>
+    /// <param name="depth">How deep the walk already is.</param>
+    /// <returns><see langword="true"/> when a member of the type, or of a type that a member holds, names the path of a resource.</returns>
+    /// <remarks>A type outside the assemblies of the engine is not walked: what a game hands to the engine is not a document of the engine's own content.</remarks>
+    private bool HoldsResourcePath(Type type, int depth = 0)
+    {
+        if (depth > 2 || type.IsPrimitive || type.IsEnum || type == typeof(string))
+        {
+            return false;
+        }
+
+        if (type.IsArray)
+        {
+            return type.GetElementType() is Type element && HoldsResourcePath(element, depth + 1);
+        }
+
+        if (type.Namespace is not string space || !space.StartsWith("Age.", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (MemberInfo member in Members(type))
+        {
+            if (member.GetCustomAttribute<ResourcePathAttribute>() is not null || HoldsResourcePath(MemberType(member), depth + 1))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Returns the type of a member of a component.</summary>
+    /// <param name="member">The member to read the type of.</param>
+    /// <returns>The type of the value of the member.</returns>
+    private static Type MemberType(MemberInfo member) =>
+        member is FieldInfo field ? field.FieldType : ((PropertyInfo)member).PropertyType;
 
     /// <summary>Checks that a state a component names is one the sheet it names declares, which is what a game would find out at the first frame instead.</summary>
     /// <remarks>

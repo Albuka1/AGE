@@ -15,7 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a font takes the first and the last character of the range to cover — the space to the tilde is the default, and the space
   to the end of the Cyrillic block is what a language with another script needs — and a font is cached by its path, its
   height and its range. A line whose font cannot be baked is drawn with the built-in font of the renderer and reported once
-  per path, so a mistake in the content of a game is visible and cheap rather than fatal.
+  per path, and a build refuses a font of a stack that no file answers, because the linter reads the paths inside a style as
+  well as the ones a component writes at its top, so a mistake in the content of a game is visible and cheap rather than
+  fatal.
 
 ### Changed
 

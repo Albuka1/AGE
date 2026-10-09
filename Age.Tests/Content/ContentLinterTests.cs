@@ -88,6 +88,26 @@ public sealed class ContentLinterTests
     }
 
     [Fact]
+    public void ContentLinter_FontOfAStyleThatIsNotThere_IsReported()
+    {
+        LintReport report = Lint("- type: entity\n  id: Broken\n  components:\n    - type: Text\n      Text: Hello\n      Style:\n        Fonts:\n          - Path: Fonts/Nowhere/gone.ttf\n            PixelHeight: 24\n");
+
+        report.Count.Should().Be(1);
+        report.Problems.Should().ContainSingle().Which.Message.Should().Contain("Fonts/Nowhere/gone.ttf");
+    }
+
+    [Fact]
+    public void ContentLinter_FontOfAStyleThatIsThere_IsNotReported()
+    {
+        LintReport report = Lint(
+            "- type: entity\n  id: Fine\n  components:\n    - type: Text\n      Text: Hello\n      Style:\n        Fonts:\n          - Path: Fonts/Cousine-Regular.ttf\n            PixelHeight: 24\n",
+            "Fonts/Cousine-Regular.ttf");
+
+        report.IsClean.Should().BeTrue("the font the content names is one the build ships");
+        report.Count.Should().Be(1);
+    }
+
+    [Fact]
     public void ContentLinter_ASheetOfABuild_IsCheckedAgainstItsImage()
     {
         LintReport report = LintSheet(Sheet);
