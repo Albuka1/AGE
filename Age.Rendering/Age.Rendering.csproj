@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Age.Assets\Age.Assets.csproj" />
+    <ProjectReference Include="..\Age.Content\Age.Content.csproj" />
     <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
     <ProjectReference Include="..\Age.UI\Age.UI.csproj" />
   </ItemGroup>

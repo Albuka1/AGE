@@ -173,7 +173,7 @@ public sealed class PrototypeSceneTests
     }
 
     [Fact]
-    public void PrototypeScene_AComponentThatThePrototypeDoesNotDeclare_IsWrittenAndComesBack()
+    public void PrototypeScene_AComponentThatDiffersFromThePrototype_IsWrittenAndComesBack()
     {
         using ServiceProvider provider = Create();
         SpawnService spawner = provider.GetRequiredService<SpawnService>();
@@ -182,7 +182,8 @@ public sealed class PrototypeSceneTests
 
         List<Entity> spawned = [.. Enumerable.Range(0, 2).Select(_ => spawner.Spawn(world, "Goblin"))];
 
-        // A game gives one goblin a sprite, which its prototype does not declare: the scene writes that component in full.
+        // One goblin of the two draws something other than what its kind draws: the scene writes that one component and
+        // leaves the other goblin as the prototype describes it.
         world.Set(spawned[0], new SpriteComponent { TexturePath = "Textures/Tiles/tiles.bmp", Size = new Vector2(32f, 32f), Color = Color.Red });
 
         string json = scenes.Save(world);
@@ -204,7 +205,9 @@ public sealed class PrototypeSceneTests
 
         loaded.Get<SpriteComponent>(restored[0]).TexturePath.Should().Be("Textures/Tiles/tiles.bmp");
         loaded.Get<SpriteComponent>(restored[0]).Color.Should().Be(Color.Red);
-        loaded.Has<SpriteComponent>(restored[1]).Should().BeFalse("a component that the prototype does not declare is not invented for the others");
+        loaded.Get<SpriteComponent>(restored[1]).SheetPath.Should().Be("Textures/Entities/goblin.yml", "the second goblin draws what its prototype says");
+        loaded.Get<SpriteComponent>(restored[1]).TexturePath.Should().BeNull("the difference of one entity does not follow the other");
+        loaded.Get<SpriteAnimationComponent>(restored[1]).State.Should().Be("walk", "and what its prototype says about playing comes with it");
     }
 
     /// <summary>Builds a provider whose content is the one the engine ships, read as entities.</summary>

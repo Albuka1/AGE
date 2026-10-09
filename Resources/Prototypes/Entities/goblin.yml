@@ -8,3 +8,15 @@
       Size:
         X: 24
         Y: 24
+    # What the goblin draws: the sheet next to its image says how the frames of a state lie on it, so this file names a
+    # state rather than a rectangle of an image.
+    - type: Sprite
+      SheetPath: Textures/Entities/goblin.yml
+      State: idle
+      Color:
+        R: 255
+        G: 255
+        B: 255
+        A: 255
+    - type: SpriteAnimation
+      State: walk

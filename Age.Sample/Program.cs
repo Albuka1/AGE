@@ -44,6 +44,10 @@ pipeline.Add(collisions);
 pipeline.Add(provider.GetRequiredService<TimerSystem>());
 pipeline.Add(provider.GetRequiredService<TweenSystem>());
 
+// The animation of a sprite sheet plays on the same fixed steps: the goblin this game spawns from content walks because its
+// prototype names a state of the sheet, not because this game counts frames.
+pipeline.Add(provider.GetRequiredService<SpriteAnimationSystem>());
+
 // The interface is a frame system, not a step system: the pointer is a state of the frame, and it keeps working while
 // the simulation is paused, which is the whole point of a pause menu.
 pipeline.AddFrame(provider.GetRequiredService<UIUpdateSystem>());

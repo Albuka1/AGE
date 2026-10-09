@@ -27,7 +27,7 @@ public sealed class PrototypeContentTests
 
         Prototype goblin = prototypes.Get<Prototype>("Goblin");
         goblin.Parent.Should().Be("CreatureBase");
-        goblin.Components.Select(component => component.Name).Should().Equal("Transform", "Collider");
+        goblin.Components.Select(component => component.Name).Should().Equal("Transform", "Collider", "Sprite", "SpriteAnimation");
         goblin.TryGet("Collider", out PrototypeComponent? collider).Should().BeTrue();
         collider!.Values.GetProperty("Size").GetProperty("X").GetInt32().Should().Be(24, "the goblin declares its own collider over the one of a creature");
         goblin.File.Should().Be("Prototypes/Entities/goblin.yml");

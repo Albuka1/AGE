@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A sprite sheet is data: the document next to an image declares the grid (`cell`, `columns`, `rows`) and the states over it
+  (the row a state lies on, the frames at the start of it, the length of a frame and whether it repeats), and
+  `SpriteComponent.SheetPath` together with `State` and `Frame` picks one frame of it, so a game never writes a normalized
+  coordinate and a region is arithmetic over the declared grid. `SpriteSheetReader` reads that document in the same subset
+  of YAML as the rest of the content and refuses a state that does not fit the grid with the file and the line.
+  `ISpriteSheetService` answers a renderer with the texture and the region of a frame — a document, a state or an image that
+  is not there is the placeholder and one line in the log rather than an exception in the middle of a frame — and
+  `SpriteAnimationSystem` plays a state on the time of the simulation, writes the frame into the sprite and raises
+  `SpriteAnimationFinishedEvent` once for a state that does not repeat. A layer of a character is an entity of its own,
+  because the engine draws in `ZOrder`, and a direction is a state of its own. The repository now ships an animated goblin:
+  `Textures/Entities/goblin.tga` with the document beside it, which the prototype of the goblin names, so the content of the
+  engine animates without one line of code about frames.
 - The `Resources` folder is a catalogue rather than a pile: `Resources/README.md` says where a file goes
   (`<Section>/<Subsection>/<file>`, the same path in the engine, in a document of content and in the table), lists every
   file the folder holds and who uses it, and names the sections that arrive with a later step (`Locale` with F2, `Maps`,

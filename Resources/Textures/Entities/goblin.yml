@@ -1,0 +1,23 @@
+# The frames of the goblin, in the cell grid of the image next to this file. A state is a row of the grid and the frames
+# at the start of it, and a direction is a state of its own, so a character that walks in four directions declares four
+# states rather than a count of directions and a mask of frames.
+image: Textures/Entities/goblin.tga
+cell:
+  X: 16
+  Y: 16
+columns: 4
+rows: 2
+states:
+  idle:
+    row: 0
+    frames: 2
+    delay: 0.4
+  walk:
+    row: 0
+    frames: 4
+    delay: 0.12
+  attack:
+    row: 1
+    frames: 3
+    delay: 0.1
+    loop: false

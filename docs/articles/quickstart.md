@@ -289,6 +289,54 @@ world.Set(sprite, new SpriteComponent { Texture = playerTexture, Size = new Vect
 `ITextureService` decodes the file once, uploads it and caches it by path, so loading the same
 image twice returns the same texture. Release it with `Unload` when the level that used it ends.
 
+## Draw an animated character
+
+The frames of a character live in an image and a document beside it, which says where each state lies on the grid:
+
+```yaml
+image: Textures/Entities/goblin.tga
+cell:
+  X: 16
+  Y: 16
+columns: 4
+rows: 2
+states:
+  idle:
+    row: 0
+    frames: 2
+    delay: 0.4
+  attack:
+    row: 1
+    frames: 3
+    delay: 0.1
+    loop: false
+```
+
+A sprite names the document, the state and the frame; an animation plays a state on the time of the simulation:
+
+```csharp
+world.Set(goblin, new SpriteComponent { SheetPath = "Textures/Entities/goblin.yml", State = "idle", Color = Color.White });
+world.Set(goblin, new SpriteAnimationComponent { State = "walk" });
+```
+
+`SpriteAnimationSystem` runs in the fixed step next to the timers, writes the frame that is on screen into the
+`SpriteComponent` of the same entity, and raises `SpriteAnimationFinishedEvent` once when a state that does not loop
+reaches its last frame:
+
+```csharp
+world.Events.Subscribe<SpriteAnimationFinishedEvent>((entity, @event) =>
+{
+    ref SpriteAnimationComponent animation = ref world.GetRef<SpriteAnimationComponent>(entity);
+    animation.State = "idle";
+    animation.Paused = false;
+});
+```
+
+No coordinate of an image is written in a game: the region of a frame is arithmetic over the grid that the document
+declares. A layer of a character is an entity of its own with a higher `ZOrder`, and a direction is a state of its own. A
+document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once, and
+`Age.Content.Lint` checks the paths a prototype names against the files a build ships.
+
 ## Draw text
 
 ```csharp

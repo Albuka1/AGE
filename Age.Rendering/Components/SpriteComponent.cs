@@ -4,12 +4,25 @@ using Age.Core;
 namespace Age.Rendering;
 
 /// <summary>
-/// Draws the image that <see cref="TexturePath"/> names, a handle that a game set, or a solid color quad when neither is set.
+/// Draws the image that <see cref="TexturePath"/> names, the frame of the sheet that <see cref="SheetPath"/> and
+/// <see cref="State"/> name, a handle that a game set, or a solid color quad when none of them is set.
 /// </summary>
 /// <remarks>
-/// A sprite that content describes names its image by path, which is the one thing about a sprite that survives a save:
-/// the handle belongs to the graphics device, and a device is not saved. The path is resolved the first time the sprite is
+/// <para>
+/// A sprite that content describes names what it draws by path, which is the one thing about a sprite that survives a save:
+/// the handle belongs to the graphics device, and a device is not saved. A path is resolved the first time the sprite is
 /// drawn, and an image that is not there becomes the placeholder of the texture service rather than a failed frame.
+/// </para>
+/// <para>
+/// A sheet is the same idea for a character: the document next to the image says how the frames of a state lie on it, and
+/// <see cref="State"/> and <see cref="Frame"/> pick one, so a game never writes a normalized coordinate. A sprite that
+/// names a sheet and leaves <see cref="Size"/> at zero takes the size of one cell of it.
+/// </para>
+/// <para>
+/// A layer of a character is an entity of its own: the engine draws in <see cref="ZOrder"/>, so a body, its clothes and the
+/// effect over them are three entities at the same position with three orders, and each of them carries its own sheet and
+/// its own animation.
+/// </para>
 /// </remarks>
 [Component("Sprite")]
 public struct SpriteComponent : IComponent
@@ -32,6 +45,23 @@ public struct SpriteComponent : IComponent
     /// </remarks>
     [ResourcePath]
     public string? TexturePath;
+
+    /// <summary>Gets or sets the path of the document of a sprite sheet, relative to the game root.</summary>
+    /// <remarks>
+    /// A sheet wins over <see cref="TexturePath"/>, because the frames of a state are what a character draws. The document
+    /// is the one next to the image, in the catalogue of the repository, and it says the grid, the states and how fast
+    /// they play: see <c>Age.Content.Sheets.SpriteSheetReader</c>.
+    /// </remarks>
+    [ResourcePath]
+    public string? SheetPath;
+
+    /// <summary>Gets or sets the name of the state of the sheet that is drawn.</summary>
+    /// <remarks>A state that the sheet does not declare is drawn as the placeholder and reported once.</remarks>
+    public string? State;
+
+    /// <summary>Gets or sets the frame of the state that is drawn, counting from zero.</summary>
+    /// <remarks>A <see cref="SpriteAnimationSystem"/> writes this field, and a game may set it for a state that stands still.</remarks>
+    public int Frame;
 
     /// <summary>Gets or sets the base size, in pixels, before the transform scale is applied.</summary>
     public Vector2 Size;

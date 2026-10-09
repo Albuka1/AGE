@@ -1,0 +1,212 @@
+using Age.Assets;
+using Age.Core;
+using Age.Rendering;
+using FluentAssertions;
+using Xunit;
+
+namespace Age.Tests;
+
+public sealed class SpriteAnimationSystemTests : IDisposable
+{
+    private const string Sheet =
+        "image: Textures/Entities/goblin.bmp\n"
+        + "cell:\n"
+        + "  X: 16\n"
+        + "  Y: 16\n"
+        + "columns: 4\n"
+        + "rows: 2\n"
+        + "states:\n"
+        + "  walk:\n"
+        + "    row: 0\n"
+        + "    frames: 4\n"
+        + "    delay: 0.1\n"
+        + "  attack:\n"
+        + "    row: 1\n"
+        + "    frames: 3\n"
+        + "    delay: 0.1\n"
+        + "    loop: false\n";
+
+    private readonly string _root;
+    private readonly World _world = new();
+    private readonly List<SpriteAnimationFinishedEvent> _finished = [];
+    private readonly SpriteSheetService _sheets;
+    private readonly SpriteAnimationSystem _system;
+
+    public SpriteAnimationSystemTests()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "age-animation-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(Path.Combine(_root, "goblin.yml"), Sheet);
+
+        var assets = new NullAssetLoader();
+        assets.Initialize(_root);
+
+        _sheets = new SpriteSheetService(assets, new TextureService(new FakeImageLoader(), new FakeRenderer()));
+        _system = new SpriteAnimationSystem(_sheets);
+        _world.Events.Subscribe<SpriteAnimationFinishedEvent>((_, @event) => _finished.Add(@event));
+    }
+
+    public void Dispose() => Directory.Delete(_root, recursive: true);
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateThatDoesNotLoop_FinishesOnItsLastFrame()
+    {
+        Entity entity = Animate("attack");
+
+        Step(0.1f);
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(2);
+        _finished.Should().BeEmpty("the state still has its last frame to show");
+
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(2, "the last frame of a state that does not loop stays on screen");
+        _world.Get<SpriteAnimationComponent>(entity).Paused.Should().BeTrue("the play stands still until a game says what comes next");
+        _finished.Should().ContainSingle("three frames of a tenth of a second are over after three steps");
+        _finished[0].State.Should().Be("attack");
+        _finished[0].Entity.Should().Be(entity);
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateThatStandsStill_DoesNotReportAgain()
+    {
+        Entity entity = Animate("attack");
+        Step(0.1f);
+        Step(0.1f);
+        Step(0.1f);
+        _finished.Should().ContainSingle();
+
+        Step(0.1f);
+        Step(0.1f);
+
+        _finished.Should().ContainSingle();
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(2);
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateThatLoops_StartsOverAndNeverFinishes()
+    {
+        Entity entity = Animate("walk");
+
+        Step(0.1f);
+        Step(0.1f);
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(3);
+
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(0, "a state that loops starts over at its first frame");
+        _world.Get<SpriteAnimationComponent>(entity).Paused.Should().BeFalse();
+        _finished.Should().BeEmpty("a state that loops is never over");
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_Speed_PlaysFramesFaster()
+    {
+        Entity entity = Animate("walk");
+        _world.GetRef<SpriteAnimationComponent>(entity).Speed = 2f;
+
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(2, "twice the speed is twice the frames of a step");
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AStateTheSheetDoesNotDeclare_PlaysNothing()
+    {
+        Entity entity = Animate("jump");
+
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(0);
+        _finished.Should().BeEmpty();
+        _sheets.Missing.Should().Contain("goblin.yml:jump", "a state that a sheet does not declare is reported once");
+    }
+
+    [Fact]
+    public void SpriteAnimationSystem_AnEntityWithoutASheet_PlaysNothingAndDoesNotFail()
+    {
+        Entity entity = _world.CreateEntity();
+        _world.Set(entity, new SpriteComponent { Color = Color.White });
+        _world.Set(entity, new SpriteAnimationComponent { State = "walk" });
+
+        Step(0.1f);
+
+        _world.Get<SpriteComponent>(entity).Frame.Should().Be(0);
+        _finished.Should().BeEmpty();
+    }
+
+    /// <summary>Puts a sprite of the sheet and an animation of it on a new entity.</summary>
+    private Entity Animate(string state)
+    {
+        Entity entity = _world.CreateEntity();
+        _world.Set(entity, new SpriteComponent { SheetPath = "goblin.yml", State = state, Color = Color.White });
+        _world.Set(entity, new SpriteAnimationComponent { State = state });
+
+        return entity;
+    }
+
+    /// <summary>Runs one step of the simulation and hands the events that it raised to their subscribers.</summary>
+    private void Step(float seconds)
+    {
+        _system.Update(_world, new GameTime(seconds, 0d));
+        _world.Events.Dispatch();
+    }
+
+    private sealed class FakeImageLoader : IImageLoader
+    {
+        public ImageData Load(string relativePath) => new(2, 2, new byte[16]);
+    }
+
+    /// <summary>A renderer that only uploads textures, which is what the texture service asks of one.</summary>
+    private sealed class FakeRenderer : IRenderer
+    {
+        private int _created;
+
+        public Vector2 ViewportSize => new(1280f, 720f);
+
+        public void Attach(IWindowService window)
+        {
+        }
+
+        public void SetCamera(Camera2D camera)
+        {
+        }
+
+        public void BeginFrame(bool clear)
+        {
+        }
+
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+        }
+
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+        }
+
+        public void DrawRectangle(Rect rect, Color color)
+        {
+        }
+
+        public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color)
+        {
+        }
+
+        public void EndFrame()
+        {
+        }
+
+        public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => new(++_created);
+
+        public void ReleaseTexture(TextureHandle texture)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+}

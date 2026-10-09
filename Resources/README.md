@@ -22,6 +22,7 @@ A path is written the same way everywhere: in the engine, in a document of conte
 | `Fonts` | `Cousine-Regular.ttf`, the TrueType font the text tests bake and the sample draws with, with its `OFL.txt` license and its own `README.md` | `Age.Sample`, `Age.Tests` |
 | `Prototypes/Entities` | `base.yml`, which declares `CreatureBase`, and `goblin.yml`, which declares `Goblin` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Prototypes/Items` | `base.yml`, which declares `ItemBase`, and `sword.yml`, which declares `Sword` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
+| `Textures/Entities` | `goblin.tga`, the frames of the goblin in a grid of four cells by two, and `goblin.yml`, the document that says where each state lies on it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Icons` | `icon-20.png`, `icon-40.png` and `icon-60.png`, the window icon in the three sizes the operating system picks from | `Age.Rendering` |
 | `Textures/Logo` | `logo-320.png`, the logo the splash screen shows | `Age.Rendering` |
 | `Textures/Tiles` | `tiles.bmp`, the tile the sprite of the sample draws | `Age.Sample` |
