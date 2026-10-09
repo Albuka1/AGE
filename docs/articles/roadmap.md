@@ -21,6 +21,14 @@ What remains are the content features the engine does not have yet, and then the
 - Hierarchy.
 - User-defined shaders and materials.
 - OBB collision and multiple contacts.
+- A splash screen that works: the resources and the systems of the engine and of a game load while the logo is on screen, with
+  a bar under it, instead of a window that stands empty until everything is ready.
+- The graphics settings of a game as settings: vertical sync, a limit on the frames of a second, the mode of the window and a
+  scale, as console variables of the client, which the split of the settings into client and server sorts out when it comes.
+- The logs of the engine and of a game in the console, coloured by their level: an error in red, a warning in yellow, the rest
+  in the plain colour.
+- A console of its own: the completion of a command that is being typed, the value and the description of a setting in a
+  tooltip, and the strings of both of them read from the content like every other string of a game.
 - Text beyond fitting a line into a box: the kerning of a font is not read, one text carries one style, and a script that is
   written right to left or a font whose glyphs are colored pictures needs more than the layout has today.
 - A renderer that collects the quads of one texture into one buffer and draws them in one call: every glyph of a line, and every
