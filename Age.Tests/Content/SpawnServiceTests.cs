@@ -1,6 +1,7 @@
 using Age.Assets;
 using Age.Content;
 using Age.Content.Prototypes;
+using Age.Content.Yaml;
 using Age.Core;
 using Age.Physics;
 using Age.Rendering;
@@ -83,6 +84,43 @@ public sealed class SpawnServiceTests
 
         world.Get<TransformComponent>(sword).Scale.Should().Be(new Vector2(0.5f, 0.5f), "an item lies smaller than a creature");
         world.Get<ColliderComponent>(sword).Size.Should().Be(new Vector2(16f, 16f));
+    }
+
+    [Fact]
+    public void SpawnService_Spawn_APrototypeWhoseComponentCannotBeRead_LeavesTheWorldAsItWas()
+    {
+        using ServiceProvider provider = new ServiceCollection()
+            .AddAgeCore()
+            .AddAgeContent()
+            .AddAgePhysics()
+            .AddAgeUI()
+            .AddAgeRendering()
+            .BuildServiceProvider();
+
+        // A game reads its content with the kind it registered, and it is free to hand back something else: this one answers
+        // every document with a prototype that names a component the engine does not know, which is what a spawn refuses.
+        var ghost = new EntityPrototype(new Prototype(
+            "Ghost",
+            EntityPrototype.Kind,
+            parent: null,
+            "Prototypes/Entities/ghost.yml",
+            line: 3,
+            [new PrototypeComponent("Nowhere", YamlJson.Write(YamlReader.Read("Level: 3\n", "ghost.yml")), "Prototypes/Entities/ghost.yml", 5)]));
+
+        PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+        prototypes.Register(EntityPrototype.Kind, _ => ghost);
+
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+        prototypes.Load(assets, "Prototypes");
+
+        SpawnService spawner = provider.GetRequiredService<SpawnService>();
+        var world = new World();
+
+        Action spawn = () => spawner.Spawn(world, "Goblin", new Vector2(320f, 240f));
+
+        spawn.Should().Throw<InvalidOperationException>().WithMessage("*Nowhere*");
+        world.Enumerate().Should().BeEmpty("half of a creature is worse than none of it");
     }
 
     /// <summary>Builds a provider whose content is the one the engine ships.</summary>

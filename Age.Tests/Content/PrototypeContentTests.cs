@@ -16,9 +16,10 @@ public sealed class PrototypeContentTests
     [Fact]
     public void PrototypeContent_WhatTheEngineShips_LoadsInheritsAndValidates()
     {
+        using ServiceProvider provider = Create();
         var assets = new NullAssetLoader();
         assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
-        PrototypeManager prototypes = Create();
+        PrototypeManager prototypes = ReadAsEntity(provider);
 
         int count = prototypes.Load(assets, "Prototypes");
 
@@ -55,7 +56,8 @@ public sealed class PrototypeContentTests
 
             var assets = new NullAssetLoader();
             assets.Initialize(root);
-            PrototypeManager prototypes = Create();
+            using ServiceProvider provider = Create();
+            PrototypeManager prototypes = ReadAsEntity(provider);
 
             prototypes.Load(assets, "Prototypes").Should().Be(2, "a file that is not a document is left alone");
             prototypes.Ids.Should().Equal("Base", "One");
@@ -68,17 +70,19 @@ public sealed class PrototypeContentTests
         }
     }
 
-    /// <summary>Builds a manager over the components of the engine, with one kind of prototype that holds the data itself.</summary>
-    private static PrototypeManager Create()
-    {
-        using ServiceProvider provider = new ServiceCollection()
-            .AddAgeCore()
-            .AddAgeContent()
-            .AddAgePhysics()
-            .AddAgeUI()
-            .AddAgeRendering()
-            .BuildServiceProvider();
+    /// <summary>Builds a container whose registrations hold the components of the engine.</summary>
+    private static ServiceProvider Create() => new ServiceCollection()
+        .AddAgeCore()
+        .AddAgeContent()
+        .AddAgePhysics()
+        .AddAgeUI()
+        .AddAgeRendering()
+        .BuildServiceProvider();
 
+    /// <summary>Takes the manager of a container and registers the kind that reads a prototype as the data itself.</summary>
+    /// <remarks>The container stays alive while the manager is used: the manager is a singleton of it, not a copy of it.</remarks>
+    private static PrototypeManager ReadAsEntity(ServiceProvider provider)
+    {
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register<Prototype>("entity", prototype => prototype);
         return prototypes;

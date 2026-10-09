@@ -15,13 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   document declares, read by the same contract that reads a scene — so what a document of content says and what a saved
   map says reach an entity the same way. A spawn places what carries a transform, `TrySpawn` reports a prototype that the
   content does not hold, a component that nothing registered is refused with the file and the line that named it, and a
-  map of a hundred units of one prototype is a hundred calls rather than a hundred copies. `AddAgeContent` registers the
-  service over the manager and the component registry, and the sample puts a goblin of the content in the world from its
-  console.
+  map of a hundred units of one prototype is a hundred calls rather than a hundred copies, and a spawn that fails leaves
+  the world as it was, because every component of a prototype is read before anything of it reaches an entity.
+  `AddAgeContent` registers the service over the manager and the component registry, and the sample puts a goblin of the
+  content in the world from its console.
 - `IAssetLoader.Enumerate`, which returns the files of a folder in it and below it, ordered by ordinal and written with a
-  forward slash whatever the platform uses, so a folder of content is read the same way on every machine; a folder that
-  cannot be walked is refused by name. `PrototypeManager.Load(IAssetLoader, folder)` reads every `*.yml` and `*.yaml` of a
-  folder before it resolves any of them, because a prototype may inherit from one that another file declares, leaves files
+  forward slash whatever the platform uses, so a folder of content is read the same way on every machine, and a link is
+  not followed, so walking the content of a game never leaves the game root; a folder that cannot be walked is refused by
+  name. `PrototypeManager.Load(IAssetLoader, folder)` reads every `*.yml` and `*.yaml` of a folder before it resolves any
+  of them, because a prototype may inherit from one that another file declares, leaves files
   that are not documents alone, and treats a folder that is not there as content that holds nothing. `AddAgeContent`
   registers the manager over the component registry of the container. `Resources/Prototypes` now ships the first content
   of the engine: a `CreatureBase` with the goblin that inherits it, and an `ItemBase` with the sword that inherits it,

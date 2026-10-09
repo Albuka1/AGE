@@ -70,9 +70,18 @@ public sealed class NullAssetLoader : IAssetLoader
         string root = _root!;
 
         // The paths are materialized here rather than lazily, so that a folder that cannot be walked says so where the call
-        // was made, and so that the order of the files is the order of their names on every machine.
+        // was made, and so that the order of the files is the order of their names on every machine. The attributes that
+        // are skipped hold one entry of the enumeration back, and it is the link: a folder of a game is walked inside the
+        // game root, while a link is a way out of it. Every other attribute is left alone, so a file whose name looks
+        // hidden is still content.
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+        };
+
         return Directory
-            .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+            .EnumerateFiles(folder, "*", options)
             .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();

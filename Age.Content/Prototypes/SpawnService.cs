@@ -104,9 +104,14 @@ public sealed class SpawnService
     }
 
     /// <summary>Creates an entity and attaches the components of a prototype that was resolved already.</summary>
+    /// <remarks>
+    /// Every component of the prototype is read before anything of it reaches the world, and an entity that could not
+    /// take one of them goes away again, so a spawn that fails leaves the world as it was rather than holding half of a
+    /// thing that no document describes.
+    /// </remarks>
     private Entity Spawn(World world, EntityPrototype prototype)
     {
-        Entity entity = world.CreateEntity();
+        var components = new List<(string Name, object Values)>(prototype.Components.Count);
 
         foreach (PrototypeComponent component in prototype.Components)
         {
@@ -115,7 +120,22 @@ public sealed class SpawnService
                 throw new InvalidOperationException($"The component '{component.Name}' of '{prototype.Id}' is not registered, so nothing can attach it ({component.File}, line {component.Line}).");
             }
 
-            _components.TryApply(component.Name, world, entity, values);
+            components.Add((component.Name, values));
+        }
+
+        Entity entity = world.CreateEntity();
+
+        try
+        {
+            foreach ((string name, object values) in components)
+            {
+                _components.TryApply(name, world, entity, values);
+            }
+        }
+        catch
+        {
+            world.DestroyEntity(entity);
+            throw;
         }
 
         return entity;

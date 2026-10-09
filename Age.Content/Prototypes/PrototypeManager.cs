@@ -103,10 +103,18 @@ public sealed class PrototypeManager : IPrototypeManager
     /// <exception cref="YamlException">A document is not one this engine reads.</exception>
     /// <exception cref="PrototypeException">A document does not describe a prototype, and the error names the file and the line.</exception>
     /// <remarks>
+    /// <para>
     /// Every file of the folder is read before any of them is resolved, because a prototype may inherit from one that
     /// another file declares, and the files are read in the order the loader returns them, so a content is read the same
     /// way everywhere. A file that is not a document of YAML is left alone, and a folder that is not there holds nothing
     /// rather than being an error.
+    /// </para>
+    /// <para>
+    /// A manager is filled once, at startup, and this is the call that fills it: what the documents of the folder declare
+    /// is added to the content the manager already holds, and then the whole content is built again. A second call
+    /// therefore reads more files into the same content and refuses an identifier that any of them declares twice, so a
+    /// game loads the folder of its content once and hands out what was built rather than reloading it.
+    /// </para>
     /// </remarks>
     public int Load(IAssetLoader assets, string folder)
     {
