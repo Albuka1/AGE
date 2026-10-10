@@ -77,6 +77,11 @@ public interface ITextureService
     /// </remarks>
     Vector2 Size(TextureHandle texture);
 
+    /// <summary>Returns every image this service loaded, with the path that named it and the size it was decoded at.</summary>
+    /// <returns>The textures in the order they were first asked about, which is what a developer page reports.</returns>
+    /// <remarks>A page that gathers the textures of a run reads this rather than walking the pool the service keeps to itself.</remarks>
+    IEnumerable<(string Path, TextureHandle Texture, Vector2 Size)> Textures { get; }
+
     /// <summary>Deletes the texture behind the handle and forgets its path, so loading the path again decodes it anew.</summary>
     /// <param name="texture">The handle of the texture to delete.</param>
     /// <returns><see langword="true"/> when a loaded texture was deleted, <see langword="false"/> when the handle was stale or not owned by this service.</returns>

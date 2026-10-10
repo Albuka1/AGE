@@ -86,7 +86,10 @@ public sealed class UILayoutSystem : IFrameSystem
         {
             Entity parent = ParentOf(world, entity);
 
-            if (!world.IsAlive(parent))
+            // An element is a root when it names no parent, when the parent is not in the world, or when the parent is not itself an
+            // element: a canvas is what a tree of the interface hangs from, and it is placed by the scaler rather than by an anchor, so
+            // its children are laid out against the canvas rather than against a rectangle it does not have.
+            if (!world.IsAlive(parent) || !world.Has<RectTransformComponent>(parent))
             {
                 Layout(world, entity, area, scale, visited);
             }

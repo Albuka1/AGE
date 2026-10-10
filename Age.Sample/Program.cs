@@ -129,6 +129,12 @@ IDevWindowService devWindow = provider.GetRequiredService<IDevWindowService>();
 // than what the engine holds: the console stays, the world page comes and goes.
 devWindow.Add(new WorldTab(() => world, provider.GetRequiredService<FixedTimestep>()));
 
+// The pages of the engine that gather the scene: the tree of the interface, the images the run resolved, and the prototypes with what
+// was built from them. Each is a tab of its own, so a person reads one thing at a time rather than a wall of numbers.
+devWindow.Add(new UITreeTab(() => world));
+devWindow.Add(new TexturesTab(textures, () => world));
+devWindow.Add(new PrototypesTab(() => prototypes.Ids, () => world));
+
 // The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
 // content, so they are made before the loading starts. The settings and the language are read again in a loading step, once
 // the loader knows where the game keeps its files, which is the step that turns the choice of a person into what the game
@@ -322,6 +328,11 @@ loading.Add(() =>
         Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
     });
 
+    // The panel and the other corner stand inside the canvas rather than loose in the world, which is what the tree of the interface is:
+    // the canvas is the root, both elements are its children, and the page `ui` of the developer window prints them one level in.
+    world.Set(panel, new ParentComponent { Parent = world.Reference(canvas) });
+    world.Set(canvas, new ChildrenComponent { Children = [world.Reference(panel)] });
+
     // The other corner of the same canvas, with the opposite anchor and pivot: this element keeps its margin from the bottom-right
     // corner of the window however the window is resized, which is what the anchors are for.
     corner = world.CreateEntity();
@@ -342,6 +353,10 @@ loading.Add(() =>
         Text = "corner anchor",
         Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
     });
+
+    // The second child of the canvas, which the `ui` page prints beside the first one, both one level under the root.
+    world.Set(corner, new ParentComponent { Parent = world.Reference(canvas) });
+    world.GetRef<ChildrenComponent>(canvas).Children = [world.Reference(panel), world.Reference(corner)];
 
     RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
     TextRenderSystem textRenderSystem = provider.GetRequiredService<TextRenderSystem>();

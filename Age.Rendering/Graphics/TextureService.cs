@@ -24,6 +24,7 @@ public sealed class TextureService : ITextureService, IDisposable
     private readonly List<string> _missing = [];
     private readonly HashSet<string> _broken = new(StringComparer.Ordinal);
     private readonly Dictionary<int, Vector2> _sizes = [];
+    private readonly List<string> _order = [];
     private TextureHandle? _error;
 
     /// <summary>Initializes the service with the decoder and the renderer it works through.</summary>
@@ -110,6 +111,11 @@ public sealed class TextureService : ITextureService, IDisposable
         // device is not asked how large a texture it uploaded is, and the pixels are the one place the number is known.
         _sizes[uploaded.Id] = new Vector2(image.Width, image.Height);
 
+        if (!_order.Contains(relativePath))
+        {
+            _order.Add(relativePath);
+        }
+
         return new TextureHandle(slot, uploaded.Id);
     }
 
@@ -117,6 +123,21 @@ public sealed class TextureService : ITextureService, IDisposable
     /// <remarks>A handle the renderer made itself is not one this service decoded, so its size is unknown and answers zero.</remarks>
     public Vector2 Size(TextureHandle texture) =>
         _sizes.TryGetValue(texture.Id, out Vector2 size) ? size : Vector2.Zero;
+
+    /// <inheritdoc />
+    public IEnumerable<(string Path, TextureHandle Texture, Vector2 Size)> Textures
+    {
+        get
+        {
+            foreach (string path in _order)
+            {
+                if (_textures.TryGetHandle(path, out ResourceHandle slot) && _textures.TryGet(slot, out uint id))
+                {
+                    yield return (path, new TextureHandle(slot, (int)id), _sizes.TryGetValue((int)id, out Vector2 size) ? size : Vector2.Zero);
+                }
+            }
+        }
+    }
 
     /// <inheritdoc />
     public bool IsAlive(TextureHandle texture) => texture.Resource.IsValid && _textures.TryGet(texture.Resource, out _);
@@ -166,6 +187,7 @@ public sealed class TextureService : ITextureService, IDisposable
         // handle, so the next call asks for a new one rather than handing out a texture that is gone.
         _error = null;
         _sizes.Clear();
+        _order.Clear();
 
         failure?.Throw();
     }
