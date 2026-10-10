@@ -26,19 +26,19 @@ A path is written the same way everywhere: in the engine, in a document of conte
 | `Audio/Effects` | `click.wav`, the short sound effect a press plays | `Age.Sample` |
 | `Audio/Samples` | `sample.ogg` and `sample.mp3`, two seconds of two real recordings that the decoders read, with a `README.md` that says where they come from | `Age.Tests` |
 | `Fonts` | `Cousine-Regular.ttf`, the TrueType font the text tests bake and the sample draws with, with its `OFL.txt` license and its own `README.md` | `Age.Sample`, `Age.Tests` |
-| `Locale/en/Entities` | `creatures.yml`, the names and the descriptions of the creatures in the base language | `Age.Content`, `Age.Tests` |
+| `Locale/en/Entities` | `creatures.yml`, the names and the descriptions of the creatures in the base language, and `props.yml`, those of the beacon | `Age.Content`, `Age.Tests` |
 | `Locale/en/Items` | `items.yml`, the names and the descriptions of the items in the base language | `Age.Content`, `Age.Content.Lint`, `Age.Tests` |
 | `Locale/en/Ui` | `window.yml`, the strings of the window in the base language, including one that is written by count | `Age.Content`, `Age.Tests` |
-| `Locale/ru/Entities` | `creatures.yml`, the same keys in Russian | `Age.Tests` |
+| `Locale/ru/Entities` | `creatures.yml` and `props.yml`, the same keys in Russian | `Age.Tests` |
 | `Locale/ru/Items` | `items.yml`, the same keys in Russian | `Age.Tests` |
 | `Locale/ru/Ui` | `window.yml`, the same keys in Russian, with the three forms its counts are written in | `Age.Tests` |
-| `Prototypes/Entities` | `base.yml`, which declares `CreatureBase`, and `goblin.yml`, which declares `Goblin` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
+| `Prototypes/Entities` | `base.yml`, which declares `CreatureBase`, `goblin.yml`, which declares `Goblin` and inherits it, and `beacon.yml`, which declares `Beacon`, a sprite of two layers one of which is drawn with a shader | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Prototypes/Items` | `base.yml`, which declares `ItemBase`, and `sword.yml`, which declares `Sword` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Entities` | `goblin.tga`, the frames of the goblin in a grid of four cells by two, and `goblin.yml`, the document that says where each state lies on it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Icons` | `icon-20.png`, `icon-40.png` and `icon-60.png`, the window icon in the three sizes the operating system picks from | `Age.Rendering` |
 | `Textures/Logo` | `logo-320.png`, the logo the splash screen shows | `Age.Rendering` |
 | `Textures/Tiles` | `tiles.bmp`, the tile the sprite of the sample draws | `Age.Sample` |
-| `Shaders` | `vignette.frag`, the fragment stage that the sample draws over its frame to darken the edges of it | `Age.Sample`, `Age.Tests` |
+| `Shaders` | `vignette.frag`, the fragment stage that the sample draws over its frame to darken the edges of it, and `pulse.frag`, the stage it draws the second layer of its beacon with | `Age.Sample`, `Age.Tests` |
 
 The table holds every file of this folder, and a test walks the folder and checks it: a file that no line mentions fails
 the build, and a path this file mentions that is not there fails it too. That is what keeps this catalogue from going

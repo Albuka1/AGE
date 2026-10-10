@@ -4,8 +4,9 @@ using Age.Core;
 namespace Age.Rendering;
 
 /// <summary>
-/// Draws the image that <see cref="TexturePath"/> names, the frame of the sheet that <see cref="SheetPath"/> and
-/// <see cref="State"/> name, a handle that a game set, or a solid color quad when none of them is set.
+/// Draws the layers that <see cref="Layers"/> names, the image that <see cref="TexturePath"/> names, the frame of the sheet
+/// that <see cref="SheetPath"/> and <see cref="State"/> name, a handle that a game set, or a solid color quad when none of
+/// them is set.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,9 +20,11 @@ namespace Age.Rendering;
 /// names a sheet and leaves <see cref="Size"/> at zero takes the size of one cell of it.
 /// </para>
 /// <para>
-/// A layer of a character is an entity of its own: the engine draws in <see cref="ZOrder"/>, so a body, its clothes and the
-/// effect over them are three entities at the same position with three orders, and each of them carries its own sheet and
-/// its own animation.
+/// A part of a character is either a layer of one sprite or an entity of its own. The engine draws in <see cref="ZOrder"/>, so
+/// a body, its clothes and the effect over them are three entities at the same position with three orders, each of them with
+/// its own sheet and its own animation, which is what a part that moves on its own needs. They are the layers of one sprite
+/// when they are one picture drawn in one place: a layer brings an image and a shader of its own and is drawn at the box of the
+/// sprite, and nothing of it can be placed or turned apart from the rest.
 /// </para>
 /// </remarks>
 [Component("Sprite")]
@@ -48,6 +51,16 @@ public struct SpriteComponent : IComponent
     /// </remarks>
     [ResourcePath]
     public string? TexturePath;
+
+    /// <summary>Gets or sets the layers that the sprite is drawn from, in the order they are drawn.</summary>
+    /// <remarks>
+    /// A sprite that names layers is drawn from them instead of from the one image that <see cref="SheetPath"/> or
+    /// <see cref="TexturePath"/> names: every layer is drawn over the one before it, at the position, the size and the colour
+    /// of the sprite, with the image and the shader of its own. A sprite that leaves this null is what it was, so content
+    /// written without layers keeps drawing. The size of the layers is the size of the sprite, which is why a sprite that
+    /// names layers sets <see cref="Size"/>: the engine does not ask the device how large an image it uploaded is.
+    /// </remarks>
+    public SpriteLayer[]? Layers;
 
     /// <summary>Gets or sets the path of the document of a sprite sheet, relative to the game root.</summary>
     /// <remarks>

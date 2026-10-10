@@ -27,7 +27,7 @@ public sealed class ContentLinterTests
         LintReport report = linter.Lint("Prototypes");
 
         report.IsClean.Should().BeTrue("the content of the engine is what a build ships");
-        report.Count.Should().Be(4);
+        report.Count.Should().Be(5);
     }
 
     [Fact]
@@ -104,6 +104,30 @@ public sealed class ContentLinterTests
             "Fonts/Cousine-Regular.ttf");
 
         report.IsClean.Should().BeTrue("the font the content names is one the build ships");
+        report.Count.Should().Be(1);
+    }
+
+    [Fact]
+    public void ContentLinter_ImageOfALayerThatIsNotThere_IsReported()
+    {
+        LintReport report = Lint("- type: entity\n  id: Broken\n  components:\n    - type: Sprite\n      Layers:\n        - Name: base\n          Image: Textures/Nowhere/gone.png\n");
+
+        report.Count.Should().Be(1);
+        report.Problems.Should().ContainSingle().Which.Message.Should().Contain("Textures/Nowhere/gone.png");
+    }
+
+    [Fact]
+    public void ContentLinter_FilesOfALayerThatAreThere_AreNotReported()
+    {
+        // A layer names what a build has to ship twice: the image it draws and the stage that draws it. Both are read out of
+        // the list of layers rather than out of the fields of the component, so a path written inside a layer is checked the
+        // same way as one written at the top of a sprite.
+        LintReport report = LintWith(
+            "- type: entity\n  id: Fine\n  components:\n    - type: Sprite\n      Layers:\n        - Name: base\n          Image: Textures/Entities/thing.bmp\n        - Name: pulse\n          Image: Textures/Entities/thing.bmp\n          Shader: Shaders/pulse.frag\n",
+            ("Textures/Entities/thing.bmp", string.Empty),
+            ("Shaders/pulse.frag", "void main() { COLOR = sampleTexture(UV); }"));
+
+        report.IsClean.Should().BeTrue("the image and the stage of a layer are files that the build ships");
         report.Count.Should().Be(1);
     }
 

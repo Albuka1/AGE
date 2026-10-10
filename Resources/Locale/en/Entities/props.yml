@@ -1,0 +1,5 @@
+# The strings of the things of the engine that are not creatures, in the language every other language falls back to. A
+# prototype that writes no name of its own is named by the key of its identifier, so 'ent-Beacon' is what the beacon is called
+# whether or not the document writes it, and the linter of the content asks for that key before a build ships it.
+ent-Beacon: beacon
+ent-Beacon.desc: A thing of two layers, the second of them drawn with a shader of its own.

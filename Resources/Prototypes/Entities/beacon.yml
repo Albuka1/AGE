@@ -1,0 +1,32 @@
+# A beacon is a sprite of two layers: one image drawn over another, the second of them with a shader of its own, which is what
+# layers are for. The layers are drawn in the order they are written, so 'base' is at the bottom. The size is written here rather
+# than taken from an image, because the engine does not ask the device how large an image it uploaded is: a sprite that names
+# layers sets the box its layers are drawn at. The colour is written for the reason every sprite of the content writes one:
+# every layer is drawn with the tint of the sprite, and a sprite that names no colour draws its layers in no colour at all.
+- type: entity
+  id: Beacon
+  name: ent-Beacon
+  desc: ent-Beacon.desc
+  components:
+    - type: Transform
+      Position:
+        X: 640
+        Y: 360
+      Scale:
+        X: 1
+        Y: 1
+    - type: Sprite
+      Color:
+        R: 255
+        G: 255
+        B: 255
+        A: 255
+      Size:
+        X: 40
+        Y: 40
+      Layers:
+        - Name: base
+          Image: Textures/Tiles/tiles.bmp
+        - Name: pulse
+          Image: Textures/Tiles/tiles.bmp
+          Shader: Shaders/pulse.frag

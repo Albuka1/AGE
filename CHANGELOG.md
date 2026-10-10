@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A sprite is drawn from layers, each of them with an image and a shader of its own: `SpriteComponent.Layers` holds them in the
+  order they are drawn, every layer is drawn over the one before it at the position, the size and the colour of the sprite, and a
+  layer that names no shader is drawn with the program of the engine, which is what an unshaded layer is. The stage of a layer is
+  compiled on the first frame that draws it and kept while the renderer stays attached to the window that compiled it, so a layer
+  costs one lookup per frame rather than one file read; a stage that cannot be loaded is reported once in the log and the layer is
+  drawn without it. A document writes a layer where it writes the sprite, so `Age.Content.Lint` checks the image and the stage of
+  every layer against the files of a build the way it checks the image of a sprite.
 - A game draws with a shader of its own: `IShaderService` reads the stages of a shader from the content, compiles them with the
   renderer and keeps one program per pair of paths, and `IRenderer.UseShader`, `SetUniform` and `SetSampler` draw the quads
   that follow with it — the quads that were collected before a shader or a uniform changes are drawn first, because one draw

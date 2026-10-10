@@ -109,6 +109,11 @@ world.Set(second, new TransformComponent { Position = new Vector2(430f, 315f), S
 world.Set(second, new SpriteComponent { Size = new Vector2(64f, 64f), Color = Color.Green, ZOrder = 1 });
 world.Set(second, new ColliderComponent { Size = new Vector2(64f, 64f) });
 
+// A sprite of layers: two images drawn over one another at the same box, the second of them with a shader of its own, which is
+// what a layer is for. It is content like any other thing of the world, so the document names the layers; the pass of the world
+// compiles the stage of a layer the first time it draws it and keeps the program for every frame after that.
+spawner.Spawn(world, "Beacon", new Vector2(700f, 360f));
+
 // The interface of this game is authored against the resolution above rather than against pixels of a screen: the canvas
 // scales the whole of it to the window, and the elements below are anchored to the corners of that canvas instead of being put
 // at a pixel, so the same layout fits a display of any resolution and a window of any shape. The command `ui` reports the scale
@@ -304,6 +309,7 @@ console.Register("loc", "Reports the language the strings are read in, and switc
     console.Write($"items: {locale.Get("ui-entities", ("count", 1))}, {locale.Get("ui-entities", ("count", 4))}");
 });
 console.Register("goblin", "Puts a goblin of the content in the world, at 320 by 240.", _ => spawner.Spawn(world, "Goblin", new Vector2(320f, 240f)));
+console.Register("beacon", "Puts a sprite of two layers of the content in the world, at 700 by 360, the second layer of which is drawn with the pulse shader.", _ => spawner.Spawn(world, "Beacon", new Vector2(700f, 360f)));
 
 // The shader of this game is a setting of the sample rather than of the engine: `vignette` turns it on and off while the game
 // runs, which is what shows that the quads which were collected before a shader changes are drawn with the state they were

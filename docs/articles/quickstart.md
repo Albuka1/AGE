@@ -344,8 +344,9 @@ world.Events.Subscribe<SpriteAnimationFinishedEvent>((entity, @event) =>
 ```
 
 No coordinate of an image is written in a game: the region of a frame is arithmetic over the grid that the document
-declares. A layer of a character is an entity of its own with a higher `ZOrder`, and a direction is a state of its own. A
-document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once — the
+declares. A part of a character that is placed or animated apart from the rest is an entity of its own with a higher `ZOrder`
+— the layers of one sprite are what a part is when it is one picture drawn in one place — and a direction is a state of its
+own. A document, a state or an image that is not there is drawn as the placeholder of the texture service and reported once — the
 overlay of a build names the sheets and the states behind those placeholders — and `Age.Content.Lint` reads every document
 under the textures of a build: it checks the paths a prototype names against the files a build ships, the grid of a sheet
 against the image it names, that every sheet says which licence its art comes with and who it belongs to, and that every
@@ -547,6 +548,58 @@ points the draws of a pass at it, `EndRenderTarget` points them at the window ag
 texture that a shader binds as a sampler of its own — the third unit and up, because the first two belong to the engine — or
 draws as a quad. While a target is bound, `ViewportSize` answers with the size of it, so a pass, a camera and the layout of the
 interface measure the target rather than the window.
+
+## Draw a sprite of layers
+
+A sprite of one image is what most things of a world are. A thing that is a picture drawn over another picture — a body, the
+clothes over it and the glow over both — is one sprite of layers instead, and every layer brings the image and the stage that
+draws it:
+
+```yaml
+- type: entity
+  id: Beacon
+  components:
+    - type: Sprite
+      Color:
+        R: 255
+        G: 255
+        B: 255
+        A: 255
+      Size:
+        X: 40
+        Y: 40
+      Layers:
+        - Name: base
+          Image: Textures/Tiles/tiles.bmp
+        - Name: pulse
+          Image: Textures/Tiles/tiles.bmp
+          Shader: Shaders/pulse.frag
+```
+
+The layers are drawn in the order the document writes them, so the first one is at the bottom, and every layer is drawn at the
+position, the size and the colour of the sprite: a sprite of layers writes `Size`, because the engine does not read the size of an
+image back from the device, and it writes `Color`, because a sprite that names no colour draws its layers in no colour at all. A
+layer that names no `Shader` is drawn with the program of the engine, which is what an unshaded layer is.
+
+```csharp
+world.Set(beacon, new SpriteComponent
+{
+    Size = new Vector2(40f, 40f),
+    Color = Color.White,
+    Layers =
+    [
+        new SpriteLayer { Name = "base", Image = "Textures/Tiles/tiles.bmp" },
+        new SpriteLayer { Name = "pulse", Image = "Textures/Tiles/tiles.bmp", Shader = "Shaders/pulse.frag" },
+    ],
+});
+```
+
+The stage of a layer is compiled on the first frame that draws it and kept while the renderer stays attached to the window it was
+compiled against, and the pass switches to another program only when a layer names one that the layer before it did not: one draw
+call samples one program, so the layers of a sprite that share a stage are drawn in one call and the layers that alternate are
+drawn in several. A stage that cannot be loaded is reported once in the log and its layer is drawn without it, which is what an
+image that is not there does as well. A part of a character that is placed or animated apart from the rest is still an entity of
+its own with a higher `ZOrder`; layers are what a part is when it is one picture drawn in one place.
 
 ## Load and play a sound
 
