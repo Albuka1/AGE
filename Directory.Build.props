@@ -1,5 +1,10 @@
 <Project>
 
+  <ItemGroup Condition="'$(AgeSilkInputAliases)' == 'true'">
+    <Using Include="Silk.NET.Input.Key" Alias="Key" />
+    <Using Include="Silk.NET.Input.MouseButton" Alias="MouseButton" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -13,6 +18,12 @@
     <Version>0.3.0</Version>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Albuka1/Age</RepositoryUrl>
+
+    <!-- A key and a button are the names of the device that a window reports through, which is Silk.NET for this engine, so the
+         two names are the same everywhere and no project keeps a list of the keys it knows. Every assembly of the engine speaks
+         them without a using of its own, which is why the package is here rather than in the assemblies that use a device, and a
+         project that is a build tool rather than a part of a game turns the two names off instead. -->
+    <AgeSilkInputAliases>true</AgeSilkInputAliases>
 
     <!-- Projects sit in folders named after them at the repository root, so every build
          writes to one shared artifacts/ folder instead of a bin/obj pair per project. -->

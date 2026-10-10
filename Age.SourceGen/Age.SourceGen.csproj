@@ -6,6 +6,9 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- This project is a build tool rather than a part of a game, so it has no device to speak to and the names of the keys of
+         a window mean nothing in it. -->
+    <AgeSilkInputAliases>false</AgeSilkInputAliases>
     <!-- The diagnostics of this generator are read in the build of an assembly, not shipped as a rule set of a package,
          so they need no release tracking file. -->
     <NoWarn>$(NoWarn);RS2008</NoWarn>

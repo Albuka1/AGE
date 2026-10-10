@@ -427,7 +427,7 @@ gameLoop.Run(
 
         // Held rather than pressed: the factor is a live state of the clock, so holding the key slows the world down and
         // letting go brings it back to normal speed. Tab belongs to the console of the overlay.
-        timestep.TimeScale = input.IsKeyDown(Key.Ctrl) ? 0.25d : 1d;
+        timestep.TimeScale = input.IsKeyDown(Key.ControlLeft) ? 0.25d : 1d;
 
         if (input.IsKeyPressed(Key.F))
         {

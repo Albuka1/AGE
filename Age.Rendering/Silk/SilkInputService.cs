@@ -1,12 +1,9 @@
 using System.Text;
 using Age.Core;
 using Age.Input;
+using Silk.NET.GLFW;
 using Silk.NET.Input;
 using Silk.NET.Windowing;
-using Key = Age.Input.Key;
-using MouseButton = Age.Input.MouseButton;
-using SilkKey = Silk.NET.Input.Key;
-using SilkMouseButton = Silk.NET.Input.MouseButton;
 
 namespace Age.Rendering;
 
@@ -24,57 +21,6 @@ namespace Age.Rendering;
 /// </remarks>
 public sealed class SilkInputService : IInputService, ITextInputService, IDisposable
 {
-    private static readonly (SilkKey Silk, Key Engine)[] KeyMap =
-    [
-        (SilkKey.W, Key.W),
-        (SilkKey.A, Key.A),
-        (SilkKey.S, Key.S),
-        (SilkKey.D, Key.D),
-        (SilkKey.Q, Key.Q),
-        (SilkKey.E, Key.E),
-        (SilkKey.R, Key.R),
-        (SilkKey.F, Key.F),
-        (SilkKey.G, Key.G),
-        (SilkKey.Up, Key.Up),
-        (SilkKey.Down, Key.Down),
-        (SilkKey.Left, Key.Left),
-        (SilkKey.Right, Key.Right),
-        (SilkKey.Space, Key.Space),
-        (SilkKey.ShiftLeft, Key.Shift),
-        (SilkKey.ShiftRight, Key.Shift),
-        (SilkKey.ControlLeft, Key.Ctrl),
-        (SilkKey.ControlRight, Key.Ctrl),
-        (SilkKey.AltLeft, Key.Alt),
-        (SilkKey.AltRight, Key.Alt),
-        (SilkKey.Enter, Key.Enter),
-        (SilkKey.Escape, Key.Escape),
-        (SilkKey.Tab, Key.Tab),
-        (SilkKey.Backspace, Key.Backspace),
-        (SilkKey.F1, Key.F1),
-        (SilkKey.Number0, Key.Digit0),
-        (SilkKey.Number1, Key.Digit1),
-        (SilkKey.Number2, Key.Digit2),
-        (SilkKey.Number3, Key.Digit3),
-        (SilkKey.Number4, Key.Digit4),
-        (SilkKey.Number5, Key.Digit5),
-        (SilkKey.Number6, Key.Digit6),
-        (SilkKey.Number7, Key.Digit7),
-        (SilkKey.Number8, Key.Digit8),
-        (SilkKey.Number9, Key.Digit9),
-    ];
-
-    private static readonly (SilkMouseButton Silk, MouseButton Engine)[] MouseMap =
-    [
-        (SilkMouseButton.Left, MouseButton.Left),
-        (SilkMouseButton.Right, MouseButton.Right),
-        (SilkMouseButton.Middle, MouseButton.Middle),
-    ];
-
-    private static readonly Key[] EngineKeys = [.. KeyMap.Select(entry => entry.Engine).Distinct()];
-
-    private static readonly HashSet<Key> GroupedKeys =
-        [.. KeyMap.GroupBy(entry => entry.Engine).Where(group => group.Count() > 1).Select(group => group.Key)];
-
     private readonly IWindowService _windowService;
     private readonly InputStateTracker _tracker = new();
     private readonly StringBuilder _typed = new();
@@ -111,35 +57,49 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
         _typed.Clear();
         _tracker.BeginFrame();
 
-        foreach (Key engine in EngineKeys)
-        {
-            _tracker.SetKey(engine, IsKeyboardKeyDown(engine));
-        }
-
-        foreach ((SilkMouseButton silk, MouseButton engine) in MouseMap)
-        {
-            _tracker.SetMouseButton(engine, _mouse!.IsButtonPressed(silk));
-        }
-
-        _tracker.MouseMove(new Vector2(_mouse!.Position.X, _mouse.Position.Y));
+        Sample();
     }
 
-    /// <summary>
-    /// Returns whether any physical key that maps to the engine key is down. Both Shift keys map to <see cref="Key.Shift"/>,
-    /// and Control and Alt work the same way, so their states have to be combined: sampling them one after another would
-    /// let the released right Shift clear the held left one.
-    /// </summary>
-    private bool IsKeyboardKeyDown(Key engine)
+    /// <summary>Reports the state of every key and button of the device, which is what a polling backend does once per frame.</summary>
+    /// <remarks>
+    /// <para>
+    /// This is the one place a backend still enumerates the keys, and it has to: a backend answers a question about one key at a
+    /// time, so the frame is where the whole keyboard is asked about. The engine keeps no list of its own, so a game asks about any
+    /// key and the frame reports every one of them.
+    /// </para>
+    /// <para>
+    /// A value that this window has no key for is skipped rather than asked about: the device refuses a name it does not carry,
+    /// and that is not a mistake of a game, which simply never asks about such a key. A press that the platform sent as an event
+    /// reached the tracker before this, so a key that went down and up inside one frame is still reported as pressed for it.
+    /// </para>
+    /// </remarks>
+    private void Sample()
     {
-        foreach ((SilkKey silk, Key mapped) in KeyMap)
+        foreach (Key key in Enum.GetValues<Key>())
         {
-            if (mapped == engine && _keyboard!.IsKeyPressed(silk))
+            try
             {
-                return true;
+                _tracker.SetKey(key, _keyboard!.IsKeyPressed(key));
+            }
+            catch (Exception exception) when (exception is ArgumentException or GlfwException)
+            {
+                // The key is not one this window knows, so nothing of a game can be holding it.
             }
         }
 
-        return false;
+        foreach (MouseButton button in Enum.GetValues<MouseButton>())
+        {
+            try
+            {
+                _tracker.SetMouseButton(button, _mouse!.IsButtonPressed(button));
+            }
+            catch (Exception exception) when (exception is ArgumentException or GlfwException)
+            {
+                // The button is not one this window knows.
+            }
+        }
+
+        _tracker.MouseMove(new Vector2(_mouse!.Position.X, _mouse.Position.Y));
     }
 
     /// <inheritdoc />
@@ -186,48 +146,14 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
         _mouse.MouseUp += OnMouseUp;
     }
 
-    private void OnKeyDown(IKeyboard keyboard, SilkKey key, int scancode) => RecordKey(key, isDown: true);
+    private void OnKeyDown(IKeyboard keyboard, Key key, int scancode) => _tracker.KeyDown(key);
 
-    private void OnKeyUp(IKeyboard keyboard, SilkKey key, int scancode) => RecordKey(key, isDown: false);
+    private void OnKeyUp(IKeyboard keyboard, Key key, int scancode) => _tracker.KeyUp(key);
 
     /// <summary>Records a character that the keyboard produced, which is what a console or a text field reads.</summary>
     private void OnKeyChar(IKeyboard keyboard, char character) => _typed.Append(character);
 
-    private void OnMouseDown(IMouse mouse, SilkMouseButton button) => RecordButton(button, isDown: true);
+    private void OnMouseDown(IMouse mouse, MouseButton button) => _tracker.MouseDown(button);
 
-    private void OnMouseUp(IMouse mouse, SilkMouseButton button) => RecordButton(button, isDown: false);
-
-    private void RecordKey(SilkKey key, bool isDown)
-    {
-        foreach ((SilkKey silk, Key engine) in KeyMap)
-        {
-            if (silk != key)
-            {
-                continue;
-            }
-
-            if (GroupedKeys.Contains(engine))
-            {
-                // Both physical keys of a modifier map to one engine key, so the state is read back from the device,
-                // which already reflects this event: otherwise releasing the right Shift would clear a held left one.
-                _tracker.SetKey(engine, IsKeyboardKeyDown(engine));
-                return;
-            }
-
-            _tracker.SetKey(engine, isDown);
-            return;
-        }
-    }
-
-    private void RecordButton(SilkMouseButton button, bool isDown)
-    {
-        foreach ((SilkMouseButton silk, MouseButton engine) in MouseMap)
-        {
-            if (silk == button)
-            {
-                _tracker.SetMouseButton(engine, isDown);
-                return;
-            }
-        }
-    }
+    private void OnMouseUp(IMouse mouse, MouseButton button) => _tracker.MouseUp(button);
 }

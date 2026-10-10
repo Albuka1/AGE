@@ -485,6 +485,33 @@ cropping the edges around the middle of the area, so what a game places at that 
 camera that leaves the zoom at one is the other way round and is the default of the engine: one unit of the world per pixel of
 the window, so a larger window shows more of the world.
 
+## Read the keyboard and the pointer
+
+```csharp
+IInputService input = provider.GetRequiredService<IInputService>();
+
+if (input.IsKeyPressed(Key.Escape))
+{
+    // Escape went down on this frame, and not on the frames it is held on.
+}
+
+Vector2 pointer = input.MousePosition;
+bool clicking = input.IsMouseButtonDown(MouseButton.Left);
+```
+
+A key is a `Key` and a button is a `MouseButton`, and both are the types of the device the window reports through, so any key of a
+keyboard can be asked about: `Key.W`, `Key.Escape`, `Key.F1`, `Key.ControlLeft`. Reaching for a key that the engine has never heard
+of is not a change in the engine, and `Key` names the whole keyboard rather than a list of the keys the engine happened to pick.
+
+The service describes one frame. The "down" queries report what is held right now, and the "pressed" queries report a transition
+that happened since the previous frame, so a key that stays held is pressed once. The frame boundary is opened by the loop, before
+the systems run, which is why a key that goes down and up inside one frame is still reported as pressed for it.
+
+```csharp
+services.AddAgeInput();       // the service that is used when no window is open: no key, no character
+services.AddAgeSilkInput();   // the keyboard and the pointer of the window
+```
+
 ## Draw with a shader
 
 ```csharp

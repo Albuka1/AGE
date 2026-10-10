@@ -7,10 +7,17 @@ namespace Age.Input;
 /// between two <see cref="BeginFrame"/> calls.
 /// </summary>
 /// <remarks>
+/// <para>
 /// This is the backend independent half of an input implementation: an adapter reports what the platform sees, either as
 /// events through <see cref="KeyDown"/> and <see cref="KeyUp"/> or as one snapshot per frame through
 /// <see cref="SetKey"/>, and the game queries the result. A key that is already down when reporting starts is not
 /// reported as pressed, because that transition happened before the tracker was watching.
+/// </para>
+/// <para>
+/// A key is a <see cref="Key"/> and a button is a <see cref="MouseButton"/>, which are the names of the device that the engine
+/// draws through: the engine does not keep a list of the keys it knows, so a key that a backend reports is a key a game can ask
+/// about without a change in the engine. A backend that names its keys another way maps them once, at its own edge.
+/// </para>
 /// </remarks>
 public sealed class InputStateTracker : IInputService
 {

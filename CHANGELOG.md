@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A key and a mouse button are the names of the device that the window reports through, so `Age.Input.Key` and
+  `Age.Input.MouseButton` are the types of the backend rather than two enumerations of the engine: `IInputService` answers about any
+  key of a keyboard, a new key in a game is not a change in the engine, and the Silk.NET adapter lost its table of thirty-five pairs
+  and the bookkeeping that merged the two Shift, Control and Alt keys. The names are the same everywhere: `Key.W`, `Key.Escape`,
+  `Key.ControlLeft`, `MouseButton.Left`.
 - A lint reports its mistakes grouped by the pass that found them: `LintReport` carries the `LintArea` it belongs to, `LintResult`
   holds the report of every pass, and `ContentLinter.Lint(LintOptions)` is the one call a build makes, which reads the folders the
   options name and answers in the order of the passes. The command line tool writes each mistake under the pass that found it, and
