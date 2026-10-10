@@ -174,10 +174,10 @@ public sealed class RenderSystem : IRenderPass
     /// <remarks>
     /// A sprite that names layers and no size takes the size of the image of its first layer, which is the base of the picture; a
     /// sprite that names a sheet takes the size of the cell the sheet resolved, which is what drawing it uses; a sprite that names
-    /// neither takes the size of its own image. Culling and drawing agree on this, so a sprite that is drawn is a sprite the camera
-    /// was told about. A sprite of a sheet is measured through the sheet rather than through the handle of the component, because that
-    /// handle is written back only when the sprite is drawn: reading it here would answer zero on the first frame, and the size of the
-    /// whole sheet once it is set.
+    /// neither takes the size of its own image, whether content named that image by path or a game set the handle itself. Culling and
+    /// drawing agree on this, so a sprite that is drawn is a sprite the camera was told about. A sprite of a sheet is measured through
+    /// the sheet rather than through the handle of the component, because that handle is written back only when the sprite is drawn:
+    /// reading it here would answer zero on the first frame, and the size of the whole sheet once it is set.
     /// </remarks>
     private Vector2 ResolvedSize(in SpriteComponent sprite)
     {
@@ -196,7 +196,11 @@ public sealed class RenderSystem : IRenderPass
             return _sheets.Resolve(sheetPath, sprite.State ?? string.Empty, sprite.Frame).Cell;
         }
 
-        return sprite.TexturePath is not null ? _textures.Size(_textures.Resolve(sprite.TexturePath)) : Vector2.Zero;
+        // A sprite that names a path is measured through the image that path resolves, and one a game gave a handle of its own is
+        // measured through that handle: a sprite whose image the service decoded is the same size whichever of the two set it, so
+        // culling does not drop a sprite that drawing would have shown.
+        TextureHandle handle = sprite.TexturePath is not null ? _textures.Resolve(sprite.TexturePath) : sprite.Texture;
+        return _textures.Size(handle);
     }
 
     /// <summary>Returns the texture of a layer, resolving the image that the document named.</summary>

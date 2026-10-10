@@ -243,6 +243,24 @@ public sealed class DevWindowServiceTests
         other.Focused.Should().BeFalse();
     }
 
+    [Fact]
+    public void DevWindowService_Focused_IsFalseWhenTheWindowManagerClosedTheWindowBeforePump()
+    {
+        var host = new FakeHost { Focused = true };
+        var service = new DevWindowService(host);
+        service.Open();
+
+        service.Focused.Should().BeTrue();
+
+        // The window manager closed the window, which is what the cross of its title bar does. The service has not pumped yet, so its
+        // own flag still says the window is open, and what a game reads until that pump runs is what matters: a window on its way out
+        // holds no keyboard, so the keys of the game are the game's again the moment the window is gone.
+        host.CloseFromTheWindowManager();
+
+        service.IsOpen.Should().BeFalse();
+        service.Focused.Should().BeFalse("a window that the window manager closed is nowhere a key goes");
+    }
+
     /// <summary>A host that reports the size and a click a test sets, which is how the frame of the window is driven without a window.</summary>
     private sealed class FakeHost : IDevWindowHost
     {

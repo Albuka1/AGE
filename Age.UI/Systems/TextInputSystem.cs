@@ -27,18 +27,21 @@ public sealed class TextInputSystem : IFrameSystem
 {
     private readonly IInputService _input;
     private readonly ITextInputService _text;
+    private readonly UIInputFrame _frame;
 
     /// <summary>Initializes the system with the input it reads.</summary>
     /// <param name="input">The keys and the pointer of the frame.</param>
     /// <param name="text">The characters that were typed during the frame.</param>
+    /// <param name="frame">The state of the frame that the controls of the interface share, or null to read no other control's decision.</param>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
-    public TextInputSystem(IInputService input, ITextInputService text)
+    public TextInputSystem(IInputService input, ITextInputService text, UIInputFrame? frame = null)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(text);
 
         _input = input;
         _text = text;
+        _frame = frame ?? new UIInputFrame();
     }
 
     /// <inheritdoc />
@@ -126,12 +129,13 @@ public sealed class TextInputSystem : IFrameSystem
     /// <remarks>
     /// A press inside the rectangle of a field that may be focused gives it focus; a press anywhere else takes focus from the field that
     /// had it, which is what clicking away from a name prompt does. A field that a game marked focused at the start keeps it until
-    /// something else is clicked.
+    /// something else is clicked. A press that another control took — a row of an open drop-down list that covers the field — is not a
+    /// press this system reads, so the field the list hangs over keeps neither the focus nor the caret a person did not click into.
     /// </remarks>
     private Entity Focus(World world)
     {
         Vector2 pointer = _input.MousePosition;
-        bool pressed = _input.IsMouseButtonPressed(MouseButton.Left);
+        bool pressed = _input.IsMouseButtonPressed(MouseButton.Left) && !_frame.Consumed;
         Entity focused = default;
 
         foreach (Entity entity in world.Enumerate<TextFieldComponent>())

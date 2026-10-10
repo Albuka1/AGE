@@ -13,13 +13,18 @@ namespace Age.UI;
 public sealed class UIUpdateSystem : IFrameSystem
 {
     private readonly IInputService _input;
+    private readonly UIInputFrame _frame;
     private readonly List<Entity> _buttons = new();
 
     /// <summary>Initializes the system with the input service it reads pointer state from.</summary>
-    public UIUpdateSystem(IInputService input)
+    /// <param name="input">The input service that reports the pointer of the frame.</param>
+    /// <param name="frame">The state of the frame that the controls of the interface share, or null to keep a state of its own.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> is null.</exception>
+    public UIUpdateSystem(IInputService input, UIInputFrame? frame = null)
     {
         ArgumentNullException.ThrowIfNull(input);
         _input = input;
+        _frame = frame ?? new UIInputFrame();
     }
 
     /// <summary>Recomputes the hover and press state of the buttons in the given world for the current pointer position.</summary>
@@ -39,9 +44,20 @@ public sealed class UIUpdateSystem : IFrameSystem
     {
         ArgumentNullException.ThrowIfNull(world);
 
+        // This system reads the pointer before the others, so it is what begins the frame for the controls of the interface: what a
+        // control took on the frame before is not a click of this one.
+        _frame.Begin();
+
         // The drop-downs read the pointer before anything else, and a click they take is not read again below: an open list covers the
         // elements under it, so a button that the list hangs over must not also be pressed by the same click.
         bool consumed = UpdateDropdowns(world);
+
+        if (consumed)
+        {
+            // The systems that read the same pointer after this one — the field that a list may cover — ask this rather than reading
+            // the press again, which is what keeps one click from reaching two controls.
+            _frame.Consume();
+        }
 
         CollectButtons(world);
 

@@ -125,6 +125,29 @@ public sealed class TextureServiceTests
     }
 
     [Fact]
+    public void TextureService_UnloadAll_WhenAReleaseFails_KeepsTheSizeAndThePathOfThatTexture()
+    {
+        var renderer = new FakeRenderer { FailRelease = id => id == 1 };
+        var textures = new TextureService(new FakeImageLoader(), renderer);
+        TextureHandle first = textures.Load("art/a.bmp");
+        TextureHandle second = textures.Load("art/b.bmp");
+
+        Action unloadAll = textures.UnloadAll;
+
+        unloadAll.Should().Throw<InvalidOperationException>();
+
+        // The texture the renderer refused is still loaded, so it is still measured and still listed: `Count`, `Size` and `Textures`
+        // agree about what the service holds rather than one of them forgetting a texture that the others still carry.
+        textures.Count.Should().Be(1);
+        textures.Size(first).Should().Be(new Vector2(2f, 2f), "a texture that is still loaded still has the size it was decoded at");
+        textures.Textures.Select(entry => entry.Path).Should().Equal(["art/a.bmp"], "a texture that is still loaded is still listed");
+
+        // The one that did unload is gone from every answer the service gives.
+        textures.Size(second).Should().Be(Vector2.Zero);
+        textures.Textures.Should().NotContain(entry => entry.Path == "art/b.bmp");
+    }
+
+    [Fact]
     public void TextureService_UnloadAll_AfterAFailedRelease_RetriesTheTexture()
     {
         var renderer = new FakeRenderer { FailRelease = id => id == 1 };

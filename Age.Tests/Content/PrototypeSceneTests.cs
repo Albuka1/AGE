@@ -431,6 +431,47 @@ public sealed class PrototypeSceneTests
         loaded.Get<SpriteComponent>(loaded.Enumerate().Single()).Color.Should().Be(Color.Red);
     }
 
+    [Fact]
+    public void PrototypeScene_AFieldResetToTheDefaultOfTheStructure_ComesBackAsAReset()
+    {
+        using ServiceProvider provider = Create();
+        SpawnService spawner = provider.GetRequiredService<SpawnService>();
+        ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+        var world = new World();
+        Entity goblin = spawner.Spawn(world, "Goblin");
+
+        // The goblin's sprite names a sheet and a state that its prototype gave it; a game takes the sheet away, which is a field that
+        // is *written* with the value the structure starts at rather than one the scene leaves out. The two are not the same thing: a
+        // field the scene leaves out keeps what the prototype gave it, and a field the scene writes wins, even where it writes the
+        // default of the structure.
+        ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(goblin);
+        sprite.SheetPath = null;
+        sprite.State = null;
+        sprite.TexturePath = "Textures/Tiles/tiles.bmp";
+
+        string json = scenes.Save(world);
+
+        using (JsonDocument document = JsonDocument.Parse(json))
+        {
+            JsonElement written = document.RootElement.GetProperty("Entities")[0].GetProperty("Components").GetProperty("Sprite");
+
+            // The field that a document may leave out and the game set to nothing is written, because it differs from the prototype:
+            // the values that the scene writes is what makes the reset survive, and a field that is equal to the prototype is left
+            // out so that inheritance still works.
+            written.TryGetProperty("State", out JsonElement state).Should().BeTrue();
+            state.ValueKind.Should().Be(JsonValueKind.Null, "a field a game set to nothing is written as nothing rather than left out");
+        }
+
+        var loaded = new World();
+        scenes.Load(loaded, json);
+
+        SpriteComponent restored = loaded.Get<SpriteComponent>(loaded.Enumerate().Single());
+
+        restored.SheetPath.Should().BeNull("the field the scene wrote wins, even where it wrote the default of the structure");
+        restored.State.Should().BeNull();
+        restored.TexturePath.Should().Be("Textures/Tiles/tiles.bmp");
+    }
+
     /// <summary>Returns a scene of one entity that names a prototype and carries no component of its own.</summary>
     private static string Scene(string prototypeId) => $$"""
         {

@@ -177,6 +177,7 @@ public sealed class TextureService : ITextureService, IDisposable
     public void UnloadAll()
     {
         ExceptionDispatchInfo? failure = null;
+        HashSet<int>? released = null;
 
         // Release one texture at a time and forget a slot only once its release succeeded, so a renderer that refuses
         // one texture leaves it loaded for a later attempt and every other texture still unloads in this call.
@@ -198,13 +199,26 @@ public sealed class TextureService : ITextureService, IDisposable
             }
 
             _textures.Release(slot);
+
+            // The size and the order of a texture are forgotten with the texture and not with the call: a release that the renderer
+            // refused leaves the texture loaded, and a texture that is loaded is still measured and still listed, so the service
+            // answers the same thing about it whether it is asked through `Count`, `Size` or `Textures`.
+            (released ??= []).Add((int)id);
         }
 
         // The placeholder belongs to the renderer, which deletes it with its own objects: the service lets go of the
         // handle, so the next call asks for a new one rather than handing out a texture that is gone.
         _error = null;
-        _sizes.Clear();
-        _order.Clear();
+
+        // A texture that was released is forgotten and one whose release was refused is kept, so the size of a texture that is still
+        // loaded is still answered and the path of one that is still loaded is still listed: `Count`, `Size` and `Textures` agree
+        // about what the service holds, whatever the renderer did.
+        foreach (int id in released ?? [])
+        {
+            _sizes.Remove(id);
+        }
+
+        _order.RemoveAll(path => !_textures.TryGetHandle(path, out ResourceHandle slot) || !_textures.TryGet(slot, out _));
 
         failure?.Throw();
     }

@@ -225,6 +225,48 @@ public sealed class UILayoutSystemTests
     }
 
     [Fact]
+    public void UILayoutSystem_AChildThatItsParentDoesNotList_IsStillPlacedInsideIt()
+    {
+        var world = new World();
+        var system = new UILayoutSystem(new RecordingRenderer());
+        CreateCanvas(world);
+
+        // The parent does not list the child, which is what a game that sets only the link of the child leaves behind: the name of the
+        // parent is what makes the tree, so the element stands inside the panel rather than being laid out against the canvas.
+        Entity panel = world.CreateEntity();
+        world.Set(panel, new RectTransformComponent
+        {
+            Anchored = true,
+            AnchorMin = Vector2.Zero,
+            AnchorMax = Vector2.Zero,
+            Pivot = Vector2.Zero,
+            AnchoredPosition = new Vector2(100f, 50f),
+            SizeDelta = new Vector2(400f, 200f),
+            Visible = true,
+        });
+
+        Entity child = world.CreateEntity();
+        world.Set(child, new RectTransformComponent
+        {
+            Anchored = true,
+            AnchorMin = Vector2.Zero,
+            AnchorMax = Vector2.Zero,
+            Pivot = Vector2.Zero,
+            AnchoredPosition = new Vector2(10f, 20f),
+            SizeDelta = new Vector2(30f, 40f),
+            Visible = true,
+        });
+        world.Set(child, new ParentComponent { Parent = world.Reference(panel) });
+
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+
+        // The panel is at (100, 50), so a child 10 across and 20 down from the top-left corner of it is at (110, 70) rather than at
+        // (10, 20) of the canvas, which is where a child that no parent placed would stand.
+        world.Get<RectTransformComponent>(child).Position.Should().Be(new Vector2(110f, 70f));
+        world.Get<RectTransformComponent>(child).Size.Should().Be(new Vector2(30f, 40f));
+    }
+
+    [Fact]
     public void UILayoutSystem_AChildOfAnElementThatIsNotThere_IsLaidOutAgainstTheCanvas()
     {
         var world = new World();

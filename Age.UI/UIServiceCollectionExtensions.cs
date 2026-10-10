@@ -13,6 +13,10 @@ public static class UIServiceCollectionExtensions
     public static IServiceCollection AddAgeUI(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // The state of one frame is shared by the systems that read the same pointer, so a click that one control took is a click the
+        // next one does not read: it is a singleton because the systems are, and it is reset by the first of them on every frame.
+        services.AddSingleton<UIInputFrame>();
         services.AddSingleton<UIUpdateSystem>();
         services.AddSingleton<TextInputSystem>();
         services.AddSingleton<IComponentRegistrations, UiComponentRegistrations>();

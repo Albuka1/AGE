@@ -39,6 +39,28 @@ public sealed class TextInputSystemTests
     }
 
     [Fact]
+    public void TextInputSystem_APressThatAnOpenListTook_DoesNotFocusTheFieldUnderIt()
+    {
+        var world = new World();
+        Entity field = CreateField(world, "hero");
+        var input = new NullInputService();
+        var frame = new UIInputFrame();
+        var fields = new TextInputSystem(input, input, frame);
+
+        // Another control of the interface took the click of this frame, which is what a row of an open drop-down list does to the
+        // field it hangs over: the press is not one this system reads, so the field is not focused by a click that never reached it.
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(10f, 10f), true);
+        input.BeginFrame();
+        frame.Begin();
+        frame.Consume();
+
+        fields.UpdateFrame(world, new GameTime(0d, 0d));
+
+        world.Get<TextFieldComponent>(field).Focused.Should().BeFalse("the click belongs to the control that took it");
+    }
+
+    [Fact]
     public void TextInputSystem_APressOutsideEveryField_TakesTheFocusAway()
     {
         var world = new World();

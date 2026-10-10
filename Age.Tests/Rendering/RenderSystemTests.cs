@@ -158,6 +158,32 @@ public sealed class RenderSystemTests
     }
 
     [Fact]
+    public void RenderSystem_ASpriteThatNamesOnlyAHandleAndNoSize_IsMeasuredThroughThatHandle()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var textures = new TextureService(new CountingImageLoader(), renderer);
+
+        // A game loaded the image itself and put the handle on the sprite without setting a path or a size, which is what a sprite the
+        // engine did not resolve by path looks like. The service decoded it, so its size is known, and the camera has to measure the
+        // sprite through that handle rather than as a point.
+        //
+        // The image is 2x2, drawn at its position with its top-left corner there, so it covers (100, 100) to (102, 102). The camera is
+        // a single pixel at (101, 101), which is *inside* that box: a sprite measured as zero sits at (100, 100) and misses it, so the
+        // sprite is drawn only when culling and drawing agree about the size the handle answers with.
+        TextureHandle handle = textures.Load("Textures/Tiles/tiles.bmp");
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new TransformComponent { Position = new Vector2(100f, 100f), Scale = new Vector2(1f, 1f) });
+        world.Set(entity, new SpriteComponent { Texture = handle });
+
+        var camera = new Camera2D { Position = new Vector2(101f, 101f), Zoom = 1f, ViewportSize = new Vector2(1f, 1f) };
+
+        new RenderSystem(renderer, new SpriteSorter(), textures).Render(world, camera);
+
+        renderer.Textures.Should().ContainSingle("the sprite reaches the one pixel the camera shows, so it is drawn");
+    }
+
+    [Fact]
     public void RenderSystem_ASpriteWhoseTextureWasUnloaded_ResolvesItsPathAgain()
     {
         var world = new World();

@@ -82,6 +82,46 @@ public sealed class UILayoutSystem : IFrameSystem
         // cycle in the tree does not walk forever.
         var visited = new HashSet<Entity>();
 
+        // A child names its parent in `ParentComponent`, which is what makes the link, and a parent lists its children in
+        // `ChildrenComponent`, which is what makes the walk downwards quick. A game writes the two together, but only the name of the
+        // parent is what the tree is: an element whose parent does not list it is still an element that stands inside that parent, so
+        // the children that no list named are gathered here and laid out with the rest rather than left as orphans of the canvas.
+        var listed = new HashSet<Entity>();
+
+        foreach (Entity entity in world.Enumerate<RectTransformComponent>())
+        {
+            if (world.Has<ChildrenComponent>(entity))
+            {
+                foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
+                {
+                    listed.Add(world.Resolve(reference));
+                }
+            }
+        }
+
+        // The elements that name a parent which does not list them, grouped by the parent they name, so a parent can lay them out
+        // after its own rectangle is known. Only an element whose parent is itself an element belongs here: one whose parent is a
+        // canvas, or is not in the world, is a root and is handled below.
+        var unlisted = new Dictionary<Entity, List<Entity>>();
+
+        foreach (Entity entity in world.Enumerate<RectTransformComponent>())
+        {
+            Entity parent = ParentOf(world, entity);
+
+            if (listed.Contains(entity) || !world.IsAlive(parent) || !world.Has<RectTransformComponent>(parent))
+            {
+                continue;
+            }
+
+            if (!unlisted.TryGetValue(parent, out List<Entity>? children))
+            {
+                children = [];
+                unlisted[parent] = children;
+            }
+
+            children.Add(entity);
+        }
+
         foreach (Entity entity in world.Enumerate<RectTransformComponent>())
         {
             Entity parent = ParentOf(world, entity);
@@ -91,7 +131,7 @@ public sealed class UILayoutSystem : IFrameSystem
             // its children are laid out against the canvas rather than against a rectangle it does not have.
             if (!world.IsAlive(parent) || !world.Has<RectTransformComponent>(parent))
             {
-                Layout(world, entity, area, scale, visited);
+                Layout(world, entity, area, scale, visited, unlisted);
             }
         }
 
@@ -116,7 +156,8 @@ public sealed class UILayoutSystem : IFrameSystem
     /// <param name="parent">The rectangle the element is placed in, in design units: the canvas for a root, the parent for a child.</param>
     /// <param name="scale">The scale of the canvas, which is how many pixels of the screen a design unit is.</param>
     /// <param name="visited">The elements that were resolved, which is what keeps a cycle from walking forever.</param>
-    private static void Layout(World world, Entity entity, Rect parent, float scale, HashSet<Entity> visited)
+    /// <param name="unlisted">The children that name a parent which does not list them, grouped by the parent they name.</param>
+    private static void Layout(World world, Entity entity, Rect parent, float scale, HashSet<Entity> visited, Dictionary<Entity, List<Entity>> unlisted)
     {
         if (!world.IsAlive(entity) || !visited.Add(entity))
         {
@@ -124,11 +165,6 @@ public sealed class UILayoutSystem : IFrameSystem
         }
 
         Rect rect = Resolve(world, entity, parent, scale);
-
-        if (!world.Has<ChildrenComponent>(entity))
-        {
-            return;
-        }
 
         // A child is placed in the rectangle of its parent, and that rectangle is what the anchors of the child are a fraction of:
         // the child's own Resolve takes design units and multiplies them by the scale, so the rectangle of the parent is divided by
@@ -138,9 +174,22 @@ public sealed class UILayoutSystem : IFrameSystem
             new Vector2(rect.Position.X / scale, rect.Position.Y / scale),
             new Vector2(rect.Size.X / scale, rect.Size.Y / scale));
 
-        foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
+        // The children the parent listed, and then the children that named it without being listed: both stand inside this element, so
+        // both are placed in its rectangle rather than one of them being left against the canvas.
+        if (world.Has<ChildrenComponent>(entity))
         {
-            Layout(world, world.Resolve(reference), inside, scale, visited);
+            foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
+            {
+                Layout(world, world.Resolve(reference), inside, scale, visited, unlisted);
+            }
+        }
+
+        if (unlisted.TryGetValue(entity, out List<Entity>? children))
+        {
+            foreach (Entity child in children)
+            {
+                Layout(world, child, inside, scale, visited, unlisted);
+            }
         }
     }
 

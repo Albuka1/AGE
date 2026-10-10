@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, tracked from the focus events of the window. A game keeps its own console and its own keys while the window stands beside it
   without the focus, so the two windows are used side by side rather than one taking the input of the other, and a key that was held
   when the focus moved is not left held by the window that never saw the release.
+- `UIInputFrame` is what one frame's click did: the control that takes a press — an open drop-down list over the elements under it —
+  says so, and the controls that read the same pointer afterwards (`TextInputSystem`) ask rather than reading the press again, so one
+  click never reaches two controls.
 
 - `IClipboardService` is the clipboard of the machine, which `SilkInputService` reads from the keyboard and `NullInputService` keeps
   in memory for a run with no window. The console uses it: Control and A, C, X and V select, copy, cut and paste, the caret is where

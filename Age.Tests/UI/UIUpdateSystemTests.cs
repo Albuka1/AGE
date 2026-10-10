@@ -118,6 +118,33 @@ public sealed class UIUpdateSystemTests
         presses.Should().BeEmpty();
     }
 
+    [Fact]
+    public void UIUpdateSystem_AClickAnOpenListTook_IsReportedToTheControlsThatReadItAfter()
+    {
+        var world = new World();
+        var input = new NullInputService();
+        var frame = new UIInputFrame();
+        var system = new UIUpdateSystem(input, frame);
+
+        Entity dropdown = world.CreateEntity();
+        world.Set(dropdown, new RectTransformComponent { Position = new Vector2(0f, 0f), Size = new Vector2(120f, 24f), Visible = true });
+        world.Set(dropdown, new DropdownComponent { Options = ["low", "medium", "high"], RowHeight = 24f, Open = true, Interactable = true });
+
+        // A frame that does not press anything takes nothing.
+        frame.Begin();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+        frame.Consumed.Should().BeFalse();
+
+        // A press on a row of the open list is the list's, and the frame says so: the field that the list may cover reads this rather
+        // than the press, so one click does not both choose a row and take the focus of a field.
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(60f, 60f), true);
+        input.BeginFrame();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+
+        frame.Consumed.Should().BeTrue();
+    }
+
     private static Entity CreateButton(World world, int zOrder)
     {
         Entity entity = world.CreateEntity();

@@ -57,7 +57,11 @@ public sealed class DevWindowService : IDevWindowService
     public bool IsOpen => _open && _host.IsOpen;
 
     /// <inheritdoc />
-    public bool Focused => _open && _host.Focused;
+    /// <remarks>
+    /// A window that is on its way out holds no keyboard, whatever the host last reported about the focus: what a game asks this to
+    /// know is where its keys are going, and a window the window manager has closed is not somewhere a key goes.
+    /// </remarks>
+    public bool Focused => _open && _host.IsOpen && _host.Focused;
 
     /// <inheritdoc />
     public IReadOnlyList<IDevWindowTab> Tabs => _tabs;
