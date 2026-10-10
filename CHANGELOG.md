@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   options name and answers in the order of the passes. The command line tool writes each mistake under the pass that found it, and
   the passes themselves — `Lint`, `LintSheets` and `LintLocales` — answer exactly what they did.
 
+### Fixed
+
+- A value a layer wrote itself was read by nothing: `Material.Uniforms` was documented, written to a scene, and then ignored when
+  the layer was drawn, so two sprites that shared a material could not differ by one number. The values of a layer are sent after
+  the ones of the material it names now, so a name the material declares is overridden and one it does not is added, which is what
+  keeps a beacon that pulses faster than another from declaring a second material with everything written twice. The values are read
+  exactly where the values of a material are, so a value that its kind cannot hold is refused with the name of the layer and of the
+  uniform. The examples of the content, the quickstart and the reference write a value as a block, because the flow style is not
+  part of the subset of YAML that the content of the engine is read with.
+
 ### Added
 
 - A sprite is drawn from layers, each of them with an image and a material of its own: `SpriteComponent.Layers` holds them in the

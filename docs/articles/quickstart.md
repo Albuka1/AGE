@@ -650,17 +650,43 @@ value that a stage reads as a `float` and one it reads as an `int` are told apar
 
 ```yaml
   uniforms:
-    Speed: { float: 4.0 }
-    Steps: { int: 8 }
-    Direction: { vec2: 1.0, 0.0 }
-    Tint: { color: 255, 220, 120, 255 }
+    Speed:
+      float: 4.0
+    Steps:
+      int: 8
+    Direction:
+      vec2: 1.0, 0.0
+    Tint:
+      color: 255, 220, 120, 255
 ```
 
-`float` and `int` hold one number; `vec2` through `vec4` hold two to four of them; and `color` holds four numbers written the way
-every other colour of the content is written, in bytes, and read as the four channels between zero and one that a stage draws
-with. The stage of a material draws with the program of the engine unless the document names a vertex stage as well, and a value
-that its kind cannot hold is refused where the content is read: a material is data of a build, so a mistake in it is a message at
-the start of a game rather than a frame that quietly draws something else.
+`float` and `int` hold one number; `vec2` through `vec4` hold two to four of them, separated by commas; and `color` holds four
+numbers written the way every other colour of the content is written, in bytes, and read as the four channels between zero and one
+that a stage draws with. The stage of a material draws with the program of the engine unless the document names a vertex stage as
+well, and a value that its kind cannot hold is refused where the content is read: a material is data of a build, so a mistake in it
+is a message at the start of a game rather than a frame that quietly draws something else.
+
+The values are written as a block, with the kind on its own line, because the flow style — `Speed: { float: 4.0 }` — is not part of
+the subset of YAML that the content of the engine is read with.
+
+A layer that names a material and writes a value of its own is drawn with that value instead of the one of the material, so two
+beacons that share `Pulse` differ by the speed of their own pulse:
+
+```yaml
+      Layers:
+        - Name: slow
+          Material:
+            Id: Pulse
+            Uniforms:
+              Speed:
+                float: 1.0
+        - Name: fast
+          Material:
+            Id: Pulse
+            Uniforms:
+              Speed:
+                float: 8.0
+```
 
 ```csharp
 IMaterialService materials = provider.GetRequiredService<IMaterialService>();

@@ -328,7 +328,7 @@ public sealed class RenderSystemTests
         renderer.Programs[0].Should().BeNull("the layer that names no material draws with the program of the engine");
         renderer.Programs[1].Should().NotBeNull("the layer that names the material draws with its stage");
         renderer.Uniforms.Should().ContainKey("Speed", "the values of the material reach the renderer before the layer is drawn");
-        renderer.Uniforms["Speed"].Should().Equal(4f);
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 6f }, "the layer of the beacon writes the speed of its own pulse, which overrides the one of the material");
         materials.Missing.Should().BeEmpty("the content of the engine names a material that a document declares");
     }
 
@@ -424,6 +424,80 @@ public sealed class RenderSystemTests
             new[] { "Shaders/pulse.frag", "Shaders/pulse.frag" },
             "the program of the window before went away with the device of it, so the pass compiled the stage again for the one that is there now");
         materials.IsRegistered("Pulse").Should().BeTrue("the declared materials of the content are not forgotten, only what they compiled");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValue_OverridesTheOneOfItsMaterial()
+    {
+        // The material says how a pulse works and the layer says how fast its own is, which is what keeps two sprites that differ
+        // by one number from declaring the same material twice.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Speed"] = new(StringComparer.Ordinal) { ["float"] = JsonDocument.Parse("8.0").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 8f }, "the value of the layer is sent after the one of the material, so it is the one that stands");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValueOfItsOwn_KeepsTheRestOfTheMaterial()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Steps"] = new(StringComparer.Ordinal) { ["int"] = JsonDocument.Parse("8").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 4f }, "a value the layer does not write is the one the material declares");
+        renderer.Integers["Steps"].Should().Be(8, "a value the material does not declare is added, which is how one layer reads a uniform no other does");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatNamesNoMaterial_SendsItsOwnValues()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Material layer = new()
+        {
+            Fragment = "Shaders/own.frag",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Speed"] = new(StringComparer.Ordinal) { ["float"] = JsonDocument.Parse("2.0").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/own.frag" });
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 2f }, "a layer that names no material is drawn by its own stage with its own values");
     }
 
     /// <summary>Registers a material of one uniform with a service, which is what a content does when it is read.</summary>

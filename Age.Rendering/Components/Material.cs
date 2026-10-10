@@ -55,13 +55,30 @@ public struct Material
     [Age.Core.ResourcePath]
     public string? Vertex;
 
-    /// <summary>Gets or sets the values of the uniforms of the material, in the order they are sent, or null when the material reads none.</summary>
+    /// <summary>Gets or sets the values of the uniforms of the layer, which override the ones of the material it names, or null when the layer reads none.</summary>
     /// <remarks>
-    /// A value belongs to one layer rather than to the program, and a document writes it the way GLSL names its type, so a value
-    /// that a stage reads as a float and one it reads as an int are told apart:
-    /// <c>Uniforms: { Speed: { float: 4.0 }, Tint: { color: 255, 220, 120, 255 } }</c>. A material that names no value keeps the
-    /// one the stage was written with, and a name that the stage does not declare is ignored by the device, which is what a
-    /// uniform of one stage and not another looks like in practice.
+    /// <para>
+    /// A layer names a material for the stage that draws it and the values that it and its siblings share, and it writes a value
+    /// here when it is the one that differs: the same <c>pulse.frag</c> draws a beacon that breathes slowly and one that flares,
+    /// and the two differ by one line of a document rather than by a second material that declares everything twice.
+    /// </para>
+    /// <para>
+    /// A value is written the way GLSL names its type, which is what tells a number from a whole number, and the layer writes it
+    /// as a block rather than in the flow style, because that is the subset of YAML the content of the engine is read with:
+    /// </para>
+    /// <code>
+    /// Uniforms:
+    ///   Speed:
+    ///     float: 4.0
+    ///   Steps:
+    ///     int: 8
+    ///   Tint:
+    ///     color: 255, 220, 120, 255
+    /// </code>
+    /// <para>
+    /// A name that the material already declares is overridden, and one it does not is added, which is how a layer reads a
+    /// uniform that no other layer of the material sends. A material that names no value keeps the one the stage was written with.
+    /// </para>
     /// </remarks>
     public Dictionary<string, Dictionary<string, JsonElement>>? Uniforms;
 }

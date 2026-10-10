@@ -84,7 +84,7 @@ public sealed class MaterialService : IMaterialService
             throw new InvalidOperationException($"The material '{id}' cannot be registered after another one was read: a material that a frame already drew with would change under it.");
         }
 
-        var declared = new Declared(prototype.Fragment, prototype.Vertex, Values(id, prototype.Values));
+        var declared = new Declared(prototype.Fragment, prototype.Vertex, Values($"the material '{id}'", prototype.Values));
 
         if (!_declared.TryAdd(id, declared))
         {
@@ -93,17 +93,17 @@ public sealed class MaterialService : IMaterialService
     }
 
     /// <summary>Reads the values of a material into the kinds and the numbers that a renderer is handed.</summary>
-    /// <param name="id">The identifier of the material, which a refusal names.</param>
+    /// <param name="what">What the values belong to, which a refusal names: the material or the layer that wrote them.</param>
     /// <param name="values">The values as the document wrote them.</param>
     /// <returns>The values, in the order the document wrote them.</returns>
     /// <exception cref="InvalidOperationException">A value is not one that its kind holds.</exception>
     /// <remarks>
     /// The values are read once, where the content is read, rather than on every frame that draws the material: a document that
-    /// says a number where a colour belongs is a mistake of the content, so it is refused here, with the identifier of the
-    /// material and of the uniform, rather than quieting a frame and being found much later. A colour is written the way every
-    /// colour of the content is written, in bytes, and is read as the four channels between zero and one that a stage draws with.
+    /// says a number where a colour belongs is a mistake of the content, so it is refused here, with the name of what wrote it and
+    /// of the uniform, rather than quieting a frame and being found much later. A colour is written the way every colour of the
+    /// content is written, in bytes, and is read as the four channels between zero and one that a stage draws with.
     /// </remarks>
-    private static IMaterialService.UniformValue[] Values(string id, JsonElement values)
+    private static IMaterialService.UniformValue[] Values(string what, JsonElement values)
     {
         if (values.ValueKind != JsonValueKind.Object)
         {
@@ -116,12 +116,12 @@ public sealed class MaterialService : IMaterialService
         {
             if (uniform.Value.ValueKind != JsonValueKind.Object || uniform.Value.EnumerateObject().Count() != 1)
             {
-                throw new InvalidOperationException($"The uniform '{uniform.Name}' of the material '{id}' is written as one kind and the value behind it, such as 'float: 4.0'.");
+                throw new InvalidOperationException($"The uniform '{uniform.Name}' of {what} is written as one kind and the value behind it, such as 'float: 4.0'.");
             }
 
             foreach (JsonProperty kind in uniform.Value.EnumerateObject())
             {
-                read.Add(Value(id, uniform.Name, kind));
+                read.Add(Value(what, uniform.Name, kind));
             }
         }
 
@@ -129,7 +129,7 @@ public sealed class MaterialService : IMaterialService
     }
 
     /// <summary>Reads one value of a material, which is one kind of a uniform and the numbers behind it.</summary>
-    private static IMaterialService.UniformValue Value(string id, string uniform, JsonProperty kind)
+    private static IMaterialService.UniformValue Value(string what, string uniform, JsonProperty kind)
     {
         string name = kind.Name.ToLowerInvariant();
         IMaterialService.UniformKind read = name switch
@@ -140,7 +140,7 @@ public sealed class MaterialService : IMaterialService
             "vec3" => IMaterialService.UniformKind.Vec3,
             "vec4" => IMaterialService.UniformKind.Vec4,
             "color" => IMaterialService.UniformKind.Color,
-            _ => throw new InvalidOperationException($"The uniform '{uniform}' of the material '{id}' is of the kind '{kind.Name}', and a material sends a float, an int, a vec2, a vec3, a vec4 or a color."),
+            _ => throw new InvalidOperationException($"The uniform '{uniform}' of {what} is of the kind '{kind.Name}', and a material sends a float, an int, a vec2, a vec3, a vec4 or a color."),
         };
 
         int count = read switch
@@ -151,7 +151,7 @@ public sealed class MaterialService : IMaterialService
             _ => 1,
         };
 
-        float[] numbers = Numbers(id, uniform, kind.Value, count);
+        float[] numbers = Numbers(what, uniform, kind.Value, count);
 
         if (read == IMaterialService.UniformKind.Color)
         {
@@ -167,7 +167,7 @@ public sealed class MaterialService : IMaterialService
     }
 
     /// <summary>Reads the numbers of a value, which are the ones a renderer is handed.</summary>
-    private static float[] Numbers(string id, string uniform, JsonElement value, int count)
+    private static float[] Numbers(string what, string uniform, JsonElement value, int count)
     {
         if (count == 1)
         {
@@ -176,12 +176,12 @@ public sealed class MaterialService : IMaterialService
                 return [single];
             }
 
-            throw new InvalidOperationException($"The uniform '{uniform}' of the material '{id}' holds {value.ValueKind} where one number belongs.");
+            throw new InvalidOperationException($"The uniform '{uniform}' of {what} holds {value.ValueKind} where one number belongs.");
         }
 
         if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() != count)
         {
-            throw new InvalidOperationException($"The uniform '{uniform}' of the material '{id}' holds {value.ValueKind} where {count} numbers belong.");
+            throw new InvalidOperationException($"The uniform '{uniform}' of {what} holds {value.ValueKind} where {count} numbers belong.");
         }
 
         var numbers = new float[count];
@@ -297,15 +297,54 @@ public sealed class MaterialService : IMaterialService
 
         // A layer that draws with the program of the engine reads no uniform of a material: the values of a document belong to a
         // stage, and a program that was not compiled from one would be handed names it does not declare.
-        if (shader == default || material.Id is not string id || !_declared.TryGetValue(id, out Declared declared))
+        if (shader == default)
         {
             return;
         }
 
-        foreach (IMaterialService.UniformValue uniform in declared.Uniforms)
+        // The values of the material the layer names come first, and the ones the layer writes itself come after them, so a layer
+        // that differs from its siblings by one value writes that one value and is drawn with the rest of the material unchanged.
+        string? id = material.Id;
+
+        if (id is not null && _declared.TryGetValue(id, out Declared declared))
         {
-            Send(renderer, uniform);
+            foreach (IMaterialService.UniformValue uniform in declared.Uniforms)
+            {
+                Send(renderer, uniform);
+            }
         }
+
+        if (material.Uniforms is { Count: > 0 } written)
+        {
+            foreach ((string name, Dictionary<string, JsonElement> kinds) in written)
+            {
+                foreach ((string kind, JsonElement value) in kinds)
+                {
+                    Send(renderer, Layer(id, name, kind, value));
+                }
+            }
+        }
+    }
+
+    /// <summary>Reads one value that a layer wrote itself, which overrides the one of the material of the same name.</summary>
+    /// <param name="id">The identifier of the material of the layer, which a refusal names, or null when the layer names none.</param>
+    /// <param name="uniform">The name of the uniform.</param>
+    /// <param name="kind">The kind the value was written as, which is what tells a whole number from a number.</param>
+    /// <param name="value">The numbers of the value.</param>
+    /// <returns>The value, in the shape a document of a material is read into.</returns>
+    /// <exception cref="InvalidOperationException">The value is not one that its kind holds.</exception>
+    /// <remarks>
+    /// A value of a layer is read where the value of a material is read, and it is read where it is sent rather than where the
+    /// content is: the field is a set of names and values, so it is kept as it was written until a frame draws with it rather than
+    /// being read into a shape of its own at registration. The read is the same one either way, so a value that its kind cannot
+    /// hold is refused with the name of the layer and of the uniform.
+    /// </remarks>
+    private static IMaterialService.UniformValue Layer(string? id, string uniform, string kind, JsonElement value)
+    {
+        string what = id is null ? $"the layer that writes the uniform '{uniform}'" : $"the layer of the material '{id}'";
+        using JsonDocument document = JsonDocument.Parse($"{{\"{kind}\":{value.GetRawText()}}}");
+
+        return Value(what, uniform, document.RootElement.EnumerateObject().First());
     }
 
     /// <inheritdoc />
