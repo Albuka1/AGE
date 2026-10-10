@@ -428,14 +428,15 @@ public sealed class ContentLinterTests
     {
         string root = Path.Combine(Path.GetTempPath(), "age-lint-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "Prototypes"));
-        Directory.CreateDirectory(Path.Combine(root, "Locale", "en"));
+        Directory.CreateDirectory(Path.Combine(root, "Locale", "en", "Entities"));
 
         try
         {
-            // A string that names the key of a missing image, and a document that names a missing one: the two are mistakes of
-            // different passes, so a person is told which part of the content to open rather than being handed one flat list.
+            // A document that names an image the build does not ship, and a string that names a key its language does not hold: two
+            // mistakes of two passes, so a person is told which part of the content to open rather than being handed one flat list.
+            // A document of a language lives in the folder of that language, under the folder of the languages.
             File.WriteAllText(Path.Combine(root, "Prototypes", "thing.yml"), "- type: entity\n  id: Thing\n  components:\n    - type: Sprite\n      TexturePath: Textures/Nowhere/gone.png\n");
-            File.WriteAllText(Path.Combine(root, "Locale", "en", "strings.yml"), "ent-Thing: Thing\nent-Thing.desc: A thing\nbroken: \"{{ ent-Nothing }}\"\n");
+            File.WriteAllText(Path.Combine(root, "Locale", "en", "Entities", "things.yml"), "ent-Thing: Thing\nent-Thing.desc: A thing\nbroken: \"{ ent-Nothing }\"\n");
 
             using ServiceProvider provider = Create();
             var assets = new NullAssetLoader();
@@ -449,8 +450,13 @@ public sealed class ContentLinterTests
             result.Reports[0].Area.Should().Be(LintArea.Prototypes, "the passes are made in the order the folders are named");
             result.Reports[1].Area.Should().Be(LintArea.Locales);
             result.Reports.Select(report => report.Area).Should().NotContain(LintArea.Sheets, "a folder that the options leave out is not read at all");
-            result.Problems.Should().ContainSingle("the mistake of the locale pass names a string that the base language holds, and the document of the prototype is read from the language it plays in");
-            result.ProblemCount.Should().Be(1);
+
+            // A document that names an image the build does not ship, and a string that names a key its language does not hold: the
+            // mistake of the prototype pass and the one of the locale pass, and both of them are in the answer of the whole build.
+            result.Problems.Should().HaveCount(2, "the mistake of the prototype pass and the one of the locale pass are both reported");
+            result.Reports[0].Problems.Should().ContainSingle().Which.Message.Should().Contain("Textures/Nowhere/gone.png");
+            result.Reports[1].Problems.Should().ContainSingle().Which.Message.Should().Contain("ent-Nothing");
+            result.ProblemCount.Should().Be(2);
         }
         finally
         {

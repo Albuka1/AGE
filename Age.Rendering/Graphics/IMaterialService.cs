@@ -86,11 +86,23 @@ public interface IMaterialService
     /// One value of a material, which a document writes as the kind of a uniform and the numbers behind it.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A value belongs to one layer rather than to the program, and a document writes it the way GLSL names its type, so a value
-    /// that a stage reads as a float and one it reads as an int are told apart and the renderer is handed one or the other:
-    /// <c>Uniforms: { Speed: { float: 4.0 }, Steps: { int: 8 } }</c>. A material that names no value keeps the one the stage was
-    /// written with, and a name that the stage does not declare is ignored by the device, which is what a uniform of one stage and
-    /// not another looks like in practice.
+    /// that a stage reads as a float and one it reads as an int are told apart and the renderer is handed one or the other. A
+    /// material that names no value keeps the one the stage was written with, and a name that the stage does not declare is
+    /// ignored by the device, which is what a uniform of one stage and not another looks like in practice.
+    /// </para>
+    /// <para>
+    /// The kind is on a line of its own rather than in the flow style, because the flow style is not part of the subset of YAML
+    /// that the content of the engine is read with:
+    /// </para>
+    /// <code>
+    /// Uniforms:
+    ///   Speed:
+    ///     float: 4.0
+    ///   Steps:
+    ///     int: 8
+    /// </code>
     /// </remarks>
     /// <param name="Name">The name of the uniform, as the stage declares it.</param>
     /// <param name="Kind">The kind the value was read as, which is what a renderer is handed it by.</param>
