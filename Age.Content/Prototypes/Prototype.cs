@@ -24,7 +24,10 @@ public sealed class Prototype : IPrototype
     /// <param name="line">The line of the file, counting from one.</param>
     /// <param name="components">The components and their values, in the order the documents declared them.</param>
     /// <param name="fields">The fields of the document that are not one of the reserved ones, in the order they were written.</param>
-    public Prototype(string id, string kind, string? parent, string? nameKey, string? descKey, string file, int line, IReadOnlyList<PrototypeComponent> components, IReadOnlyList<PrototypeComponent>? fields = null)
+    /// <param name="nameText">The words that name this prototype, written in the document rather than in a language, or null when it writes none.</param>
+    /// <param name="descText">The words that describe this prototype, written in the document rather than in a language, or null when it writes none.</param>
+
+    public Prototype(string id, string kind, string? parent, string? nameKey, string? descKey, string file, int line, IReadOnlyList<PrototypeComponent> components, IReadOnlyList<PrototypeComponent>? fields = null, string? nameText = null, string? descText = null)
     {
         Id = id;
         Kind = kind;
@@ -35,6 +38,8 @@ public sealed class Prototype : IPrototype
         Line = line;
         Components = components;
         Fields = fields ?? [];
+        NameText = nameText;
+        DescText = descText;
     }
 
     /// <inheritdoc />
@@ -74,6 +79,17 @@ public sealed class Prototype : IPrototype
     /// game is data rather than state of a run, so it travels with the identifier the same way the components do.
     /// </remarks>
     public IReadOnlyList<PrototypeComponent> Fields { get; }
+
+    /// <summary>Gets the words that name this prototype, written in the document rather than in a language, or null when it writes none.</summary>
+    /// <remarks>
+    /// A document may write a name as a text of its own rather than as a key of a language, which is what a thing that is not
+    /// translated carries. A key wins over it where a language holds one, and a document that writes neither is named by its
+    /// identifier.
+    /// </remarks>
+    public string? NameText { get; }
+
+    /// <summary>Gets the words that describe this prototype, written in the document rather than in a language, or null when it writes none.</summary>
+    public string? DescText { get; }
 
     /// <summary>Determines whether the prototype carries a component.</summary>
     /// <param name="name">The name a document uses for the component.</param>

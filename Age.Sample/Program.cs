@@ -551,7 +551,19 @@ console.Register("loc", "Reports the language the strings are read in, and switc
     }
 
     console.Write($"language {locale.Language}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve");
-    console.Write($"goblin: {locale.Get("ent-Goblin")} / {locale.Get("ent-Goblin.desc")}");
+
+    // A name is drawn from the key of a language, the words the document wrote, or the identifier, so this line reports what a game
+    // would draw rather than what a key answers: `locale.Get` answers the key itself when nothing holds it, and `NameOf` walks the chain.
+    if (prototypes.TryGet("Goblin", out EntityPrototype? goblin) && goblin is not null)
+    {
+        console.Write($"goblin: {locale.NameOf(goblin)} / {locale.Describe(goblin)}");
+    }
+
+    if (prototypes.TryGet("Beacon", out EntityPrototype? beacon) && beacon is not null)
+    {
+        console.Write($"beacon: {locale.NameOf(beacon)} / {locale.Describe(beacon)} (it writes no name of its own, so the key of the content answers)");
+    }
+
     console.Write($"items: {locale.Get("ui-entities", ("count", 1))}, {locale.Get("ui-entities", ("count", 4))}");
 });
 console.Register("goblin", "Puts a goblin of the content in the world, at 320 by 240.", _ => spawner.Spawn(world, "Goblin", new Vector2(320f, 240f)));

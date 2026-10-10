@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A name and a description of a prototype are drawn in a chain rather than from a key alone: `ILocaleService.NameOf` and `Describe`
+  answer with `ent-<Id>` in the language being played, then with that key in the base language, then with the words a document wrote
+  in its `name` and `desc` fields, and with the identifier of the entity last of all. A document therefore never has to say what an
+  entity is called: `Goblin` is named by `ent-Goblin` and described by `ent-Goblin.desc` whether or not the document writes either, and
+  a thing that is translated in one language and written in its document in another is named in both without either repeating the
+  other. A name that takes a step of the chain is a name a game expected rather than a key that is missing, so it is not counted in
+  `Missing`, and a bare key is never drawn.
 - `DevWindowService` is the developer window: a window of the operating system that stands beside the game rather than a panel over
   the frame, so it is drawn at the resolution of the display and is moved by the window manager. It holds a set of `IDevWindowTab`
   pages and draws each into a `IDevWindowHost`, which `SilkDevWindowHost` answers with a second Silk.NET window and a context of its
@@ -223,12 +230,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than a copy of it, which is how a string is inherited rather than repeated. A key that is not there is answered with
   the key itself, counted in `Missing` and written once in the log, `PluralRules` selects the form for a count in the languages
   the engine ships, and `Resources/Locale/en` with `Resources/Locale/ru` are what a game copies to add a language of its own.
-  A prototype names its strings with the fields `name` and `desc`, which hold keys rather than texts and are inherited with the
-  rest of the prototype, so an entity of `Goblin` is named by `ent-Goblin` and described by `ent-Goblin.desc` without a document
-  writing either; a name is written once where a kind is declared, and `ent-GoblinHeavy` that is a `Goblin` says so by writing
-  nothing at all. `Age.Content.Lint` reads every language of a build: a key that two documents write, a reference that its
-  language does not answer, a translation that holds a key the base language does not, and a name or a description that a
-  prototype points at and no string answers are all mistakes of the content rather than something a player finds. The sample
+  A prototype names its strings with the fields `name` and `desc`, and needs to write neither: an entity of `Goblin` is named by
+  `ent-Goblin` and described by `ent-Goblin.desc`, and a prototype that writes `name`/`desc` writes the words to fall back to rather
+  than a key. What a game draws is the string of `ent-<Id>` in the language being played, then the string of the base language, then
+  the words the document wrote, and the identifier last of all — so a thing that is translated in one language and written in its
+  document in another is named in both without either repeating the other, and nothing is ever drawn as a bare key. `ILocaleService.NameOf`
+  and `Describe` walk that chain, and a name that falls back is not counted in `Missing`. `Age.Content.Lint` reads every language of a
+  build: a key that two documents write, a reference that its language does not answer, a translation that holds a key the base
+  language does not, and a name or a description that neither a string of the base language nor the words of a document answers are all
+  mistakes of the content rather than something a player finds. The sample
   reads its language from the setting `locale` and the command `loc` reports what the strings say and switches the language
   while the game runs.
 - A release is cut by one script and checked by the workflow that publishes it: `tools/release.ps1` bumps the version, closes
