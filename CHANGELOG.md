@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A lint reports its mistakes grouped by the pass that found them: `LintReport` carries the `LintArea` it belongs to, `LintResult`
+  holds the report of every pass, and `ContentLinter.Lint(LintOptions)` is the one call a build makes, which reads the folders the
+  options name and answers in the order of the passes. The command line tool writes each mistake under the pass that found it, and
+  the passes themselves — `Lint`, `LintSheets` and `LintLocales` — answer exactly what they did.
+
 ### Added
 
 - A sprite is drawn from layers, each of them with an image and a material of its own: `SpriteComponent.Layers` holds them in the
