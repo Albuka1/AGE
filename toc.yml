@@ -6,8 +6,6 @@
   href: docs/articles/adding-a-system.md
 - name: Roadmap
   href: docs/articles/roadmap.md
-- name: Progress
-  href: PROGRESS.md
 - name: Releasing
   href: docs/articles/releasing.md
 - name: API Reference
