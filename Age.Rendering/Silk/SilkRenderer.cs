@@ -484,8 +484,13 @@ public sealed class SilkRenderer : IRenderer
             return;
         }
 
+        // The scissor of the device cuts a clear as well as a draw, so a clip that is in force would leave the rest of the
+        // surface as it was: it is turned off around the clear and put back on the same call, which keeps a frame that opens
+        // inside a clip from clearing a part of the surface rather than all of it.
+        gl.Disable(EnableCap.ScissorTest);
         gl.ClearColor(Color.Black.R / 255f, Color.Black.G / 255f, Color.Black.B / 255f, Color.Black.A / 255f);
         gl.Clear(ClearBufferMask.ColorBufferBit);
+        ApplyClip();
     }
 
     private void CreateResources()
@@ -1116,32 +1121,13 @@ public sealed class SilkRenderer : IRenderer
             return;
         }
 
-        Rect clip = _clips.Peek();
-        float x = MathF.Max(clip.X, 0f);
-        float y = MathF.Max(clip.Y, 0f);
-        float width = MathF.Max(clip.Width, 0f);
-        float height = MathF.Max(clip.Height, 0f);
-
-        // A clip wider or taller than the surface is cut to it, so a scissor that reaches past the framebuffer cannot turn a
-        // draw of a valid rectangle into an error of the device.
-        width = MathF.Min(width, MathF.Max(_surfacePixels.X - x, 0f));
-        height = MathF.Min(height, MathF.Max(_surfacePixels.Y - y, 0f));
+        // The clip is cut to the surface, which is what keeps a rectangle that reaches past the framebuffer from turning a
+        // draw of a valid rectangle into an error of the device, and what reduces a clip that begins outside the surface to
+        // the part of it that is on the surface: the intersection of two rectangles that do not touch covers nothing.
+        Rect clip = _clips.Peek().Intersect(new Rect(Vector2.Zero, _surfacePixels));
 
         gl.Enable(EnableCap.ScissorTest);
-        gl.Scissor((int)x, (int)(MathF.Max(_surfacePixels.Y - y - height, 0f)), (uint)width, (uint)height);
-    }
-
-    /// <summary>Returns the part of two clips that both of them keep, which is the whole of the clip that is inside the other.</summary>
-    private static Rect Intersect(Rect first, Rect second)
-    {
-        // A rectangle whose size is negative is one of nothing, which keeps a clip that is entirely outside the one below it from
-        // covering its neighbour: the intersection of two that do not touch is in the same place and of no size.
-        float left = MathF.Max(first.X, second.X);
-        float top = MathF.Max(first.Y, second.Y);
-        float right = MathF.Min(first.X + first.Width, second.X + second.Width);
-        float bottom = MathF.Min(first.Y + first.Height, second.Y + second.Height);
-
-        return new Rect(new Vector2(left, top), new Vector2(MathF.Max(right - left, 0f), MathF.Max(bottom - top, 0f)));
+        gl.Scissor((int)clip.X, (int)(_surfacePixels.Y - clip.Y - clip.Height), (uint)clip.Width, (uint)clip.Height);
     }
 
     private uint CreateFontTexture()

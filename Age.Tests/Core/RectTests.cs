@@ -62,4 +62,27 @@ public sealed class RectTests
 
         shared.Size.Should().Be(Vector2.Zero, "a chain of clips keeps working after a pair of them stop overlapping");
     }
+
+    [Fact]
+    public void Rect_Intersect_AClipCutToTheSurface_KeepsOnlyTheVisiblePart()
+    {
+        // What the renderer does to a clip before it points the scissor at it: a clip that begins outside the surface keeps
+        // the part that is on the surface rather than a size taken from the corner that is off it.
+        var surface = new Rect(Vector2.Zero, new Vector2(800f, 600f));
+        var clip = new Rect(new Vector2(-50f, -20f), new Vector2(200f, 100f));
+
+        Rect visible = clip.Intersect(surface);
+
+        visible.Position.Should().Be(Vector2.Zero);
+        visible.Size.Should().Be(new Vector2(150f, 80f));
+    }
+
+    [Fact]
+    public void Rect_Intersect_AClipPastTheSurface_CoversNothing()
+    {
+        var surface = new Rect(Vector2.Zero, new Vector2(800f, 600f));
+        var clip = new Rect(new Vector2(900f, 700f), new Vector2(100f, 100f));
+
+        clip.Intersect(surface).Size.Should().Be(Vector2.Zero, "a clip that starts past the surface draws nothing");
+    }
 }
