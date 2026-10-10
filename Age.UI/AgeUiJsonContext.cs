@@ -15,6 +15,9 @@ namespace Age.UI;
 [JsonSerializable(typeof(CanvasComponent))]
 [JsonSerializable(typeof(ParentComponent))]
 [JsonSerializable(typeof(ChildrenComponent))]
+[JsonSerializable(typeof(CheckBoxComponent))]
+[JsonSerializable(typeof(SliderComponent))]
+[JsonSerializable(typeof(ProgressBarComponent))]
 internal sealed partial class AgeUiJsonContext : JsonSerializerContext
 {
 }
