@@ -4,7 +4,7 @@ using Age.Input;
 namespace Age.Rendering;
 
 /// <summary>
-/// The developer overlay of a game: the console and a few numbers about the frame, drawn over everything else.
+/// The developer overlay of a game: a few numbers about the frame, drawn over everything else.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -14,10 +14,8 @@ namespace Age.Rendering;
 /// is what makes a path with a typo in it visible without reading the log.
 /// </para>
 /// <para>
-/// The stats key, F1 by default, shows and hides the numbers, and the console key, Tab by default, opens and closes the
-/// console, which stands the simulation still while it is open and puts the clock back the way it was when it closes.
-/// While the console is open the typed characters reach it, Enter runs the line, backspace removes a character, and the up
-/// and down keys walk its history.
+/// The stats key, F3 by default, shows and hides the numbers. The console of a game is <see cref="DevConsoleOverlay"/>, which
+/// is a pass of its own because it takes the whole input while it is open.
 /// </para>
 /// </remarks>
 /// <example>
@@ -40,9 +38,7 @@ public sealed class DevOverlay : IRenderPass
     private static readonly Color ErrorColour = new(255, 120, 120);
     private static readonly Color HintColour = new(150, 150, 150);
 
-    private readonly IConsoleService _console;
     private readonly IInputService _input;
-    private readonly ITextInputService _text;
     private readonly SystemPipeline _pipeline;
     private readonly FixedTimestep _timestep;
     private readonly IRenderer _renderer;
@@ -54,39 +50,31 @@ public sealed class DevOverlay : IRenderPass
     private double _seconds;
     private double _framesPerSecond;
     private int _frames;
-    private int _consoleLines = 12;
-    private bool _wasPaused;
 
-    /// <summary>Initializes the overlay from the console it drives and the services it reports.</summary>
-    /// <param name="console">The console that <see cref="ConsoleKey"/> opens and the typed characters reach.</param>
-    /// <param name="input">The keys that open the console, run a line and walk its history.</param>
-    /// <param name="text">The characters that are typed, which reach the console while it is open.</param>
+    /// <summary>Initializes the overlay from the services it reports.</summary>
+    /// <param name="input">The key that shows and hides the numbers.</param>
     /// <param name="pipeline">The pipeline whose step and frame times are printed.</param>
-    /// <param name="timestep">The clock, which stands still while the console is open.</param>
+    /// <param name="timestep">The clock, whose tick and factor are printed.</param>
     /// <param name="renderer">The renderer that the overlay draws with.</param>
     /// <param name="textures">The texture service, whose images that are not there are reported, or null to report none.</param>
     /// <param name="sheets">The sheet service, whose sheets and states that did not resolve are reported, or null to report none.</param>
     /// <param name="textRenderer">The renderer of the text of the overlay, which draws it with the fonts of the engine, or null to draw it with the built-in font.</param>
     /// <exception cref="ArgumentNullException">One of the arguments is null.</exception>
-    public DevOverlay(IConsoleService console, IInputService input, ITextInputService text, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer, ITextureService? textures = null, ISpriteSheetService? sheets = null, TextRenderer? textRenderer = null)
+    public DevOverlay(IInputService input, SystemPipeline pipeline, FixedTimestep timestep, IRenderer renderer, ITextureService? textures = null, ISpriteSheetService? sheets = null, TextRenderer? textRenderer = null)
     {
-        ArgumentNullException.ThrowIfNull(console);
         ArgumentNullException.ThrowIfNull(input);
-        ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(pipeline);
         ArgumentNullException.ThrowIfNull(timestep);
         ArgumentNullException.ThrowIfNull(renderer);
 
-        _console = console;
         _input = input;
         _textures = textures;
         _sheets = sheets;
         _textRenderer = textRenderer;
 
         // The lines of the overlay are stacked at the height of a line of the font it draws with, so a font of the engine that
-        // is taller than the bitmap one does not make the lines of the console overlap.
+        // is taller than the bitmap one does not make the lines of the numbers overlap.
         _line = textRenderer?.LineHeight ?? BitmapFontMetrics.GlyphHeight;
-        _text = text;
         _pipeline = pipeline;
         _timestep = timestep;
         _renderer = renderer;
@@ -95,84 +83,30 @@ public sealed class DevOverlay : IRenderPass
     /// <summary>Gets or sets a value indicating whether the numbers of the frame are drawn. <see cref="StatsKey"/> changes it.</summary>
     public bool ShowStats { get; set; } = true;
 
-    /// <summary>Gets or sets the key that shows and hides the numbers of the frame. The default is F1.</summary>
-    public Key StatsKey { get; set; } = Key.F1;
-
-    /// <summary>Gets or sets the key that opens and closes the console. The default is Tab.</summary>
-    /// <remarks>Escape closes the console as well, so a game that keeps Escape for a menu still has a way out.</remarks>
-    public Key ConsoleKey { get; set; } = Key.Tab;
-
-    /// <summary>Gets or sets the number of console lines that are drawn above the line that is being typed. The default is 12.</summary>
-    /// <exception cref="ArgumentOutOfRangeException">The number is negative.</exception>
-    public int ConsoleLines
-    {
-        get => _consoleLines;
-        set
-        {
-            ArgumentOutOfRangeException.ThrowIfNegative(value);
-            _consoleLines = value;
-        }
-    }
+    /// <summary>Gets or sets the key that shows and hides the numbers of the frame. The default is F3.</summary>
+    public Key StatsKey { get; set; } = Key.F3;
 
     /// <summary>Gets the frames per second over the last window of a second, which is what the overlay prints.</summary>
     public double FramesPerSecond => _framesPerSecond;
 
-    /// <summary>Reads the keys and the characters of one frame, which is what opens the console and runs a line.</summary>
+    /// <summary>Gets or sets how far the numbers are drawn from the top of the frame, in pixels. The default is zero.</summary>
+    /// <remarks>
+    /// A game that draws a panel at the top of its frame sets this to the height of that panel, so the numbers stand below it
+    /// rather than under it: the console of the engine reports its height through <c>PanelHeight</c>, which is what the sample
+    /// hands to this property while the console is open.
+    /// </remarks>
+    public float TopMargin { get; set; }
+
+    /// <summary>Reads the keys of one frame, which is what shows and hides the numbers.</summary>
     /// <param name="frame">The time of the frame, which the frames per second are measured over.</param>
     /// <remarks>Call it once per frame from the render callback of the loop, before the passes are rendered.</remarks>
     public void Update(in GameTime frame)
     {
         Measure(frame.Delta);
 
-        foreach (char character in _text.TypedCharacters)
-        {
-            if (_console.IsOpen)
-            {
-                _console.Type(character);
-            }
-        }
-
         if (_input.IsKeyPressed(StatsKey))
         {
             ShowStats = !ShowStats;
-        }
-
-        if (_input.IsKeyPressed(ConsoleKey))
-        {
-            _console.Toggle();
-            ApplyPause();
-        }
-
-        if (!_console.IsOpen)
-        {
-            return;
-        }
-
-        if (_input.IsKeyPressed(Key.Escape))
-        {
-            _console.Close();
-            ApplyPause();
-            return;
-        }
-
-        if (_input.IsKeyPressed(Key.Enter))
-        {
-            _console.Submit();
-        }
-
-        if (_input.IsKeyPressed(Key.Backspace))
-        {
-            _console.Backspace();
-        }
-
-        if (_input.IsKeyPressed(Key.Up))
-        {
-            _console.RecallPrevious();
-        }
-
-        if (_input.IsKeyPressed(Key.Down))
-        {
-            _console.RecallNext();
         }
     }
 
@@ -192,39 +126,17 @@ public sealed class DevOverlay : IRenderPass
         _seconds = 0d;
     }
 
-    /// <summary>Stands the clock still while the console is open, and puts it back the way it was when it closes.</summary>
-    /// <remarks>A game that was already paused stays paused, because the overlay remembers what it found.</remarks>
-    private void ApplyPause()
-    {
-        if (_console.IsOpen)
-        {
-            _wasPaused = _timestep.Paused;
-            _timestep.Paused = true;
-            return;
-        }
-
-        _timestep.Paused = _wasPaused;
-    }
-
     /// <inheritdoc />
     /// <remarks>The overlay begins its own frame without clearing, so what the game drew stays behind it.</remarks>
     public void Render(World world, in Camera2D camera)
     {
         ArgumentNullException.ThrowIfNull(world);
 
-        Vector2 viewport = _renderer.ViewportSize;
-        float y = 8f;
-
         _renderer.BeginFrame(false);
-
-        if (_console.IsOpen)
-        {
-            y = DrawConsole(viewport, y);
-        }
 
         if (ShowStats)
         {
-            DrawStats(world, y);
+            DrawStats(world, 8f + TopMargin);
         }
 
         _renderer.EndFrame();
@@ -235,8 +147,8 @@ public sealed class DevOverlay : IRenderPass
     /// <param name="position">The top-left corner of the line.</param>
     /// <param name="color">The color of the glyphs.</param>
     /// <remarks>
-    /// The font of the engine is what makes a line of a game readable in the console and in the numbers of a frame: the built-in
-    /// font covers the printable ASCII range and draws everything else as a space, which is what a game that ships no font gets.
+    /// The font of the engine is what makes a line of a game readable in the numbers of a frame: the built-in font covers the
+    /// printable ASCII range and draws everything else as a space, which is what a game that ships no font gets.
     /// </remarks>
     private void Line(string text, Vector2 position, Color color)
     {
@@ -247,27 +159,6 @@ public sealed class DevOverlay : IRenderPass
         }
 
         _textRenderer.Draw(text, position, new TextStyle { Color = color });
-    }
-
-    /// <summary>Draws the visible lines of the console and the line that is being typed, and returns the line below them.</summary>
-    private float DrawConsole(Vector2 viewport, float y)
-    {
-        float line = _line + 2f;
-        IReadOnlyList<string> output = _console.Output;
-        int shown = Math.Min(output.Count, ConsoleLines);
-
-        _renderer.DrawRectangle(new Rect(Vector2.Zero, new Vector2(viewport.X, (shown + 2f) * line)), Color.Black);
-
-        for (var index = 0; index < shown; index++)
-        {
-            string text = output[output.Count - shown + index];
-            Color colour = text.StartsWith("error:", StringComparison.Ordinal) ? ErrorColour : TextColour;
-            Line(text, new Vector2(8f, 8f + (index * line)), colour);
-        }
-
-        Line($"> {_console.Input}_", new Vector2(8f, 8f + (shown * line)), TextColour);
-
-        return 8f + ((shown + 2f) * line);
     }
 
     /// <summary>Draws the numbers of the frame and of every system behind them.</summary>
@@ -304,7 +195,7 @@ public sealed class DevOverlay : IRenderPass
 
         y = DrawTimings(_pipeline.StepTimings, "step", y);
         y = DrawTimings(_pipeline.FrameTimings, "frame", y);
-        Line($"{StatsKey} numbers  {ConsoleKey} console", new Vector2(8f, y), HintColour);
+        Line($"{StatsKey} numbers", new Vector2(8f, y), HintColour);
     }
 
     /// <summary>Draws one line per system of a stage and returns the line below the last one.</summary>

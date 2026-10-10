@@ -1,9 +1,5 @@
 bin/
 obj/
-artifacts/
-_site/
-api/
-publish/
 *.user
 *.suo
 .vs/

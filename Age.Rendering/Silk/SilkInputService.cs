@@ -19,7 +19,7 @@ namespace Age.Rendering;
 /// typed are collected from the same device, and the frame boundary is what separates the characters of one frame from
 /// the next.
 /// </remarks>
-public sealed class SilkInputService : IInputService, ITextInputService, IDisposable
+public sealed class SilkInputService : IInputService, ITextInputService, IClipboardService, IDisposable
 {
     private readonly IWindowService _windowService;
     private readonly InputStateTracker _tracker = new();
@@ -41,8 +41,40 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
     /// <summary>Gets the underlying Silk.NET input context. It is created together with the window at the first frame.</summary>
     public IInputContext? Context => _context;
 
+    /// <summary>Forgets every key and button that is being held, which is what a window that loses the focus asks for.</summary>
+    /// <remarks>
+    /// A device reports a key that went down and one that came up, and a window that loses the focus while a key is held never sees
+    /// the release: the key would stay held for the rest of the run, and a game would walk on its own after the person let go. The
+    /// state is dropped here instead, together with the characters that were typed and not read, so that a line that was half typed
+    /// when the focus moved does not arrive in the console of the frame that follows.
+    /// </remarks>
+    public void ReleaseHeld()
+    {
+        _tracker.ReleaseAll();
+        _typed.Clear();
+    }
+
     /// <inheritdoc />
     public Vector2 MousePosition => _tracker.MousePosition;
+
+    /// <inheritdoc />
+    public float MouseWheel => _tracker.MouseWheel;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The clipboard belongs to the keyboard, which is opened with the window on the first frame, so a read before that answers an
+    /// empty text rather than reaching a device that is not there yet.
+    /// </remarks>
+    public string Text => _keyboard?.ClipboardText ?? string.Empty;
+
+    /// <inheritdoc />
+    public void SetText(string? text)
+    {
+        if (_keyboard is not null)
+        {
+            _keyboard.ClipboardText = text ?? string.Empty;
+        }
+    }
 
     /// <inheritdoc />
     public string TypedCharacters => _typed.ToString();
@@ -114,9 +146,26 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
     /// <inheritdoc />
     public bool IsMouseButtonPressed(MouseButton button) => _tracker.IsMouseButtonPressed(button);
 
+    /// <summary>Records how far the wheel of the mouse was turned, which the device reports as an event rather than as a state.</summary>
+    private void OnMouseWheel(IMouse mouse, ScrollWheel wheel) => _tracker.SetMouseWheel(wheel.Y);
+
+    /// <summary>Forgets what is held when the window of the game takes or loses the keyboard focus.</summary>
+    /// <param name="focused">Whether the window now has the keyboard focus.</param>
+    /// <remarks>
+    /// A device reports a key that went down and one that came up, and a window that loses the focus while a key is held never sees
+    /// the release. What is held is forgotten on the way out and on the way in alike, so a key that was down when a window beside the
+    /// game took the keyboard is not a key that is still down when the game gets it back.
+    /// </remarks>
+    private void OnFocusChanged(bool focused) => ReleaseHeld();
+
     /// <summary>Closes the input context and releases its devices. Calling it more than once does nothing.</summary>
     public void Dispose()
     {
+        if (_context is not null)
+        {
+            _windowService.Window.FocusChanged -= OnFocusChanged;
+        }
+
         _context?.Dispose();
         _context = null;
         _keyboard = null;
@@ -131,6 +180,11 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
         }
 
         IWindow window = _windowService.Window;
+
+        // A window that loses the focus never sees the release of a key that was held while it had it, so what is held is forgotten:
+        // a person who was walking when they clicked the developer window does not come back to a game that walks on its own.
+        window.FocusChanged += OnFocusChanged;
+
         _context = window.CreateInput();
         _keyboard = _context.Keyboards.Count > 0
             ? _context.Keyboards[0]
@@ -144,6 +198,7 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
         _keyboard.KeyChar += OnKeyChar;
         _mouse.MouseDown += OnMouseDown;
         _mouse.MouseUp += OnMouseUp;
+        _mouse.Scroll += OnMouseWheel;
     }
 
     private void OnKeyDown(IKeyboard keyboard, Key key, int scancode) => _tracker.KeyDown(key);

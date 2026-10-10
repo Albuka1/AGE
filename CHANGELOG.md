@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A name and a description of a prototype are drawn in a chain rather than from a key alone: `ILocaleService.NameOf` and `Describe`
+  answer with `ent-<Id>` in the language being played, then with that key in the base language, then with the words a document wrote
+  in its `name` and `desc` fields, and with the identifier of the entity last of all. A document therefore never has to say what an
+  entity is called: `Goblin` is named by `ent-Goblin` and described by `ent-Goblin.desc` whether or not the document writes either, and
+  a thing that is translated in one language and written in its document in another is named in both without either repeating the
+  other. A name that takes a step of the chain is a name a game expected rather than a key that is missing, so it is not counted in
+  `Missing`, and a bare key is never drawn.
+- `DevWindowService` is the developer window: a window of the operating system that stands beside the game rather than a panel over
+  the frame, so it is drawn at the resolution of the display and is moved by the window manager. It holds a set of `IDevWindowTab`
+  pages and draws each into a `IDevWindowHost`, which `SilkDevWindowHost` answers with a second Silk.NET window and a context of its
+  own and `NullDevWindowHost` answers with a window that is never there for a headless run. The window is created the first time it is
+  opened and its size is kept while it is closed. The cross of a tab removes that page and the cross of the title bar closes the
+  window. A page is drawn inside the body of the window and clipped to it by `IDevWindowHost.PushClip` and `PopClip`, so a page that
+  draws past the room it was given is cut off at the frame of the window rather than drawn over it. The page draws through the
+  renderer of its own window, which is what puts the output of the console on the screen of the
+  window rather than in the context of the game, and a line that is wider than the page is wrapped onto the rows below it rather than
+  running off the side of the window. The window is titled `devwindow`, and a close that the window manager sends — the cross of the
+  title bar — closes and disposes it, so the next `devwindow` opens a window of its own. `ConsoleTab` shows the output of the console,
+  and a click on a line copies it to the clipboard, the whole line when it is wrapped over several rows. A page carries a cross only
+  when it says it is `Closable`, and the console of the engine does not, so it stays while a page of a game comes and goes. A frame
+  of the window makes its context current and hands the window of the game its own back afterwards, which is what keeps the game
+  drawing while the window is open. A frame of the game makes the context of its own window current rather than assuming it, and the
+  loop makes it current again before it swaps, so a frame that drew a page of the developer window does not leave the context of that
+  window behind; a window that is closed makes its own context current before its program, its buffers and its textures are deleted,
+  because a delete that runs on the context of the game instead deletes the object of the game that holds the same number and leaves
+  the game on a black frame.
+- `WindowPointer` is handed to the page that is shown, so a page reads the pointer of its own window and acts on a click inside the
+  body; a click on the frame of the window is the window's own and never reaches the page.
+- The developer window holds the keyboard only while it has the focus: `IDevWindowHost.Focused` and `IDevWindowService.Focused` report
+  it, tracked from the focus events of the window. A game keeps its own console and its own keys while the window stands beside it
+  without the focus, so the two windows are used side by side rather than one taking the input of the other, and a key that was held
+  when the focus moved is not left held by the window that never saw the release.
+
+- `IClipboardService` is the clipboard of the machine, which `SilkInputService` reads from the keyboard and `NullInputService` keeps
+  in memory for a run with no window. The console uses it: Control and A, C, X and V select, copy, cut and paste, the caret is where
+  the next character lands, and the left and right, home and end keys move it while Shift extends the selection.
+- `IUserDataService` is the folder of a game that belongs to the person playing it: a game is installed read-only, so its settings,
+  its saves and what it takes a picture of live under the roaming application data of the account rather than beside the executable.
+  The service answers `Root`, `Data`, `Saves` and `Screenshots`, makes a folder on the first ask so a game that writes nothing
+  leaves nothing behind, and turns a name of a file into a path below the folder it names, refusing a name that climbs out of it.
+  `AddAgeCore` registers one named after the entry assembly, and a game that replaces the registration names itself, as `Age.Sample`
+  does.
 - `Camera2D.ScreenToWorld` and `Camera2D.WorldToScreen` turn a point of the screen into a position of the world and back. The
   conversion is the inverse of the matrix the renderer draws with, so what a game reads is what a player sees: a click that
   became a position of the screen becomes the cell of the map that stands under it, and a name that is placed over a unit
@@ -17,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Every build writes into one `bin/` and one `obj/` at the repository root — a folder per project inside each — rather than
+  into a `bin`/`obj` pair beside every project, so the output of the whole solution is in one place and two projects that share
+  the name of an assembly cannot write over one another. `Directory.Build.props` sets `BaseOutputPath`,
+  `BaseIntermediateOutputPath` and `MSBuildProjectExtensionsPath` to those root folders; the shared `artifacts/` folder is gone.
 - A key and a mouse button are the names of the device that the window reports through, so `Age.Input.Key` and
   `Age.Input.MouseButton` are the types of the backend rather than two enumerations of the engine: `IInputService` answers about any
   key of a keyboard, a new key in a game is not a change in the engine, and the Silk.NET adapter lost its table of thirty-five pairs
@@ -29,6 +75,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An overlay that reads the height of a line while it is built — the numbers of a frame and the console of the engine both do — read it
+  before the asset loader of a game was given its root, so the fonts it names could not be baked yet and the engine reported a font that
+  could not be baked on every run. `TextRenderer.LineHeight` now answers the built-in height and reports nothing while the fonts are not
+  loadable yet, bakes them on the read after the game is ready, and remembers the height from then on; a font that really is faulty is
+  still reported by the draw that needs it.
+- The delete key of the console removed the selected text **and** the character after it, because it fell through to the single
+  character removal once a selection had already gone: a selection is now the whole of what a delete removes, the way a console of a
+  terminal removes the marked text and leaves the character behind it.
+- A folder that a game gave as a relative path was compared with the absolute path of a name, so the containment check of
+  `IUserDataService.PathIn` refused a name it should have accepted, or accepted one on a folder with a trailing separator: the folder
+  is normalized to a full path before the check, in the same form the name is joined in, while a name that climbs out is still
+  refused.
 - A value that a layer wrote itself and that its kind cannot hold no longer takes the rest of the frame with it: the value is
   refused and reported, and the values around it are still sent. A frame reads the values of a layer on every draw and has
   nowhere to report a mistake of the content to but the log, so a mistake in one value used to stop the whole draw of that layer
@@ -176,12 +234,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than a copy of it, which is how a string is inherited rather than repeated. A key that is not there is answered with
   the key itself, counted in `Missing` and written once in the log, `PluralRules` selects the form for a count in the languages
   the engine ships, and `Resources/Locale/en` with `Resources/Locale/ru` are what a game copies to add a language of its own.
-  A prototype names its strings with the fields `name` and `desc`, which hold keys rather than texts and are inherited with the
-  rest of the prototype, so an entity of `Goblin` is named by `ent-Goblin` and described by `ent-Goblin.desc` without a document
-  writing either; a name is written once where a kind is declared, and `ent-GoblinHeavy` that is a `Goblin` says so by writing
-  nothing at all. `Age.Content.Lint` reads every language of a build: a key that two documents write, a reference that its
-  language does not answer, a translation that holds a key the base language does not, and a name or a description that a
-  prototype points at and no string answers are all mistakes of the content rather than something a player finds. The sample
+  A prototype names its strings with the fields `name` and `desc`, and needs to write neither: an entity of `Goblin` is named by
+  `ent-Goblin` and described by `ent-Goblin.desc`, and a prototype that writes `name`/`desc` writes the words to fall back to rather
+  than a key. What a game draws is the string of `ent-<Id>` in the language being played, then the string of the base language, then
+  the words the document wrote, and the identifier last of all — so a thing that is translated in one language and written in its
+  document in another is named in both without either repeating the other, and nothing is ever drawn as a bare key. `ILocaleService.NameOf`
+  and `Describe` walk that chain, and a name that falls back is not counted in `Missing`. `Age.Content.Lint` reads every language of a
+  build: a key that two documents write, a reference that its language does not answer, a translation that holds a key the base
+  language does not, and a name or a description that neither a string of the base language nor the words of a document answers are all
+  mistakes of the content rather than something a player finds. The sample
   reads its language from the setting `locale` and the command `loc` reports what the strings say and switches the language
   while the game runs.
 - A release is cut by one script and checked by the workflow that publishes it: `tools/release.ps1` bumps the version, closes

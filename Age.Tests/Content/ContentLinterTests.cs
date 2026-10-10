@@ -335,13 +335,31 @@ public sealed class ContentLinterTests
     }
 
     [Fact]
-    public void ContentLinter_AStringThatAPrototypeNamesAndNothingAnswers_IsReported()
+    public void ContentLinter_AnEntityThatNeitherTheLanguageNorItsDocumentNames_IsReported()
     {
+        // The entity writes no name of its own, so the keys it falls back to are 'ent-Goblin' and 'ent-Goblin.desc', and the base
+        // language holds strings for other creatures and not for this one: both names it would be drawn by are identifiers, which is
+        // what a build refuses.
         LintReport report = LintLocale(
-            "- type: entity\n  id: Goblin\n  name: ent-Nothing\n",
-            ("en/Entities/creatures.yml", "ent-Goblin: goblin\nent-Goblin.desc: A small, mean creature.\n"));
+            "- type: entity\n  id: Goblin\n",
+            ("en/Entities/creatures.yml", "ent-Orc: orc\nent-Orc.desc: A big, mean creature.\n"));
 
-        report.Problems.Should().ContainSingle().Which.Message.Should().Contain("'ent-Nothing'").And.Contain("'Goblin'");
+        report.Problems.Should().HaveCount(2);
+        report.Problems.Select(problem => problem.Message).Should().OnlyContain(message => message.Contains("'Goblin'"));
+        report.Problems.Select(problem => problem.Message).Should().Contain(message => message.Contains("'ent-Goblin'"));
+        report.Problems.Select(problem => problem.Message).Should().Contain(message => message.Contains("'ent-Goblin.desc'"));
+    }
+
+    [Fact]
+    public void ContentLinter_AnEntityNamedByTheWordsItsDocumentWrites_NeedsNoLanguage()
+    {
+        // A document that writes the words itself needs no string of any language: the key is asked, the language answers nothing, and
+        // the words of the document are what is drawn, so the content is sound.
+        LintReport report = LintLocale(
+            "- type: entity\n  id: Goblin\n  name: Gobby\n  desc: A small, mean creature.\n",
+            ("en/Entities/creatures.yml", "ent-Orc: orc\n"));
+
+        report.IsClean.Should().BeTrue("the words of the document are what a key falls back to");
     }
 
     [Fact]

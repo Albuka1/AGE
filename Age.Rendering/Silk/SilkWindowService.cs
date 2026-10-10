@@ -30,6 +30,11 @@ public sealed class SilkWindowService : IWindowService
             Size = new Vector2D<int>(width, height),
             Title = title,
             API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3)),
+
+            // The loop of the game drives the frames and polls the events itself, so the window is not event-driven: an event-driven
+            // window waits for events inside DoEvents, which is what a loop that already decides when to advance the frame does not
+            // want, and which blocks the whole game once a second window shares the one platform of the process.
+            IsEventDriven = false,
         };
 
         _window = Silk.NET.Windowing.Window.Create(options);

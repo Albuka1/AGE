@@ -266,6 +266,42 @@ public sealed class SceneSerializerTests
     }
 
     [Fact]
+    public void SceneSerializer_SaveAndLoad_KeepsTheTreeOfTheInterface()
+    {
+        // A tree of the interface is a reference in each direction — a child names its parent and a parent lists its children — so it is
+        // exactly the shape A2 warns about: a save that kept the slot of an entity rather than its scene identifier would load a tree
+        // whose links lead nowhere.
+        SceneSerializer serializer = CreateSerializerWithTarget();
+        var source = new World();
+        Entity panel = source.CreateEntity();
+        Entity button = source.CreateEntity();
+        source.Set(panel, new RectTransformComponent { Anchored = true, SizeDelta = new Vector2(300f, 200f), Visible = true });
+        source.Set(button, new RectTransformComponent { Anchored = true, SizeDelta = new Vector2(100f, 40f), Visible = true });
+        source.Set(button, new ParentComponent { Parent = source.Reference(panel) });
+        source.Set(panel, new ChildrenComponent { Children = [source.Reference(button)] });
+        int panelIdentifier = source.SceneIdOf(panel);
+
+        string json = serializer.Save(source);
+
+        var loaded = new World();
+        serializer.Load(loaded, json);
+
+        // The child is found by its parent component, and the identifier it names resolves to the panel of the loaded scene rather
+        // than to nothing or to a wrong entity.
+        Entity loadedButton = loaded.Enumerate<ParentComponent>().Single();
+        Entity loadedPanel = loaded.Resolve(loaded.Get<ParentComponent>(loadedButton).Parent);
+
+        loaded.IsAlive(loadedPanel).Should().BeTrue("the parent of the child reads back as an entity");
+        loaded.SceneIdOf(loadedPanel).Should().Be(panelIdentifier, "the reference names the panel of the loaded scene");
+
+        // The list of children points at the button the same way, so the tree is walkable from the panel downwards after a load.
+        EntityRef[] children = loaded.Get<ChildrenComponent>(loadedPanel).Children ?? [];
+
+        children.Should().ContainSingle();
+        loaded.Resolve(children[0]).Should().Be(loadedButton, "the parent lists the child it holds");
+    }
+
+    [Fact]
     public void SceneSerializer_LoadAReferenceToAnEntityTheSceneDoesNotHold_ResolvesToNothing()
     {
         SceneSerializer serializer = CreateSerializerWithTarget();

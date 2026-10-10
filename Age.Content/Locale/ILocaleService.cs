@@ -1,3 +1,5 @@
+using Age.Content.Prototypes;
+
 namespace Age.Content.Locale;
 
 /// <summary>
@@ -74,4 +76,22 @@ public interface ILocaleService
     /// <returns><see langword="true"/> when a language holds the key.</returns>
     /// <exception cref="ArgumentException">The key is null, empty or whitespace.</exception>
     bool Has(string key, string? language = null);
+
+    /// <summary>Returns what an entity is called, in the language that is being played, which is what a game draws.</summary>
+    /// <param name="entity">The data of the entity, which knows the key it is named by and the words its document wrote.</param>
+    /// <returns>The name of the entity.</returns>
+    /// <exception cref="ArgumentNullException">The entity is null.</exception>
+    /// <remarks>
+    /// The chain is what makes a name something a game never repeats in a file: the key <c>ent-&lt;Id&gt;</c> is asked of the language
+    /// and then of the base language, and when neither holds one the words the document wrote are used, and when it wrote none the
+    /// identifier of the entity is drawn. A name that is only in one language therefore falls back to the words of the document rather
+    /// than to the key.
+    /// </remarks>
+    string NameOf(EntityPrototype entity);
+
+    /// <summary>Returns what an entity is described as, in the language that is being played, and falls back the way <see cref="NameOf"/> does.</summary>
+    /// <param name="entity">The data of the entity, which knows the key it is described by and the words its document wrote.</param>
+    /// <returns>The description of the entity.</returns>
+    /// <exception cref="ArgumentNullException">The entity is null.</exception>
+    string Describe(EntityPrototype entity);
 }

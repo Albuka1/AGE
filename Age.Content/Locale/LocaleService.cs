@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Age.Assets;
+using Age.Content.Prototypes;
 using Microsoft.Extensions.Logging;
 
 namespace Age.Content.Locale;
@@ -170,6 +171,48 @@ public sealed class LocaleService : ILocaleService
         return Holds(Load(_language), key) || Holds(Load(Base), key);
     }
 
+    /// <inheritdoc />
+    public string NameOf(EntityPrototype entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+
+        return Resolve(entity.NameKey, entity.Name, entity.Id);
+    }
+
+    /// <inheritdoc />
+    public string Describe(EntityPrototype entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+
+        return Resolve(entity.DescKey, entity.Desc, entity.Id);
+    }
+
+    /// <summary>Answers a key with the string of a language, the words a document wrote, or the identifier, in that order.</summary>
+    /// <param name="key">The key a language may hold, such as <c>ent-Goblin</c>.</param>
+    /// <param name="text">The words the document wrote, or null when it wrote none.</param>
+    /// <param name="fallback">What is drawn when neither a language nor the document holds anything, which is the identifier.</param>
+    /// <returns>The string to draw.</returns>
+    /// <remarks>
+    /// A key that a language holds wins, and the base language is asked before the words of the document, so a translation that is
+    /// only in the language being played is used where it is there and the base language is used where it is not, and the words of the
+    /// document are what is drawn when no language at all holds the key. Asking this way reports nothing to <see cref="Missing"/>: a
+    /// name that falls back is a thing that a game expected, not a key that is missing.
+    /// </remarks>
+    private string Resolve(string key, string? text, string fallback)
+    {
+        if (Read(_language, key, []) is string translated)
+        {
+            return translated;
+        }
+
+        if (!string.Equals(_language, Base, StringComparison.Ordinal) && Read(Base, key, []) is string inherited)
+        {
+            return inherited;
+        }
+
+        return string.IsNullOrWhiteSpace(text) ? fallback : text;
+    }
+
     /// <summary>Determines whether a language holds a key, which may name what a key says besides its text.</summary>
     private static bool Holds(LocaleLanguage language, string key)
     {
@@ -199,6 +242,15 @@ public sealed class LocaleService : ILocaleService
         if (_languages.TryGetValue(language, out LocaleLanguage? loaded))
         {
             return loaded;
+        }
+
+        // A loader that has not been initialized has no root, so it can neither list the languages nor read a document: an
+        // answer that is taken now would be empty and remembered, which is what a language would then say for the whole run.
+        // The language is answered empty without being kept, so the first real ask, once the game has said where its files
+        // are, reads the documents and keeps them.
+        if (_assets.Root is null)
+        {
+            return new LocaleLanguage(language, new Dictionary<string, LocaleString>(StringComparer.Ordinal));
         }
 
         if (!Languages.Contains(language, StringComparer.Ordinal))

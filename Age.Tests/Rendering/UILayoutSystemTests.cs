@@ -167,6 +167,115 @@ public sealed class UILayoutSystemTests
         return entity;
     }
 
+    [Theory]
+    [MemberData(nameof(Screens))]
+    public void UILayoutSystem_AChild_IsPlacedInsideTheRectangleOfItsParent(float width, float height)
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer { ViewportSize = new Vector2(width, height) };
+        var system = new UILayoutSystem(renderer);
+        CreateCanvas(world);
+
+        // A panel anchored at the top-left corner with a size of its own, and a child stretched across its right half.
+        Entity panel = world.CreateEntity();
+        world.Set(panel, new RectTransformComponent
+        {
+            Anchored = true,
+            AnchorMin = Vector2.Zero,
+            AnchorMax = Vector2.Zero,
+            Pivot = Vector2.Zero,
+            AnchoredPosition = new Vector2(100f, 50f),
+            SizeDelta = new Vector2(400f, 200f),
+            Visible = true,
+        });
+
+        Entity child = world.CreateEntity();
+        world.Set(child, new RectTransformComponent
+        {
+            Anchored = true,
+            AnchorMin = new Vector2(0.5f, 0f),
+            AnchorMax = new Vector2(1f, 1f),
+            Pivot = Vector2.Zero,
+            Visible = true,
+        });
+        world.Set(child, new ParentComponent { Parent = world.Reference(panel) });
+        world.Set(panel, new ChildrenComponent { Children = [world.Reference(child)] });
+
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+
+        // The scale of the canvas is a number of pixels per design unit, and every resolution here is a different one, so the same
+        // authored numbers lay the same tree out at the size of the screen: the child is the right half of its parent at every scale
+        // rather than only where a design unit happens to be a pixel. The layout resolved it, so it is read after the frame above.
+        float scale = world.Get<CanvasComponent>(world.Enumerate<CanvasComponent>().First()).Scale;
+
+        // The panel is at (100, 50) with a size of 400x200 in design units, so its right half begins at 100 + 200 = 300 and is 200 wide
+        // and 200 tall; everything of that is in pixels of the screen, which is why the scale multiplies it. The comparison is
+        // approximate because the scale of a canvas is a quotient of two sizes and a product of it need not land on the same float bit
+        // twice.
+        world.Get<RectTransformComponent>(child).Position.X.Should().BeApproximately(300f * scale, Tolerance);
+        world.Get<RectTransformComponent>(child).Position.Y.Should().BeApproximately(50f * scale, Tolerance);
+        world.Get<RectTransformComponent>(child).Size.X.Should().BeApproximately(200f * scale, Tolerance);
+        world.Get<RectTransformComponent>(child).Size.Y.Should().BeApproximately(200f * scale, Tolerance);
+
+        // Moving the panel moves the child with it, which is what the hierarchy is for.
+        world.GetRef<RectTransformComponent>(panel).AnchoredPosition = new Vector2(200f, 50f);
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+
+        world.Get<RectTransformComponent>(child).Position.X.Should().BeApproximately(400f * scale, Tolerance);
+    }
+
+    [Fact]
+    public void UILayoutSystem_AChildOfAnElementThatIsNotThere_IsLaidOutAgainstTheCanvas()
+    {
+        var world = new World();
+        var system = new UILayoutSystem(new RecordingRenderer());
+        CreateCanvas(world);
+
+        Entity orphan = world.CreateEntity();
+        world.Set(orphan, new RectTransformComponent
+        {
+            Anchored = true,
+            AnchorMin = new Vector2(1f, 1f),
+            AnchorMax = new Vector2(1f, 1f),
+            Pivot = new Vector2(1f, 1f),
+            AnchoredPosition = new Vector2(-100f, -100f),
+            SizeDelta = new Vector2(200f, 50f),
+            Visible = true,
+        });
+
+        // A reference that names an entity the world does not hold is a root rather than an element that stands nowhere.
+        world.Set(orphan, new ParentComponent { Parent = new EntityRef(9999) });
+
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+
+        world.Get<RectTransformComponent>(orphan).Position.Should().Be(new Vector2(1280f - 100f - 200f, 720f - 100f - 50f));
+    }
+
+    [Fact]
+    public void UILayoutSystem_ATreeThatPointsBackAtItself_IsLaidOutOnce()
+    {
+        var world = new World();
+        var system = new UILayoutSystem(new RecordingRenderer());
+        CreateCanvas(world);
+
+        Entity first = world.CreateEntity();
+        Entity second = world.CreateEntity();
+        world.Set(first, new RectTransformComponent { Anchored = true, SizeDelta = new Vector2(100f, 100f), Visible = true });
+        world.Set(second, new RectTransformComponent { Anchored = true, SizeDelta = new Vector2(100f, 100f), Visible = true });
+        world.Set(first, new ParentComponent { Parent = world.Reference(second) });
+        world.Set(second, new ParentComponent { Parent = world.Reference(first) });
+        world.Set(first, new ChildrenComponent { Children = [world.Reference(second)] });
+        world.Set(second, new ChildrenComponent { Children = [world.Reference(first)] });
+
+        Action update = () => system.UpdateFrame(world, new GameTime(0d, 0d));
+
+        // A cycle is not a walk that never ends: the tree is visited once, and an element no root reached is laid out against the
+        // canvas, so both elements end up placed rather than one looping forever.
+        update.Should().NotThrow();
+        world.Get<RectTransformComponent>(first).Size.Should().Be(new Vector2(100f, 100f));
+        world.Get<RectTransformComponent>(second).Size.Should().Be(new Vector2(100f, 100f));
+    }
+
     /// <summary>An element anchored to the bottom-right corner of the canvas with a margin of its own.</summary>
     private static Entity CreateCorner(World world)
     {

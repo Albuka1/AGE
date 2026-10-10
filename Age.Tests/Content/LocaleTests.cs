@@ -1,6 +1,8 @@
 using System.Globalization;
 using Age.Assets;
 using Age.Content.Locale;
+using Age.Content.Prototypes;
+using Age.Core;
 using FluentAssertions;
 using Xunit;
 
@@ -158,6 +160,62 @@ public sealed class LocaleTests : IDisposable
         locale.Missing.Should().BeEmpty();
     }
 
+    [Fact]
+    public void LocaleService_AName_IsDrawnFromTheKeyOfTheLanguageThenTheWordsOfTheDocumentThenTheIdentifier()
+    {
+        LocaleService locale = Service(
+            ("en/Entities/creatures.yml", "ent-Goblin: goblin\nent-Goblin.desc: A small, mean creature.\n"),
+            ("ru/Entities/creatures.yml", "ent-Orc: орк\n"));
+
+        PrototypeManager prototypes = Prototypes(
+            "- type: entity\n  id: Goblin\n"
+            + "- type: entity\n  id: GoblinNamed\n  name: Gobby\n  desc: The words of the document.\n"
+            + "- type: entity\n  id: Orc\n  name: Orc\n  desc: A big, mean creature.\n"
+            + "- type: entity\n  id: Runt\n");
+
+        // English is the base language, so every key it holds is drawn: the words of a document are the fallback of a key that is not
+        // there, and they are not what is drawn here because the language holds the key.
+        locale.NameOf(prototypes.Get<EntityPrototype>("Goblin")).Should().Be("goblin");
+        locale.Describe(prototypes.Get<EntityPrototype>("Goblin")).Should().Be("A small, mean creature.");
+
+        // A key that no language holds falls back to the words the document wrote, so a thing that is not translated needs no string.
+        locale.NameOf(prototypes.Get<EntityPrototype>("GoblinNamed")).Should().Be("Gobby");
+        locale.Describe(prototypes.Get<EntityPrototype>("GoblinNamed")).Should().Be("The words of the document.");
+
+        // A key and no words at all is drawn as the identifier, which is the last step of the chain rather than nothing.
+        locale.NameOf(prototypes.Get<EntityPrototype>("Runt")).Should().Be("Runt");
+
+        // A language that holds the key answers it, and one that holds none takes the words of the document rather than the base
+        // language, because the chain asks the base language before the words and it holds no key for that entity either.
+        locale.Language = "ru";
+
+        locale.NameOf(prototypes.Get<EntityPrototype>("Orc")).Should().Be("орк");
+        locale.NameOf(prototypes.Get<EntityPrototype>("GoblinNamed")).Should().Be("Gobby", "neither language holds the key, so the document answers");
+        locale.Describe(prototypes.Get<EntityPrototype>("GoblinNamed")).Should().Be("The words of the document.");
+        locale.NameOf(prototypes.Get<EntityPrototype>("Goblin")).Should().Be("goblin", "a language that lacks the key falls back to the base language");
+
+        // A name that falls back is a thing a game expected rather than a key that is missing, so nothing is reported.
+        locale.Missing.Should().BeEmpty();
+    }
+
+    /// <summary>Reads the documents of a content of entities, which is what the words of a name live in.</summary>
+    private static PrototypeManager Prototypes(params string[] documents)
+    {
+        var components = new ComponentRegistry();
+        var prototypes = new PrototypeManager(components);
+
+        prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+
+        foreach (string document in documents)
+        {
+            prototypes.Add("entities.yml", document);
+        }
+
+        prototypes.Build();
+
+        return prototypes;
+    }
+
     /// <summary>Builds a service over a game root of its own, which the test writes the documents of a language into.</summary>
     private LocaleService Service(params (string Path, string Text)[] documents) => Build(CultureInfo.InvariantCulture, documents);
 
@@ -178,6 +236,26 @@ public sealed class LocaleTests : IDisposable
         assets.Initialize(_root);
 
         return new LocaleService(assets, null, culture);
+    }
+
+    [Fact]
+    public void Locale_ABuildBeforeTheLoaderKnowsItsRoot_ReadsTheDocumentsOnceItDoes()
+    {
+        string folder = Path.Combine(_root, LocaleService.Folder, "en", "Ui");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "window.yml"), "ui-title: Make a choice\n");
+
+        var assets = new NullAssetLoader();
+
+        // A host that makes the service before it says where its files are, which is what a game whose first loading step is the
+        // one that initializes the loader does: the answer that is taken now is empty, and the fix is that it is not remembered.
+        var locale = new LocaleService(assets, null, CultureInfo.InvariantCulture);
+        locale.Get("ui-title").Should().Be("ui-title", "the loader has no root yet, so nothing can be read");
+
+        assets.Initialize(_root);
+
+        locale.Get("ui-title").Should().Be("Make a choice", "the first real ask reads the documents rather than the empty answer that was taken before");
+        locale.Count.Should().Be(1);
     }
 
     [Fact]

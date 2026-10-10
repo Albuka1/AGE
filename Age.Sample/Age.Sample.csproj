@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- On Windows the sample is built as a window rather than a console application, so the operating system opens the game window
+         and not the console window that a console application brings with it. The lines it writes go to the console of the developer
+         overlay, which is where the engine already sends what it has to say, and `dotnet run` still attaches a console when the
+         sample is started from a terminal. -->
+    <OutputType Condition="$([MSBuild]::IsOSPlatform('Windows'))">WinExe</OutputType>
     <RootNamespace>Age.Sample</RootNamespace>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
@@ -12,6 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- What this game was written for: the version of the engine it declares, which the engine compares with its own before the
+         game starts. The file lands beside the executable, which is where the engine reads it. -->
+    <None Include="game.version.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- The shared Resources folder lands next to the executable, which makes it the asset root of the game.
          The recordings of the decoder tests stay out: they belong to the test project, not to the sample. -->
     <Content Include="$(AgeResources)**" Exclude="$(AgeResources)Audio/Samples/**" Link="Resources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

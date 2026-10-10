@@ -17,12 +17,20 @@ namespace Age.Rendering;
 /// </remarks>
 public sealed class TextureService : ITextureService, IDisposable
 {
+    /// <summary>The size of the placeholder, in pixels, which is the side of its square.</summary>
+    private const int PlaceholderSide = 64;
+
+    /// <summary>The size of the placeholder, which is what a sprite that drew it is drawn at.</summary>
+    private static readonly Vector2 PlaceholderSize = new(PlaceholderSide, PlaceholderSide);
+
     private readonly IImageLoader _images;
     private readonly IRenderer _renderer;
     private readonly ILogger<TextureService>? _logger;
     private readonly ResourcePool<string, uint> _textures = new();
     private readonly List<string> _missing = [];
     private readonly HashSet<string> _broken = new(StringComparer.Ordinal);
+    private readonly Dictionary<int, Vector2> _sizes = [];
+    private readonly List<string> _order = [];
     private TextureHandle? _error;
 
     /// <summary>Initializes the service with the decoder and the renderer it works through.</summary>
@@ -105,7 +113,47 @@ public sealed class TextureService : ITextureService, IDisposable
             throw;
         }
 
+        // The size of the image is remembered beside its texture, so a sprite that names no size is drawn at the size of the file: the
+        // device is not asked how large a texture it uploaded is, and the pixels are the one place the number is known.
+        _sizes[uploaded.Id] = new Vector2(image.Width, image.Height);
+
+        if (!_order.Contains(relativePath))
+        {
+            _order.Add(relativePath);
+        }
+
         return new TextureHandle(slot, uploaded.Id);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A handle the renderer made itself is not one this service decoded, so its size is unknown and answers zero. The placeholder of
+    /// this service is the one exception: its size is known without a lookup, because it is built here, so a game that resolves a path
+    /// whose image is not there reads the size of the sprite it draws rather than a zero.
+    /// </remarks>
+    public Vector2 Size(TextureHandle texture)
+    {
+        if (texture.Id == _error?.Id)
+        {
+            return PlaceholderSize;
+        }
+
+        return _sizes.TryGetValue(texture.Id, out Vector2 size) ? size : Vector2.Zero;
+    }
+
+    /// <inheritdoc />
+    public IEnumerable<(string Path, TextureHandle Texture, Vector2 Size)> Textures
+    {
+        get
+        {
+            foreach (string path in _order)
+            {
+                if (_textures.TryGetHandle(path, out ResourceHandle slot) && _textures.TryGet(slot, out uint id))
+                {
+                    yield return (path, new TextureHandle(slot, (int)id), _sizes.TryGetValue((int)id, out Vector2 size) ? size : Vector2.Zero);
+                }
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -121,6 +169,7 @@ public sealed class TextureService : ITextureService, IDisposable
 
         _renderer.ReleaseTexture(new TextureHandle((int)id));
         _textures.Release(texture.Resource);
+        _sizes.Remove((int)id);
         return true;
     }
 
@@ -154,6 +203,8 @@ public sealed class TextureService : ITextureService, IDisposable
         // The placeholder belongs to the renderer, which deletes it with its own objects: the service lets go of the
         // handle, so the next call asks for a new one rather than handing out a texture that is gone.
         _error = null;
+        _sizes.Clear();
+        _order.Clear();
 
         failure?.Throw();
     }
@@ -162,7 +213,7 @@ public sealed class TextureService : ITextureService, IDisposable
     /// <remarks>The texture needs no file, so a game that ships a broken path still shows something a person can see.</remarks>
     private TextureHandle CreateErrorTexture()
     {
-        const int Size = 64;
+        const int Size = PlaceholderSide;
         const int Cell = 16;
 
         byte[] pixels = new byte[Size * Size * 4];
@@ -185,7 +236,9 @@ public sealed class TextureService : ITextureService, IDisposable
         const string Word = "ERROR";
         Write(pixels, Size, Word, (Size - (Word.Length * BitmapFontMetrics.GlyphWidth)) / 2, (Size - BitmapFontMetrics.GlyphHeight) / 2);
 
-        return _renderer.CreateTexture(pixels, Size, Size);
+        TextureHandle handle = _renderer.CreateTexture(pixels, Size, Size);
+        _sizes[handle.Id] = PlaceholderSize;
+        return handle;
     }
 
     /// <summary>Writes a word of the built-in font into a buffer of pixels, which is how the placeholder says what it is.</summary>
