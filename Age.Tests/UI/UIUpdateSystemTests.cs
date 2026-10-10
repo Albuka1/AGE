@@ -50,6 +50,41 @@ public sealed class UIUpdateSystemTests
         pressed.Should().ContainSingle("holding the button does not press it again");
     }
 
+    [Fact]
+    public void UIUpdateSystem_AClickOnADropdown_OpensItAndChoosingARowChangesTheValue()
+    {
+        var world = new World();
+        Entity dropdown = world.CreateEntity();
+        world.Set(dropdown, new RectTransformComponent { Position = new Vector2(0f, 0f), Size = new Vector2(120f, 24f), Visible = true });
+        world.Set(dropdown, new DropdownComponent { Options = ["low", "medium", "high"], Selected = 0, RowHeight = 24f, Interactable = true });
+        var input = new NullInputService();
+        var system = new UIUpdateSystem(input);
+        var changes = new List<DropdownChangedEvent>();
+        world.Events.Subscribe<DropdownChangedEvent>((_, e) => changes.Add(e));
+
+        // A press on the closed element opens the list, which hangs below it.
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(60f, 12f), true);
+        input.BeginFrame();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+
+        world.Get<DropdownComponent>(dropdown).Open.Should().BeTrue();
+
+        // The list stands from y = 24 to y = 96, so a press at y = 60 is the second row, which chooses the second value.
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(60f, 60f), false);
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(60f, 60f), true);
+        input.BeginFrame();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+        world.Events.Dispatch();
+
+        world.Get<DropdownComponent>(dropdown).Open.Should().BeFalse("choosing a row closes the list");
+        world.Get<DropdownComponent>(dropdown).Selected.Should().Be(1);
+        world.Get<DropdownComponent>(dropdown).Value.Should().Be("medium");
+        changes.Should().ContainSingle().Which.Value.Should().Be("medium");
+    }
+
     private static Entity CreateButton(World world, int zOrder)
     {
         Entity entity = world.CreateEntity();

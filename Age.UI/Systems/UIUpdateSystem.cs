@@ -63,8 +63,78 @@ public sealed class UIUpdateSystem : IFrameSystem
         // The other controls read the same pointer. A click that lands on a slider is the slider's, so the drag begins before a check
         // box that stands under the pointer claims it, and a control that stands over another wins by its ZOrder rather than the order
         // the two are read in.
+        UpdateDropdowns(world);
         UpdateCheckBoxes(world);
         UpdateSliders(world);
+    }
+
+    /// <summary>Reads the pointer for every drop-down, opening a list, choosing a row of one that is open, and dismissing one that a click landed outside of.</summary>
+    /// <remarks>
+    /// An open list is drawn over the elements under it and takes the pointer until it is dismissed, so a click inside it chooses a row
+    /// and a click outside it closes it without reaching whatever it covered. The list hangs below the closed element, so a row is found
+    /// by the height of a row rather than by an element in the world.
+    /// </remarks>
+    private void UpdateDropdowns(World world)
+    {
+        Vector2 pointer = _input.MousePosition;
+        bool pressed = _input.IsMouseButtonPressed(MouseButton.Left);
+        Entity? topMost = TopMost<DropdownComponent>(world, pointer, entity => world.Get<DropdownComponent>(entity).Interactable);
+        Entity? open = null;
+
+        foreach (Entity entity in world.Enumerate<DropdownComponent>())
+        {
+            DropdownComponent dropdown = world.Get<DropdownComponent>(entity);
+            dropdown.IsHovered = topMost == entity;
+
+            if (dropdown.Open)
+            {
+                open = entity;
+            }
+
+            world.Set(entity, dropdown);
+        }
+
+        if (!pressed)
+        {
+            return;
+        }
+
+        // A click on the element toggles the list: closed becomes open, and open becomes closed, which is what a control that is read
+        // twice by one press would otherwise do the opposite of.
+        if (topMost is Entity hit)
+        {
+            DropdownComponent dropdown = world.Get<DropdownComponent>(hit);
+            dropdown.Open = open != hit;
+            world.Set(hit, dropdown);
+            return;
+        }
+
+        if (open is not Entity openEntity || !world.Has<RectTransformComponent>(openEntity))
+        {
+            return;
+        }
+
+        // A click anywhere else with a list open either chooses a row of it or dismisses it, and never reaches what is under the list.
+        RectTransformComponent rect = world.Get<RectTransformComponent>(openEntity);
+        DropdownComponent openDropdown = world.Get<DropdownComponent>(openEntity);
+        float row = openDropdown.RowHeight > 0f ? openDropdown.RowHeight : rect.Size.Y;
+        float listTop = rect.Position.Y + rect.Size.Y;
+        float listBottom = listTop + openDropdown.ListHeight;
+
+        openDropdown.Open = false;
+
+        if (pointer.X >= rect.Position.X && pointer.X <= rect.Position.X + rect.Size.X && pointer.Y >= listTop && pointer.Y <= listBottom)
+        {
+            int index = (int)((pointer.Y - listTop) / row);
+
+            if (index >= 0 && index < openDropdown.Count && index != openDropdown.Selected)
+            {
+                openDropdown.Selected = index;
+                world.Events.Raise(new DropdownChangedEvent(openEntity, index, openDropdown.Value));
+            }
+        }
+
+        world.Set(openEntity, openDropdown);
     }
 
     private void CollectButtons(World world)

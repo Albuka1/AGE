@@ -18,6 +18,8 @@ namespace Age.UI;
 [JsonSerializable(typeof(CheckBoxComponent))]
 [JsonSerializable(typeof(SliderComponent))]
 [JsonSerializable(typeof(ProgressBarComponent))]
+[JsonSerializable(typeof(TextFieldComponent))]
+[JsonSerializable(typeof(DropdownComponent))]
 internal sealed partial class AgeUiJsonContext : JsonSerializerContext
 {
 }
