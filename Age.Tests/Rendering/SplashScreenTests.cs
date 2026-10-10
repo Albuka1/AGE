@@ -134,6 +134,56 @@ public sealed class SplashScreenTests
     }
 
     [Fact]
+    public void SplashScreen_Draw_DrawsATrackAndAFillWhileLoading()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Progress = 0.5f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().HaveCount(2, "the bar is a track with the filled part over it");
+        renderer.Rectangles[0].Size.X.Should().BeApproximately(0.9f * renderer.LastSize.X, 0.001f, "the bar is a share of the width of the logo");
+        renderer.Rectangles[1].Size.X.Should().BeApproximately(renderer.Rectangles[0].Size.X * 0.5f, 0.001f, "half of the bar is filled at a share of one half");
+        renderer.Rectangles[1].Position.Should().Be(renderer.Rectangles[0].Position, "the fill grows from the left of the track");
+        renderer.Rectangles[0].Position.Y.Should().BeGreaterThan(renderer.LastPosition.Y + renderer.LastSize.Y, "the bar hangs under the logo");
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_AShareOfZero_DrawsTheTrackAlone()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Progress = 0f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().ContainSingle("a bar that has not filled yet is the track");
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_AShareAboveOne_FillsTheWholeBar()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Progress = 2f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().HaveCount(2);
+        renderer.Rectangles[1].Size.X.Should().BeApproximately(renderer.Rectangles[0].Size.X, 0.001f, "a share above one is clamped to a full bar");
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_TheProgressBarCanBeTurnedOff()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { ShowProgress = false, Progress = 0.5f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().BeEmpty("a splash without a bar draws the logo alone");
+        renderer.Drawn.Should().HaveCount(1);
+    }
+
+    [Fact]
     public void SplashScreen_End_EndsTheSplashBeforeTheDurationRanOut()
     {
         var renderer = new FakeRenderer();
@@ -175,6 +225,7 @@ public sealed class SplashScreenTests
         public List<int> Created { get; } = [];
         public List<int> Released { get; } = [];
         public List<int> Drawn { get; } = [];
+        public List<Rect> Rectangles { get; } = [];
         public int LastWidth { get; private set; }
         public int LastHeight { get; private set; }
         public int LastPixelCount { get; private set; }
@@ -215,6 +266,7 @@ public sealed class SplashScreenTests
 
         public void DrawRectangle(Rect rect, Color color)
         {
+            Rectangles.Add(rect);
         }
 
         public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color)
