@@ -59,6 +59,13 @@ public sealed class SystemPipeline
 
         foreach (ISystem system in _systems)
         {
+            // A system that is switched off is skipped rather than called and ignored: a paused menu and a developer overlay
+            // turn a rule off with this, and a rule that is off should cost a property read and nothing else.
+            if (!system.Enabled)
+            {
+                continue;
+            }
+
             long started = Stopwatch.GetTimestamp();
 
             try
@@ -84,6 +91,12 @@ public sealed class SystemPipeline
 
         foreach (IFrameSystem system in _frameSystems)
         {
+            // A frame system is switched off the same way a step system is, so an interface that is hidden does not draw itself.
+            if (!system.Enabled)
+            {
+                continue;
+            }
+
             long started = Stopwatch.GetTimestamp();
 
             try

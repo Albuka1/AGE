@@ -100,6 +100,69 @@ public sealed class SystemPipelineTests
         pipeline.StepTimings.Should().ContainSingle().Which.Name.Should().Be(nameof(RecordingSystem), "the frame does not disturb what the step recorded");
     }
 
+    [Fact]
+    public void SystemPipeline_ASystemThatIsOff_IsSkippedAndKeepsItsPlace()
+    {
+        // A paused menu and a developer overlay turn a rule off with this, so a rule that is off costs a property read and
+        // nothing else: the system keeps its state and its position, and it starts running again where the order says.
+        var world = new World();
+        var order = new List<int>();
+        var pipeline = new SystemPipeline();
+        var first = new RecordingSystem(1, order);
+        var second = new RecordingSystem(2, order);
+        pipeline.Add(first);
+        pipeline.Add(second);
+
+        first.Enabled = false;
+        pipeline.Update(world, new GameTime(0d, 0d));
+
+        order.Should().Equal([2], "the system that is off does not run");
+        pipeline.StepTimings.Should().ContainSingle("a system that was skipped did not spend time").Which.Name.Should().Be(nameof(RecordingSystem));
+
+        first.Enabled = true;
+        pipeline.Update(world, new GameTime(0d, 0d));
+
+        order.Should().Equal([2, 1, 2], "the system that is on again runs in its own place in the order");
+    }
+
+    [Fact]
+    public void SystemPipeline_AFrameSystemThatIsOff_IsSkippedAndKeepsItsPlace()
+    {
+        var world = new World();
+        var order = new List<int>();
+        var pipeline = new SystemPipeline();
+        var hidden = new RecordingFrameSystem(1, order);
+        pipeline.AddFrame(hidden);
+        pipeline.AddFrame(new RecordingFrameSystem(2, order));
+
+        hidden.Enabled = false;
+        pipeline.UpdateFrame(world, new GameTime(0d, 0d));
+
+        order.Should().Equal([2], "a frame system that is off stops drawing itself");
+        pipeline.FrameTimings.Should().ContainSingle().Which.Name.Should().Be(nameof(RecordingFrameSystem));
+
+        hidden.Enabled = true;
+        pipeline.UpdateFrame(world, new GameTime(0d, 0d));
+
+        order.Should().Equal([2, 1, 2]);
+    }
+
+    [Fact]
+    public void SystemPipeline_ASystemOfAGame_IsOnUnlessItSaysOtherwise()
+    {
+        // The interface answers true by default, so a system that knows nothing about being switched off is a system that runs.
+        var world = new World();
+        var order = new List<int>();
+        var pipeline = new SystemPipeline();
+        pipeline.Add(new RecordingSystem(1, order));
+
+        order.Should().BeEmpty();
+
+        pipeline.Update(world, new GameTime(0d, 0d));
+
+        order.Should().Equal(1);
+    }
+
     private sealed class RecordingSystem : ISystem
     {
         private readonly int _id;
@@ -110,6 +173,8 @@ public sealed class SystemPipelineTests
             _id = id;
             _order = order;
         }
+
+        public bool Enabled { get; set; } = true;
 
         public void Update(World world, in GameTime time) => _order.Add(_id);
     }
@@ -124,6 +189,8 @@ public sealed class SystemPipelineTests
             _id = id;
             _order = order;
         }
+
+        public bool Enabled { get; set; } = true;
 
         public void UpdateFrame(World world, in GameTime frame) => _order.Add(_id);
     }
