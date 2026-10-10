@@ -646,7 +646,9 @@ a change of the glow is a change in one file.
 ```
 
 A value is written as the kind of the uniform and the numbers behind it, and the kind is spelled the way GLSL spells it, so a
-value that a stage reads as a `float` and one it reads as an `int` are told apart:
+value that a stage reads as a `float` and one it reads as an `int` are told apart. A value of one number is the number on the line
+of its kind; a vector and a colour are a block sequence, one number to a line, because a list written on one line is not part of
+the YAML the content of the engine is read with:
 
 ```yaml
   uniforms:
@@ -655,19 +657,41 @@ value that a stage reads as a `float` and one it reads as an `int` are told apar
     Steps:
       int: 8
     Direction:
-      vec2: 1.0, 0.0
+      vec2:
+        - 1.0
+        - 0.0
     Tint:
-      color: 255, 220, 120, 255
+      color:
+        - 255
+        - 220
+        - 120
+        - 255
 ```
 
-`float` and `int` hold one number; `vec2` through `vec4` hold two to four of them, separated by commas; and `color` holds four
-numbers written the way every other colour of the content is written, in bytes, and read as the four channels between zero and one
-that a stage draws with. The stage of a material draws with the program of the engine unless the document names a vertex stage as
-well, and a value that its kind cannot hold is refused where the content is read: a material is data of a build, so a mistake in it
-is a message at the start of a game rather than a frame that quietly draws something else.
+`float` and `int` hold one number; `vec2` through `vec4` hold two to four of them; and `color` holds four numbers written the way
+every other colour of the content is written, in bytes, and read as the four channels between zero and one that a stage draws
+with. The stage of a material draws with the program of the engine unless the document names a vertex stage as well, and a value
+that its kind cannot hold is refused where the content is read: a material is data of a build, so a mistake in it is a message at
+the start of a game rather than a frame that quietly draws something else.
 
-The values are written as a block, with the kind on its own line, because the flow style — `Speed: { float: 4.0 }` — is not part of
-the subset of YAML that the content of the engine is read with.
+The values are written as a block, with the kind on its own line and the numbers of a vector indented under it, because neither
+the flow style — `Speed: { float: 4.0 }` — nor a list of one line — `vec2: 1.0, 0.0` — is part of the subset of YAML that the
+content of the engine is read with.
+
+A value of a layer is written the same way, so the four numbers of a colour that overrides the one of a material are a block
+sequence as well:
+
+```yaml
+          Material:
+            Id: Pulse
+            Uniforms:
+              Tint:
+                color:
+                  - 255
+                  - 220
+                  - 120
+                  - 255
+```
 
 A layer that names a material and writes a value of its own is drawn with that value instead of the one of the material, so two
 beacons that share `Pulse` differ by the speed of their own pulse:

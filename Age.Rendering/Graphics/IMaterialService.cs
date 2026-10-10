@@ -93,7 +93,8 @@ public interface IMaterialService
     /// ignored by the device, which is what a uniform of one stage and not another looks like in practice.
     /// </para>
     /// <para>
-    /// The kind is on a line of its own rather than in the flow style, because the flow style is not part of the subset of YAML
+    /// The kind is on a line of its own rather than in the flow style, and the numbers of a vector or a colour follow it as a
+    /// block sequence rather than on one line, because neither the flow style nor a list of one line is part of the subset of YAML
     /// that the content of the engine is read with:
     /// </para>
     /// <code>
@@ -102,6 +103,12 @@ public interface IMaterialService
     ///     float: 4.0
     ///   Steps:
     ///     int: 8
+    ///   Tint:
+    ///     color:
+    ///       - 255
+    ///       - 220
+    ///       - 120
+    ///       - 255
     /// </code>
     /// </remarks>
     /// <param name="Name">The name of the uniform, as the stage declares it.</param>

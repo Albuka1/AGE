@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Age.Content;
 using Age.Content.Yaml;
 using FluentAssertions;
 using Xunit;
@@ -214,6 +216,32 @@ public sealed class YamlReaderTests
 
         numbers.Items.Select(item => ((YamlScalar)item).Text).Should().Equal("1", "2");
         ((YamlScalar)mapping.Entries[1].Value).Text.Should().Be("3", "the list ends where the indentation goes back");
+    }
+
+    [Fact]
+    public void YamlReader_Read_KeepsAListInsideANestedMapping()
+    {
+        // A vector of a material is written this way: the numbers of the vector are a block sequence under the kind of the
+        // uniform, and the whole of it has to survive into the JSON that a component contract reads.
+        const string Text = """
+            uniforms:
+              Speed:
+                float: 4.0
+              Direction:
+                vec2:
+                  - 1.0
+                  - 0.0
+            """;
+
+        YamlMapping mapping = (YamlMapping)YamlReader.Read(Text, "probe.yml");
+        YamlMapping uniforms = (YamlMapping)mapping.Entries[0].Value;
+        YamlMapping direction = (YamlMapping)uniforms.Entries[1].Value;
+
+        direction.Entries[0].Value.Should().BeOfType<YamlSequence>();
+
+        JsonElement json = YamlJson.Write(mapping);
+
+        json.GetProperty("uniforms").GetProperty("Direction").GetProperty("vec2").GetArrayLength().Should().Be(2, "the numbers of a vector are a list of two, not a word");
     }
 
     [Fact]

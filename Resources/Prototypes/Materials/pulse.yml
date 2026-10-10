@@ -3,8 +3,18 @@
 # document rather than a hundred paths, and a change of the glow is a change here rather than in every prototype.
 #
 # A value is written the way GLSL names its type, because a document writes numbers and a stage reads them as a float, an int or
-# a vector: 'float' is one number, and 'color' and 'vec2' through 'vec4' are their numbers separated by commas, with a colour
-# written the way every other colour of the content is written, in bytes from zero to 255.
+# a vector: 'float' and 'int' are one number behind the kind, and 'color' and 'vec2' through 'vec4' are their numbers on their own
+# lines under it, with a colour written the way every other colour of the content is written, in bytes from zero to 255. A list on
+# one line is not read, so a vector is always a block:
+#
+#   Speed:
+#     float: 4.0
+#   Tint:
+#     color:
+#       - 255
+#       - 220
+#       - 120
+#       - 255
 - type: material
   id: Pulse
   fragment: Shaders/pulse.frag

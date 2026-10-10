@@ -320,7 +320,24 @@ public sealed class MaterialService : IMaterialService
             {
                 foreach ((string kind, JsonElement value) in kinds)
                 {
-                    Send(renderer, Layer(id, name, kind, value));
+                    // A layer is data of the content that a frame reads on every layer it draws, so a value that its kind cannot
+                    // hold must not take the rest of the frame with it: the value is refused and reported, and the values that
+                    // follow it are still sent. This is the one place the read of a value is allowed to fail, because a frame has
+                    // nowhere to report a mistake of the content to but the log — where the content is read, the same value is
+                    // refused outright instead.
+                    try
+                    {
+                        Send(renderer, Layer(id, name, kind, value));
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        _logger?.LogError(
+                            "The value '{Kind}' that the layer of the material '{Material}' writes for the uniform '{Uniform}' cannot be read, so the value is left out: {Reason}",
+                            kind,
+                            id ?? "of its own stage",
+                            name,
+                            exception.Message);
+                    }
                 }
             }
         }
@@ -337,7 +354,8 @@ public sealed class MaterialService : IMaterialService
     /// A value of a layer is read where the value of a material is read, and it is read where it is sent rather than where the
     /// content is: the field is a set of names and values, so it is kept as it was written until a frame draws with it rather than
     /// being read into a shape of its own at registration. The read is the same one either way, so a value that its kind cannot
-    /// hold is refused with the name of the layer and of the uniform.
+    /// hold is refused with the name of the layer and of the uniform — and because this is a frame rather than the reading of the
+    /// content, the caller refuses the value and keeps the rest.
     /// </remarks>
     private static IMaterialService.UniformValue Layer(string? id, string uniform, string kind, JsonElement value)
     {

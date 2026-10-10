@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A value that a layer wrote itself and that its kind cannot hold no longer takes the rest of the frame with it: the value is
+  refused and reported, and the values around it are still sent. A frame reads the values of a layer on every draw and has
+  nowhere to report a mistake of the content to but the log, so a mistake in one value used to stop the whole draw of that layer
+  and leave every uniform written after it unset, on that frame and on every frame after it.
 - A value a layer wrote itself was read by nothing: `Material.Uniforms` was documented, written to a scene, and then ignored when
   the layer was drawn, so two sprites that shared a material could not differ by one number. The values of a layer are sent after
   the ones of the material it names now, so a name the material declares is overridden and one it does not is added, which is what

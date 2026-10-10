@@ -10,6 +10,7 @@ using Age.Rendering;
 using Age.UI;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Age.Tests;
@@ -500,6 +501,84 @@ public sealed class RenderSystemTests
         renderer.Uniforms["Speed"].Should().Equal(new[] { 2f }, "a layer that names no material is drawn by its own stage with its own values");
     }
 
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValueItsKindCannotHold_LosesThatValueAndKeepsTheRest()
+    {
+        // A frame reads the values of a layer on every draw, and it has nowhere to report a mistake to but the log: a value that
+        // cannot be read is left out and the ones around it are still sent, rather than a mistake of the content quietly removing
+        // every uniform that happens to be written after it from every frame that follows.
+        var shaders = new RecordingShaderService();
+        var logger = new RecordingLogger<MaterialService>();
+        var materials = new MaterialService(shaders, logger);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Bad"] = new(StringComparer.Ordinal) { ["vec2"] = JsonDocument.Parse("[255, 220, 120, 255]").RootElement.Clone() },
+                ["After"] = new(StringComparer.Ordinal) { ["float"] = JsonDocument.Parse("9.0").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+
+        Action send = () => ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        send.Should().NotThrow("a mistake of the content is a spent frame, not a game that stops");
+        renderer.Uniforms.Should().NotContainKey("Bad", "the value its kind cannot hold is left out");
+        renderer.Uniforms["After"].Should().Equal(new[] { 9f }, "the value written after the refused one is still sent");
+        logger.Errors.Should().ContainSingle().Which.Should().Contain("Bad").And.Contain("Pulse");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValueItsKindCannotHold_SendsTheMaterialEitherWay()
+    {
+        // The values of the material are sent before the ones of the layer, so a layer that writes one value badly is still drawn
+        // with everything its material declares.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders, new RecordingLogger<MaterialService>());
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Bad"] = new(StringComparer.Ordinal) { ["color"] = JsonDocument.Parse("[1, 2]").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 4f }, "the value of the material is sent before the one of the layer that cannot be read");
+    }
+
+    [Fact]
+    public void MaterialService_AValueThatCannotBeSentToTheRenderer_IsNotSwallowed()
+    {
+        // The refusal is for the reading of a value alone: a renderer that cannot be handed a value is a failure of the frame, and
+        // it still reaches the game rather than being logged as a mistake of the content.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders, new RecordingLogger<MaterialService>());
+        var renderer = new ThrowingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new() { Id = "Pulse" };
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+
+        Action send = () => ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        send.Should().Throw<ObjectDisposedException>("a renderer that refuses a value is not a value of the content that cannot be read");
+    }
+
     /// <summary>Registers a material of one uniform with a service, which is what a content does when it is read.</summary>
     private static MaterialPrototype Register(MaterialService materials, string id, string fragment, string uniform, string kind, string value)
     {
@@ -717,6 +796,75 @@ public sealed class RenderSystemTests
         public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => new(++_created);
 
         public void ReleaseTexture(TextureHandle texture)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>Keeps what was logged, which is how a test reads the report of a value that cannot be read.</summary>
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Records { get; } = [];
+
+        public IEnumerable<string> Errors => Records.Where(record => record.Level == LogLevel.Error).Select(record => record.Message);
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Records.Add((logLevel, formatter(state, exception)));
+    }
+
+    /// <summary>A renderer that refuses every value, which is a failure of a frame rather than of the content that is being read.</summary>
+    private sealed class ThrowingRenderer : IRenderer
+    {
+        public Vector2 ViewportSize => new(1280f, 720f);
+
+        public void SetUniform(string name, float value) => throw new ObjectDisposedException(nameof(ThrowingRenderer));
+
+        public void SetUniform(string name, ReadOnlySpan<float> values) => throw new ObjectDisposedException(nameof(ThrowingRenderer));
+
+        public void SetUniform(string name, int value) => throw new ObjectDisposedException(nameof(ThrowingRenderer));
+
+        public void BeginFrame(bool clear = true)
+        {
+        }
+
+        public void EndFrame()
+        {
+        }
+
+        public void SetCamera(Camera2D camera)
+        {
+        }
+
+        public void Attach(IWindowService window)
+        {
+        }
+
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+        }
+
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+        }
+
+        public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => default;
+
+        public void ReleaseTexture(TextureHandle texture)
+        {
+        }
+
+        public void DrawRectangle(Rect rect, Color color)
+        {
+        }
+
+        public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color)
         {
         }
 
