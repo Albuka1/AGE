@@ -293,6 +293,28 @@ public sealed class ConsoleService : IConsoleService
     }
 
     /// <inheritdoc />
+    public void SetInput(string line)
+    {
+        lock (_gate)
+        {
+            _input.Clear().Append(line ?? string.Empty);
+            _recall = -1;
+        }
+    }
+
+    /// <summary>Returns the commands whose name starts with a prefix, in the order they were registered, which is what a console lists as suggestions.</summary>
+    /// <param name="prefix">The start of a name to match. An empty prefix matches every command.</param>
+    public IEnumerable<ConsoleCommand> Matches(string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+
+        lock (_gate)
+        {
+            return [.. _commands.Where(command => command.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))];
+        }
+    }
+
+    /// <inheritdoc />
     public void Clear()
     {
         lock (_gate)

@@ -41,6 +41,14 @@ public static class RenderingServiceCollectionExtensions
             TextDefaults.Fonts));
         services.AddSingleton<SplashScreen>();
         services.AddSingleton<DevOverlay>();
+        services.AddSingleton(provider => new DevConsoleOverlay(
+            provider.GetRequiredService<IConsoleService>(),
+            provider.GetRequiredService<IInputService>(),
+            provider.GetRequiredService<ITextInputService>(),
+            provider.GetRequiredService<FixedTimestep>(),
+            provider.GetRequiredService<IRenderer>(),
+            provider.GetService<TextRenderer>(),
+            provider.GetService<ITextSource>()));
         services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();
         services.AddSingleton<IGameShutdownStep, WindowShutdownStep>();
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();

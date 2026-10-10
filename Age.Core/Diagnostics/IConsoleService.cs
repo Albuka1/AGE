@@ -53,6 +53,12 @@ public interface IConsoleService
     /// <summary>Gets the commands that are registered, in the order they were registered.</summary>
     IEnumerable<ConsoleCommand> Commands { get; }
 
+    /// <summary>Returns the commands whose name starts with a prefix, which is what a console lists under the line being typed.</summary>
+    /// <param name="prefix">The start of a name to match. An empty prefix matches every command.</param>
+    /// <returns>The matching commands, in the order they were registered.</returns>
+    /// <exception cref="ArgumentNullException">The prefix is null.</exception>
+    IEnumerable<ConsoleCommand> Matches(string prefix);
+
     /// <summary>Gets the command that the line being typed names, or null when the line names none.</summary>
     /// <remarks>
     /// The first word of the line is matched without regard to case, so a line that is half typed still finds its command: this
@@ -119,6 +125,10 @@ public interface IConsoleService
     /// command name, so a line whose first word is complete is left alone: the arguments of a command are the business of the game.
     /// </remarks>
     bool Complete();
+
+    /// <summary>Replaces the line that is being typed with the line this names, which is what a console takes a suggestion with.</summary>
+    /// <param name="line">The line to hold. A line that is null or empty leaves the line that is being typed empty.</param>
+    void SetInput(string line);
 
     /// <summary>Removes every line of the output.</summary>
     void Clear();
