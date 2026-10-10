@@ -219,7 +219,6 @@ public sealed class DevWindowService : IDevWindowService
         _host.DrawRectangle(new Rect(new Vector2(0f, TitleHeight), new Vector2(size.X, 1f)), BorderColour);
 
         _host.DrawText(ResolveTitle(), new Vector2(Padding, 6f), TitleTextColour);
-        DrawCross(CloseRect(size.X - TitleHeight, 0f));
 
         float x = 0f;
 
@@ -247,18 +246,14 @@ public sealed class DevWindowService : IDevWindowService
         }
     }
 
-    /// <summary>Handles a click on the window, which is a cross that closes something or a tab that shows a page.</summary>
+    /// <summary>Handles a click on the window, which is a cross that closes a page or a tab that shows one.</summary>
     /// <param name="point">The point of the click, in the pixels of the window.</param>
+    /// <remarks>
+    /// The window itself is closed by the window manager rather than by a cross of its own, so the only crosses it draws are the ones
+    /// of the pages that may be closed.
+    /// </remarks>
     private void Clicked(Vector2 point)
     {
-        float full = _host.Size.X;
-
-        if (Contains(CloseRect(full - TitleHeight, 0f), point))
-        {
-            Close();
-            return;
-        }
-
         float x = 0f;
 
         for (var index = 0; index < _tabs.Count; index++)

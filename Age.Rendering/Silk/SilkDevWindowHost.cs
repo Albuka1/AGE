@@ -22,6 +22,8 @@ namespace Age.Rendering;
 /// </remarks>
 public sealed class SilkDevWindowHost : IDevWindowHost
 {
+    private readonly IWindowService? _game;
+
     private IWindow? _window;
     private SilkRenderer? _renderer;
     private IInputContext? _input;
@@ -30,6 +32,14 @@ public sealed class SilkDevWindowHost : IDevWindowHost
     private bool _clickReported;
     private Vector2 _pointer;
     private bool _down;
+
+    /// <summary>Initializes the host with the window of the game, which its context is handed back to after every frame.</summary>
+    /// <param name="game">
+    /// The window of the game, which this window borrows the current context from: the two windows share one thread, so a frame of
+    /// this window makes its context current and the window of the game is made current again afterwards. A host with no game window
+    /// leaves whatever context was current alone, which is what a headless run and a test have.
+    /// </param>
+    public SilkDevWindowHost(IWindowService? game = null) => _game = game;
 
     /// <inheritdoc />
     public bool IsOpen => _window is { IsClosing: false };
@@ -121,6 +131,10 @@ public sealed class SilkDevWindowHost : IDevWindowHost
     {
         _renderer?.EndFrame();
         _window?.SwapBuffers();
+
+        // The two windows share one thread and one device, so this frame made its own context the current one: the window of the game
+        // is made current again, or the game would draw its next frame into this window rather than into its own and stand still.
+        _game?.Window.GLContext?.MakeCurrent();
     }
 
     /// <inheritdoc />

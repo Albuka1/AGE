@@ -101,6 +101,10 @@ DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
 DevConsoleOverlay consoleOverlay = provider.GetRequiredService<DevConsoleOverlay>();
 IDevWindowService devWindow = provider.GetRequiredService<IDevWindowService>();
 
+// A page of this game is added to the window beside the console, and it carries a cross because it reports the world of a run rather
+// than what the engine holds: the console stays, the world page comes and goes.
+devWindow.Add(new WorldTab(() => world, provider.GetRequiredService<FixedTimestep>()));
+
 // The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
 // content, so they are made before the loading starts. The settings and the language are read again in a loading step, once
 // the loader knows where the game keeps its files, which is the step that turns the choice of a person into what the game
@@ -931,6 +935,48 @@ static void TintByCollision(World world, Entity first, Entity second)
 
         ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(entity);
         sprite.Color = world.Has<CollisionComponent>(entity) ? touching : calm;
+    }
+}
+
+// A page of the developer window that belongs to this game rather than to the engine, and one that may be closed by its cross: what
+// it reports is the world of this game, which a person looks at and then closes again, unlike the console which stays.
+internal sealed class WorldTab(Func<World> world, FixedTimestep timestep) : IDevWindowTab
+{
+    private static readonly Color TextColour = new(225, 225, 225);
+    private static readonly Color HintColour = new(150, 150, 150);
+
+    private readonly float _line = BitmapFontMetrics.GlyphHeight + 4f;
+
+    /// <inheritdoc />
+    public string Title => "world";
+
+    /// <inheritdoc />
+    /// <remarks>What this page reports is read from the world on every frame, so it reads no pointer of its own.</remarks>
+    public bool Closable => true;
+
+    /// <inheritdoc />
+    public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
+    {
+    }
+
+    /// <inheritdoc />
+    public void Render(IRenderer renderer, Rect body)
+    {
+        ArgumentNullException.ThrowIfNull(renderer);
+
+        World current = world();
+
+        string[] lines =
+        [
+            $"entities {current.Enumerate().Count()}",
+            $"sprites {current.Enumerate<SpriteComponent>().Count()}",
+            $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x {(timestep.Paused ? "paused" : "running")}",
+        ];
+
+        for (var index = 0; index < lines.Length; index++)
+        {
+            renderer.DrawText(lines[index], new Vector2(body.X, body.Y + (index * _line)), index == 2 ? HintColour : TextColour);
+        }
     }
 }
 

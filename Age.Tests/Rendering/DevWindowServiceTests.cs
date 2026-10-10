@@ -7,8 +7,8 @@ namespace Age.Tests;
 
 /// <summary>
 /// Pins the developer window that stands beside the game to what a person does with it: it opens a window of its own and keeps its
-/// pages while it is closed, the cross of the window closes it, the cross of a tab removes that page, and the page that is shown is
-/// the one that is drawn.
+/// pages while it is closed, the cross of a tab removes that page while a page that is not closable has none, and the page that is
+/// shown is the one that is read.
 /// </summary>
 public sealed class DevWindowServiceTests
 {
@@ -85,6 +85,28 @@ public sealed class DevWindowServiceTests
         negative.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Fact]
+    public void DevWindowService_TheCrossOfAClosablePageRemovesItAndANonClosablePageHasNone()
+    {
+        var host = new FakeHost { Click = new Vector2(82f, 39f) };
+        var closable = new FakeTab("one") { Closable = true };
+        var fixedTab = new FakeTab("two") { Closable = false };
+        var service = new DevWindowService(host);
+        service.Add(closable).Add(fixedTab);
+        service.Open();
+
+        // The cross of the first page sits at the right end of its label, which is 96 pixels wide at least: a click there removes it.
+        service.Pump(new GameTime(0.016d, 0.016d));
+        service.Tabs.Should().ContainSingle().Which.Should().BeSameAs(fixedTab);
+
+        // The second page reports what the engine holds and has no cross, so the same click neither removes it nor closes the window.
+        host.Click = new Vector2(96f + 82f, 39f);
+        service.Pump(new GameTime(0.016d, 0.032d));
+
+        service.IsOpen.Should().BeTrue("the window has no cross of its own");
+        service.Tabs.Should().ContainSingle("a page that is not closable has no cross to press");
+    }
+
     /// <summary>A page that remembers whether it was read, which is how a test reads which page is on top.</summary>
     private sealed class FakeTab(string title) : IDevWindowTab
     {
@@ -92,10 +114,60 @@ public sealed class DevWindowServiceTests
 
         public bool Updated { get; private set; }
 
+        public bool Closable { get; init; }
+
         public void Update(in GameTime frame, Rect body, in WindowPointer pointer) => Updated = true;
 
         public void Render(IRenderer renderer, Rect body)
         {
         }
+    }
+
+    /// <summary>A host that reports the size and a click a test sets, which is how the frame of the window is driven without a window.</summary>
+    private sealed class FakeHost : IDevWindowHost
+    {
+        public Vector2 Click { get; set; }
+
+        public bool IsOpen { get; private set; }
+
+        public Vector2 Size { get; private set; }
+
+        public Vector2 Pointer { get; private set; }
+
+        public bool PointerDown { get; private set; }
+
+        public void Create(int width, int height, string title)
+        {
+            Size = new Vector2(width, height);
+            IsOpen = true;
+        }
+
+        public bool Pump(out Vector2? clicked)
+        {
+            clicked = Click;
+            Pointer = Click;
+            Click = default;
+            return IsOpen;
+        }
+
+        public void BeginFrame(bool clear)
+        {
+        }
+
+        public void EndFrame()
+        {
+        }
+
+        public void DrawRectangle(Rect rect, Color color)
+        {
+        }
+
+        public void DrawText(string text, Vector2 position, Color color)
+        {
+        }
+
+        public Vector2 Measure(string text) => new(text.Length * BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight);
+
+        public void Dispose() => IsOpen = false;
     }
 }

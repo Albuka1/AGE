@@ -51,7 +51,7 @@ public static class RenderingServiceCollectionExtensions
         // pages and nothing drawn — to change where it is drawn, and the service is what a game pumps each frame. A game that cannot
         // open a second window is better off with no developer window than with one that hangs it, which is why nothing is drawn when
         // no host is given.
-        services.AddSingleton<IDevWindowHost, SilkDevWindowHost>();
+        services.AddSingleton<IDevWindowHost>(provider => new SilkDevWindowHost(provider.GetService<IWindowService>()));
         services.AddSingleton<IDevWindowService>(provider => new DevWindowService(
             provider.GetRequiredService<IDevWindowHost>(),
             provider.GetService<ITextSource>())

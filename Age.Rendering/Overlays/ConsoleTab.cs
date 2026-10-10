@@ -54,6 +54,10 @@ public sealed class ConsoleTab : IDevWindowTab
     public string Title => "console";
 
     /// <inheritdoc />
+    /// <remarks>A page of the console stays by default, because it reports what the engine holds rather than a thing a person opened.</remarks>
+    public bool Closable { get; set; }
+
+    /// <inheritdoc />
     /// <remarks>A left click on a line copies it to the clipboard, which is what a line of a log is wanted for.</remarks>
     public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
     {

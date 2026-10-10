@@ -14,7 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pages and draws each into a `IDevWindowHost`, which `SilkDevWindowHost` answers with a second Silk.NET window and a context of its
   own and `NullDevWindowHost` answers with a window that is never there for a headless run. The window is created the first time it is
   opened and its size is kept while it is closed. The cross of a tab removes that page and the cross of the title bar closes the
-  window. `ConsoleTab` shows the output of the console, and a click on a line copies it to the clipboard.
+  window. `ConsoleTab` shows the output of the console, and a click on a line copies it to the clipboard. The window has no cross of
+  its own, because the window manager closes it; a page carries a cross only when it says it is `Closable`, and the console of the
+  engine does not, so it stays while a page of a game comes and goes. A frame of the window makes its context current and hands the
+  window of the game its own back afterwards, which is what keeps the game drawing while the window is open.
 - `WindowPointer` is handed to the page that is shown, so a page reads the pointer of its own window and acts on a click inside the
   body; a click on the frame of the window is the window's own and never reaches the page.
 
