@@ -113,7 +113,7 @@ public sealed class UILayoutSystem : IFrameSystem
     /// <summary>Resolves an element and then the elements that stand inside it, which is what a parent-first walk is.</summary>
     /// <param name="world">The world that holds the tree.</param>
     /// <param name="entity">The element to resolve.</param>
-    /// <param name="parent">The rectangle the element is placed in: the canvas for a root, the parent for a child.</param>
+    /// <param name="parent">The rectangle the element is placed in, in design units: the canvas for a root, the parent for a child.</param>
     /// <param name="scale">The scale of the canvas, which is how many pixels of the screen a design unit is.</param>
     /// <param name="visited">The elements that were resolved, which is what keeps a cycle from walking forever.</param>
     private static void Layout(World world, Entity entity, Rect parent, float scale, HashSet<Entity> visited)
@@ -130,9 +130,17 @@ public sealed class UILayoutSystem : IFrameSystem
             return;
         }
 
+        // A child is placed in the rectangle of its parent, and that rectangle is what the anchors of the child are a fraction of:
+        // the child's own Resolve takes design units and multiplies them by the scale, so the rectangle of the parent is divided by
+        // the scale here. Without that the two units would be mixed, and a child of a scaled canvas would jump by the scale of it as
+        // soon as it stopped being a root.
+        var inside = new Rect(
+            new Vector2(rect.Position.X / scale, rect.Position.Y / scale),
+            new Vector2(rect.Size.X / scale, rect.Size.Y / scale));
+
         foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
         {
-            Layout(world, world.Resolve(reference), rect, scale, visited);
+            Layout(world, world.Resolve(reference), inside, scale, visited);
         }
     }
 

@@ -220,12 +220,38 @@ public sealed class DevWindowServiceTests
         public void Render(IRenderer renderer, Rect body) => RenderedBody = body;
     }
 
+    [Fact]
+    public void DevWindowService_Focused_IsTrueOnlyWhileTheWindowIsOpenAndHasTheKeyboard()
+    {
+        var host = new NullDevWindowHost();
+        var service = new DevWindowService(host);
+
+        service.Focused.Should().BeFalse("a window that is not open has no keyboard to hold");
+
+        service.Open();
+        service.Focused.Should().BeFalse("the host of a run with no window is never given the focus");
+
+        var focused = new FakeHost { Focused = true };
+        var other = new DevWindowService(focused);
+        other.Open();
+
+        other.Focused.Should().BeTrue("the window of the operating system has the focus");
+
+        // A window that the window manager closed holds no focus, whatever the host last reported, because the service is the one
+        // that says whether the window is there at all.
+        other.Close();
+        other.Focused.Should().BeFalse();
+    }
+
     /// <summary>A host that reports the size and a click a test sets, which is how the frame of the window is driven without a window.</summary>
     private sealed class FakeHost : IDevWindowHost
     {
         public Vector2 Click { get; set; }
 
         public bool IsOpen { get; private set; }
+
+        /// <summary>Gets or sets whether the window has the focus, which a test moves the way the window manager does.</summary>
+        public bool Focused { get; set; }
 
         public int Created { get; private set; }
 

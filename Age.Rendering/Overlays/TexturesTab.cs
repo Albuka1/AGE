@@ -58,7 +58,12 @@ public sealed class TexturesTab : IDevWindowTab
 
         List<(string Path, Vector2 Size)> rows = _textures.Textures.Select(entry => (entry.Path, entry.Size)).ToList();
         World world = _world();
-        int capacity = Math.Max(1, (int)(body.Height / _line));
+
+        // The header stands above the images and the hint below them, so the room an image row may take is what is left of the body
+        // once those two are accounted for: a page that counted only the image rows would draw its last ones past the body and have
+        // them cut off by the clip of the window.
+        int height = Math.Max(1, (int)(body.Height / _line));
+        int capacity = Math.Max(0, height - 2);
         int shown = Math.Min(rows.Count, capacity);
         float y = body.Y;
 

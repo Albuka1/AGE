@@ -57,6 +57,9 @@ public sealed class DevWindowService : IDevWindowService
     public bool IsOpen => _open && _host.IsOpen;
 
     /// <inheritdoc />
+    public bool Focused => _open && _host.Focused;
+
+    /// <inheritdoc />
     public IReadOnlyList<IDevWindowTab> Tabs => _tabs;
 
     /// <inheritdoc />

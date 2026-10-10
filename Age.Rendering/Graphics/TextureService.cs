@@ -17,6 +17,12 @@ namespace Age.Rendering;
 /// </remarks>
 public sealed class TextureService : ITextureService, IDisposable
 {
+    /// <summary>The size of the placeholder, in pixels, which is the side of its square.</summary>
+    private const int PlaceholderSide = 64;
+
+    /// <summary>The size of the placeholder, which is what a sprite that drew it is drawn at.</summary>
+    private static readonly Vector2 PlaceholderSize = new(PlaceholderSide, PlaceholderSide);
+
     private readonly IImageLoader _images;
     private readonly IRenderer _renderer;
     private readonly ILogger<TextureService>? _logger;
@@ -120,9 +126,20 @@ public sealed class TextureService : ITextureService, IDisposable
     }
 
     /// <inheritdoc />
-    /// <remarks>A handle the renderer made itself is not one this service decoded, so its size is unknown and answers zero.</remarks>
-    public Vector2 Size(TextureHandle texture) =>
-        _sizes.TryGetValue(texture.Id, out Vector2 size) ? size : Vector2.Zero;
+    /// <remarks>
+    /// A handle the renderer made itself is not one this service decoded, so its size is unknown and answers zero. The placeholder of
+    /// this service is the one exception: its size is known without a lookup, because it is built here, so a game that resolves a path
+    /// whose image is not there reads the size of the sprite it draws rather than a zero.
+    /// </remarks>
+    public Vector2 Size(TextureHandle texture)
+    {
+        if (texture.Id == _error?.Id)
+        {
+            return PlaceholderSize;
+        }
+
+        return _sizes.TryGetValue(texture.Id, out Vector2 size) ? size : Vector2.Zero;
+    }
 
     /// <inheritdoc />
     public IEnumerable<(string Path, TextureHandle Texture, Vector2 Size)> Textures
@@ -196,7 +213,7 @@ public sealed class TextureService : ITextureService, IDisposable
     /// <remarks>The texture needs no file, so a game that ships a broken path still shows something a person can see.</remarks>
     private TextureHandle CreateErrorTexture()
     {
-        const int Size = 64;
+        const int Size = PlaceholderSide;
         const int Cell = 16;
 
         byte[] pixels = new byte[Size * Size * 4];
@@ -220,7 +237,7 @@ public sealed class TextureService : ITextureService, IDisposable
         Write(pixels, Size, Word, (Size - (Word.Length * BitmapFontMetrics.GlyphWidth)) / 2, (Size - BitmapFontMetrics.GlyphHeight) / 2);
 
         TextureHandle handle = _renderer.CreateTexture(pixels, Size, Size);
-        _sizes[handle.Id] = new Vector2(Size, Size);
+        _sizes[handle.Id] = PlaceholderSize;
         return handle;
     }
 

@@ -167,11 +167,12 @@ public sealed class UILayoutSystemTests
         return entity;
     }
 
-    [Fact]
-    public void UILayoutSystem_AChild_IsPlacedInsideTheRectangleOfItsParent()
+    [Theory]
+    [MemberData(nameof(Screens))]
+    public void UILayoutSystem_AChild_IsPlacedInsideTheRectangleOfItsParent(float width, float height)
     {
         var world = new World();
-        var renderer = new RecordingRenderer();
+        var renderer = new RecordingRenderer { ViewportSize = new Vector2(width, height) };
         var system = new UILayoutSystem(renderer);
         CreateCanvas(world);
 
@@ -202,15 +203,25 @@ public sealed class UILayoutSystemTests
 
         system.UpdateFrame(world, new GameTime(0d, 0d));
 
-        // The panel is at (100, 50) with a size of 400x200, so its right half begins at 100 + 200 = 300 and is 200 wide and 200 tall.
-        world.Get<RectTransformComponent>(child).Position.Should().Be(new Vector2(300f, 50f));
-        world.Get<RectTransformComponent>(child).Size.Should().Be(new Vector2(200f, 200f));
+        // The scale of the canvas is a number of pixels per design unit, and every resolution here is a different one, so the same
+        // authored numbers lay the same tree out at the size of the screen: the child is the right half of its parent at every scale
+        // rather than only where a design unit happens to be a pixel. The layout resolved it, so it is read after the frame above.
+        float scale = world.Get<CanvasComponent>(world.Enumerate<CanvasComponent>().First()).Scale;
+
+        // The panel is at (100, 50) with a size of 400x200 in design units, so its right half begins at 100 + 200 = 300 and is 200 wide
+        // and 200 tall; everything of that is in pixels of the screen, which is why the scale multiplies it. The comparison is
+        // approximate because the scale of a canvas is a quotient of two sizes and a product of it need not land on the same float bit
+        // twice.
+        world.Get<RectTransformComponent>(child).Position.X.Should().BeApproximately(300f * scale, Tolerance);
+        world.Get<RectTransformComponent>(child).Position.Y.Should().BeApproximately(50f * scale, Tolerance);
+        world.Get<RectTransformComponent>(child).Size.X.Should().BeApproximately(200f * scale, Tolerance);
+        world.Get<RectTransformComponent>(child).Size.Y.Should().BeApproximately(200f * scale, Tolerance);
 
         // Moving the panel moves the child with it, which is what the hierarchy is for.
         world.GetRef<RectTransformComponent>(panel).AnchoredPosition = new Vector2(200f, 50f);
         system.UpdateFrame(world, new GameTime(0d, 0d));
 
-        world.Get<RectTransformComponent>(child).Position.Should().Be(new Vector2(400f, 50f));
+        world.Get<RectTransformComponent>(child).Position.X.Should().BeApproximately(400f * scale, Tolerance);
     }
 
     [Fact]

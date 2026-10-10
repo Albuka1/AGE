@@ -173,8 +173,11 @@ public sealed class RenderSystem : IRenderPass
     /// <returns>The size of the sprite, or zero when it names none and its image has none either.</returns>
     /// <remarks>
     /// A sprite that names layers and no size takes the size of the image of its first layer, which is the base of the picture; a
-    /// sprite that names no layers takes the size of its own image. Culling and drawing agree on this, so a sprite that is drawn is a
-    /// sprite the camera was told about.
+    /// sprite that names a sheet takes the size of the cell the sheet resolved, which is what drawing it uses; a sprite that names
+    /// neither takes the size of its own image. Culling and drawing agree on this, so a sprite that is drawn is a sprite the camera
+    /// was told about. A sprite of a sheet is measured through the sheet rather than through the handle of the component, because that
+    /// handle is written back only when the sprite is drawn: reading it here would answer zero on the first frame, and the size of the
+    /// whole sheet once it is set.
     /// </remarks>
     private Vector2 ResolvedSize(in SpriteComponent sprite)
     {
@@ -188,9 +191,12 @@ public sealed class RenderSystem : IRenderPass
             return _textures.Size(Texture(layers[0]));
         }
 
-        return sprite.SheetPath is not null || sprite.TexturePath is not null
-            ? _textures.Size(sprite.TexturePath is not null ? _textures.Resolve(sprite.TexturePath) : sprite.Texture)
-            : Vector2.Zero;
+        if (sprite.SheetPath is string sheetPath && _sheets is not null)
+        {
+            return _sheets.Resolve(sheetPath, sprite.State ?? string.Empty, sprite.Frame).Cell;
+        }
+
+        return sprite.TexturePath is not null ? _textures.Size(_textures.Resolve(sprite.TexturePath)) : Vector2.Zero;
     }
 
     /// <summary>Returns the texture of a layer, resolving the image that the document named.</summary>

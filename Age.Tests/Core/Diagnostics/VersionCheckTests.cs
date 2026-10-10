@@ -62,6 +62,47 @@ public sealed class VersionCheckTests
         }
     }
 
+    [Theory]
+    [InlineData("0.4.x")]
+    [InlineData("0.4.-1")]
+    [InlineData("0.4.0.5")]
+    [InlineData("1..0")]
+    [InlineData("")]
+    public void VersionCheck_AVersionThatDoesNotRead_IsRefusedRatherThanRounded(string version)
+    {
+        // A version that does not read is refused: reading `0.4.x` as `0.4.0` would run a game of another contract, and a fourth
+        // number would be dropped without a word. The engine's own version and the declared one are read the same way.
+        Action compare = () => VersionCheck.Compare("0.4.0", version);
+
+        compare.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void VersionCheck_AGameThatDeclaresNothingInAFile_IsRefused()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "age-version-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            Directory.CreateDirectory(folder);
+
+            // A missing file is a game that declares nothing, which is accepted; a file that holds `null` is a game that wrote a
+            // declaration and said nothing in it, which is a mistake rather than the same thing.
+            File.WriteAllText(Path.Combine(folder, GameVersion.FileName), "null");
+
+            Action read = () => VersionCheck.Read(folder);
+
+            read.Should().Throw<InvalidDataException>("a declaration that is there and holds nothing is not a declaration that was never written");
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void EngineVersion_ReportsThreeNumbers()
     {

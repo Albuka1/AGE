@@ -16,6 +16,10 @@ public sealed class NullDevWindowHost : IDevWindowHost
     public bool IsOpen { get; private set; }
 
     /// <inheritdoc />
+    /// <remarks>A window that is never there never has the keyboard focus, so a game reads the keys as its own.</remarks>
+    public bool Focused => false;
+
+    /// <inheritdoc />
     public Vector2 Size { get; private set; }
 
     /// <inheritdoc />

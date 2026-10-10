@@ -209,6 +209,21 @@ public sealed class TextureServiceTests
     }
 
     [Fact]
+    public void TextureService_SizeOfThePlaceholder_IsKnownWithoutALookup()
+    {
+        var renderer = new FakeRenderer();
+        var textures = new TextureService(new FakeImageLoader(), renderer);
+
+        // The id the placeholder was uploaded under is handed back out by the device when a texture is released, so the size is
+        // answered for the handle rather than out of the table: a sprite that drew a missing image is drawn at 64x64 on the frame
+        // that image was released on as well, rather than collapsing to nothing.
+        TextureHandle error = textures.Error;
+
+        textures.Size(error).Should().Be(new Vector2(64f, 64f));
+        textures.Size(error).Should().Be(new Vector2(64f, 64f), "the size is of the placeholder and not of whatever reused its id");
+    }
+
+    [Fact]
     public void TextureService_UnloadAll_ForgetsThePlaceholderSoTheNextCallBuildsItAgain()
     {
         var renderer = new FakeRenderer();

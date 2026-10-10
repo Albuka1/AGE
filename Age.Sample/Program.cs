@@ -34,7 +34,10 @@ if (declared is not null)
 
     if (match == VersionMatch.Compatible)
     {
-        Console.Error.WriteLine($"This game was written for AGE {declared.Engine} and is running on {EngineVersion.Value}, a later build of the same contract.");
+        // The two name the same contract and another build, and which of them is newer is not what this line is about: a game that
+        // was written for a later build of the engine runs on an earlier one as well, so the wording says what they are rather than
+        // which of them came first.
+        Console.Error.WriteLine($"This game was written for AGE {declared.Engine} and the engine that is running it is {EngineVersion.Value}: a different build of the same contract.");
     }
 }
 
@@ -662,10 +665,12 @@ gameLoop.Run(
             return;
         }
 
-        // The console and the developer window take the whole input while they are open, so the keys that move the sprite belong to
-        // them rather than to the game: the sprite stands still while a line is being typed or a page is being read, whatever was
-        // held when one of them opened.
-        if (!consoleOverlay.IsVisible && !devWindow.IsOpen)
+        // The keys that move the sprite belong to the game while the game is the window a person is typing into, and to the console
+        // while a line is being typed into it: the console is a text field and takes the whole keyboard, which is what a line typed
+        // into it means. The developer window stands beside the game and is a window of the operating system of its own, so while it
+        // has the focus the keys are going there and the sprite stands still; the moment it gives the focus back the sprite moves
+        // again, which is what makes the two windows live side by side rather than one taking the other's input away.
+        if (!consoleOverlay.IsVisible && !devWindow.Focused)
         {
             MoveFirstSprite(world, first, input, step);
         }
@@ -716,8 +721,14 @@ gameLoop.Run(
         world.UpdateFrame(time, pipeline);
 
         // The console reads the keys of this frame before the passes draw, and the numbers of a frame are read beside it. The
-        // console takes the whole input while it is visible, so the game below reads the keys only when it is not.
-        consoleOverlay.Update(time);
+        // console takes the whole input while it is visible, so the game below reads the keys only when it is not. While the
+        // developer window has the focus the keys are going to that window rather than to the game, so the console of the game reads
+        // nothing: a line typed into the window beside the game is not a line typed into the game, which is what keeps the two
+        // consoles apart.
+        if (!devWindow.Focused)
+        {
+            consoleOverlay.Update(time);
+        }
 
         // The numbers of a frame stand below the console while it is open, which is what keeps the two from drawing over one
         // another: the console reports the height of its panel and the overlay is offset by it.
@@ -728,7 +739,7 @@ gameLoop.Run(
         // and pumped every frame: pumping it draws its page, which is what keeps it in step with the game without a loop of its own.
         devWindow.Pump(time);
 
-        if (!consoleOverlay.IsVisible && !devWindow.IsOpen)
+        if (!consoleOverlay.IsVisible && !devWindow.Focused)
         {
             if (input.IsKeyPressed(Key.Q))
             {

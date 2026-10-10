@@ -26,15 +26,22 @@ public sealed class UIUpdateSystem : IFrameSystem
     /// <param name="world">The world to update.</param>
     /// <param name="frame">The time of the frame. The system does not use it.</param>
     /// <remarks>
-    /// Every button first has <see cref="ButtonComponent.IsHovered"/> and <see cref="ButtonComponent.IsPressed"/> cleared,
-    /// so a button that lost the pointer stops reporting a state. Then the buttons that are interactable and have a
-    /// <see cref="RectTransformComponent"/> containing the pointer are considered, and the one with the highest
-    /// <see cref="RectTransformComponent.ZOrder"/> wins; when two share a ZOrder the later entity wins, which matches the
-    /// order the UI renderer draws them in. That button is marked hovered, and pressed while the left mouse button is held.
+    /// The drop-downs are read first, because an open list hangs over the elements under it and takes the pointer until it is dismissed:
+    /// a click that chooses a row of a list, or one that closes it, is the list's rather than the button's that the list covered. When a
+    /// drop-down takes the click, the rest of the controls are left alone for that frame. Every button first has
+    /// <see cref="ButtonComponent.IsHovered"/> and <see cref="ButtonComponent.IsPressed"/> cleared, so a button that lost the pointer
+    /// stops reporting a state. Then the buttons that are interactable and have a <see cref="RectTransformComponent"/> containing the
+    /// pointer are considered, and the one with the highest <see cref="RectTransformComponent.ZOrder"/> wins; when two share a ZOrder
+    /// the later entity wins, which matches the order the UI renderer draws them in. That button is marked hovered, and pressed while
+    /// the left mouse button is held.
     /// </remarks>
     public void UpdateFrame(World world, in GameTime frame)
     {
         ArgumentNullException.ThrowIfNull(world);
+
+        // The drop-downs read the pointer before anything else, and a click they take is not read again below: an open list covers the
+        // elements under it, so a button that the list hangs over must not also be pressed by the same click.
+        bool consumed = UpdateDropdowns(world);
 
         CollectButtons(world);
 
@@ -46,35 +53,47 @@ public sealed class UIUpdateSystem : IFrameSystem
             world.Set(entity, button);
         }
 
-        Entity? topMost = FindTopMost(world);
-        if (topMost is not null)
+        if (!consumed)
         {
-            ButtonComponent pressed = world.Get<ButtonComponent>(topMost.Value);
-            pressed.IsHovered = true;
-            pressed.IsPressed = _input.IsMouseButtonDown(MouseButton.Left);
-            world.Set(topMost.Value, pressed);
-
-            if (_input.IsMouseButtonPressed(MouseButton.Left))
+            Entity? topMost = FindTopMost(world);
+            if (topMost is not null)
             {
-                world.Events.Raise(new ButtonPressedEvent(topMost.Value));
+                ButtonComponent pressed = world.Get<ButtonComponent>(topMost.Value);
+                pressed.IsHovered = true;
+                pressed.IsPressed = _input.IsMouseButtonDown(MouseButton.Left);
+                world.Set(topMost.Value, pressed);
+
+                if (_input.IsMouseButtonPressed(MouseButton.Left))
+                {
+                    world.Events.Raise(new ButtonPressedEvent(topMost.Value));
+                }
             }
         }
 
-        // The other controls read the same pointer. A click that lands on a slider is the slider's, so the drag begins before a check
-        // box that stands under the pointer claims it, and a control that stands over another wins by its ZOrder rather than the order
-        // the two are read in.
-        UpdateDropdowns(world);
-        UpdateCheckBoxes(world);
-        UpdateSliders(world);
+        // The other controls read the same pointer. When a drop-down took the click, they are left as they are for the frame, so a
+        // click that chose a row of a list does not also tick the box that stood under it.
+        if (!consumed)
+        {
+            UpdateCheckBoxes(world);
+            UpdateSliders(world);
+        }
+        else
+        {
+            // Hover is still reported, so a control the pointer is over looks live even on the frame a list took the click.
+            UpdateCheckBoxes(world, pressed: false);
+            UpdateSliders(world, pressed: false);
+        }
     }
 
     /// <summary>Reads the pointer for every drop-down, opening a list, choosing a row of one that is open, and dismissing one that a click landed outside of.</summary>
+    /// <param name="world">The world to read the drop-downs from.</param>
+    /// <returns><see langword="true"/> when a drop-down took the click of this frame, which is what keeps it from reaching the rest of the interface.</returns>
     /// <remarks>
     /// An open list is drawn over the elements under it and takes the pointer until it is dismissed, so a click inside it chooses a row
     /// and a click outside it closes it without reaching whatever it covered. The list hangs below the closed element, so a row is found
     /// by the height of a row rather than by an element in the world.
     /// </remarks>
-    private void UpdateDropdowns(World world)
+    private bool UpdateDropdowns(World world)
     {
         Vector2 pointer = _input.MousePosition;
         bool pressed = _input.IsMouseButtonPressed(MouseButton.Left);
@@ -96,7 +115,7 @@ public sealed class UIUpdateSystem : IFrameSystem
 
         if (!pressed)
         {
-            return;
+            return false;
         }
 
         // A click on the element toggles the list: closed becomes open, and open becomes closed, which is what a control that is read
@@ -106,12 +125,12 @@ public sealed class UIUpdateSystem : IFrameSystem
             DropdownComponent dropdown = world.Get<DropdownComponent>(hit);
             dropdown.Open = open != hit;
             world.Set(hit, dropdown);
-            return;
+            return true;
         }
 
         if (open is not Entity openEntity || !world.Has<RectTransformComponent>(openEntity))
         {
-            return;
+            return false;
         }
 
         // A click anywhere else with a list open either chooses a row of it or dismisses it, and never reaches what is under the list.
@@ -135,6 +154,7 @@ public sealed class UIUpdateSystem : IFrameSystem
         }
 
         world.Set(openEntity, openDropdown);
+        return true;
     }
 
     private void CollectButtons(World world)
@@ -151,12 +171,14 @@ public sealed class UIUpdateSystem : IFrameSystem
         TopMost<ButtonComponent>(world, _input.MousePosition, entity => world.Get<ButtonComponent>(entity).Interactable);
 
     /// <summary>Reads the pointer for every check box, toggling the state of the one that was pressed and reporting hover.</summary>
+    /// <param name="world">The world to read the check boxes from.</param>
+    /// <param name="pressed">Whether a press of this frame may toggle a box, which a frame that a drop-down took the click on does not.</param>
     /// <remarks>
     /// A press toggles the state and raises <see cref="CheckChangedEvent"/>, so a game reacts to a change rather than comparing the
     /// state with the frame before it. The box that the pointer is over is the one with the highest
     /// <see cref="RectTransformComponent.ZOrder"/>, so a box over a box is the one that is pressed.
     /// </remarks>
-    private void UpdateCheckBoxes(World world)
+    private void UpdateCheckBoxes(World world, bool pressed = true)
     {
         Vector2 pointer = _input.MousePosition;
         Entity? topMost = TopMost<CheckBoxComponent>(world, pointer, entity => world.Get<CheckBoxComponent>(entity).Interactable);
@@ -168,7 +190,7 @@ public sealed class UIUpdateSystem : IFrameSystem
             world.Set(entity, box);
         }
 
-        if (topMost is not Entity hit || !_input.IsMouseButtonPressed(MouseButton.Left))
+        if (topMost is not Entity hit || !pressed || !_input.IsMouseButtonPressed(MouseButton.Left))
         {
             return;
         }
@@ -180,15 +202,19 @@ public sealed class UIUpdateSystem : IFrameSystem
     }
 
     /// <summary>Reads the pointer for every slider, beginning, following and ending a drag, and reporting the number it moved to.</summary>
+    /// <param name="world">The world to read the sliders from.</param>
+    /// <param name="pressed">Whether a press of this frame may begin a drag, which a frame that a drop-down took the click on does not.</param>
     /// <remarks>
     /// A drag begins on a press inside the track and follows the pointer wherever it goes until the button comes up, so a pointer that
     /// slips off the slider still moves the number, which is what a person dragging a handle expects. The number is taken from where
-    /// the pointer stands along the track, so a click in the middle of the track jumps the handle there rather than nudging it.
+    /// the pointer stands along the track, so a click in the middle of the track jumps the handle there rather than nudging it. A drag
+    /// that is already under way is still followed on a frame that a drop-down took a click on, so a list that opens over a track the
+    /// pointer is dragging does not freeze the handle.
     /// </remarks>
-    private void UpdateSliders(World world)
+    private void UpdateSliders(World world, bool pressed = true)
     {
         Vector2 pointer = _input.MousePosition;
-        bool pressed = _input.IsMouseButtonPressed(MouseButton.Left);
+        bool begin = pressed && _input.IsMouseButtonPressed(MouseButton.Left);
         bool held = _input.IsMouseButtonDown(MouseButton.Left);
         Entity? topMost = TopMost<SliderComponent>(world, pointer, entity => world.Get<SliderComponent>(entity).Interactable);
 
@@ -210,7 +236,7 @@ public sealed class UIUpdateSystem : IFrameSystem
                 continue;
             }
 
-            if (!slider.IsDragging && pressed && topMost == entity)
+            if (!slider.IsDragging && begin && topMost == entity)
             {
                 slider.IsDragging = true;
             }

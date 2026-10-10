@@ -85,6 +85,39 @@ public sealed class UIUpdateSystemTests
         changes.Should().ContainSingle().Which.Value.Should().Be("medium");
     }
 
+    [Fact]
+    public void UIUpdateSystem_AClickOnAnOpenList_DoesNotAlsoPressTheButtonUnderIt()
+    {
+        var world = new World();
+        var input = new NullInputService();
+        var system = new UIUpdateSystem(input);
+
+        // A button that the open list of a drop-down hangs over: the two overlap where the second row of the list is.
+        Entity button = world.CreateEntity();
+        world.Set(button, new RectTransformComponent { Position = new Vector2(0f, 40f), Size = new Vector2(120f, 24f), Visible = true });
+        world.Set(button, new ButtonComponent { Interactable = true });
+
+        Entity dropdown = world.CreateEntity();
+        world.Set(dropdown, new RectTransformComponent { Position = new Vector2(0f, 0f), Size = new Vector2(120f, 24f), Visible = true });
+        world.Set(dropdown, new DropdownComponent { Options = ["low", "medium", "high"], Selected = 0, RowHeight = 24f, Open = true, Interactable = true });
+
+        var presses = new List<ButtonPressedEvent>();
+        world.Events.Subscribe<ButtonPressedEvent>((_, e) => presses.Add(e));
+
+        // The press lands on the second row of the open list, which is drawn over the button: the list takes it, so the button is
+        // neither pressed nor hovered, which is what an open list that the pointer can choose from means.
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(60f, 60f), true);
+        input.BeginFrame();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+        world.Events.Dispatch();
+
+        world.Get<DropdownComponent>(dropdown).Selected.Should().Be(1, "the click chose the row it landed on");
+        world.Get<ButtonComponent>(button).IsPressed.Should().BeFalse("the list that covered the button took the click");
+        world.Get<ButtonComponent>(button).IsHovered.Should().BeFalse();
+        presses.Should().BeEmpty();
+    }
+
     private static Entity CreateButton(World world, int zOrder)
     {
         Entity entity = world.CreateEntity();

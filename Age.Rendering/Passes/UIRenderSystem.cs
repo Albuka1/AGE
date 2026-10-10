@@ -94,6 +94,7 @@ public sealed class UIRenderSystem : IRenderPass
                 DrawCheckBox(world.Get<CheckBoxComponent>(item.Entity), box);
             }
 
+            // A drop-down draws its closed element here, among the rest of them, and keeps its open list for the pass below.
             if (item.HasDropdown)
             {
                 DrawDropdown(world.Get<DropdownComponent>(item.Entity), box);
@@ -113,6 +114,27 @@ public sealed class UIRenderSystem : IRenderPass
             {
                 DrawTextField(world.Get<TextFieldComponent>(item.Entity), box);
             }
+        }
+
+        // An open list hangs over whatever stands under its element, so it is drawn after every element rather than among them: a
+        // list drawn where its element sits would be covered by the elements that come later in the sort, which is the opposite of
+        // what a list that the pointer can choose from is. The order of the lists among themselves is the order of their elements.
+        foreach (UiItem item in _items)
+        {
+            if (!item.HasDropdown)
+            {
+                continue;
+            }
+
+            DropdownComponent dropdown = world.Get<DropdownComponent>(item.Entity);
+
+            if (!dropdown.Open)
+            {
+                continue;
+            }
+
+            RectTransformComponent rect = world.Get<RectTransformComponent>(item.Entity);
+            DrawDropdownList(dropdown, new Rect(rect.Position, rect.Size));
         }
 
         _renderer.EndFrame();
@@ -162,7 +184,7 @@ public sealed class UIRenderSystem : IRenderPass
         _renderer.DrawRectangle(new Rect(box.Position, new Vector2(box.Width * bar.Normalized, box.Height)), FaceColour);
     }
 
-    /// <summary>Draws a drop-down: the chosen value in the closed element, and the whole list under it when it is open.</summary>
+    /// <summary>Draws the closed element of a drop-down, which is the chosen value on a face.</summary>
     /// <param name="dropdown">The values of the drop-down.</param>
     /// <param name="box">The rectangle of the closed element.</param>
     private void DrawDropdown(in DropdownComponent dropdown, Rect box)
@@ -174,13 +196,20 @@ public sealed class UIRenderSystem : IRenderPass
             return;
         }
 
-        float row = dropdown.RowHeight > 0f ? dropdown.RowHeight : box.Height;
         _renderer.DrawText(dropdown.Value, box.Position + new Vector2(LinePad, 0f), TextColour);
+    }
 
-        if (!dropdown.Open)
+    /// <summary>Draws the open list of a drop-down, which hangs under the closed element and stands over the rest of the interface.</summary>
+    /// <param name="dropdown">The values of the open drop-down.</param>
+    /// <param name="box">The rectangle of the closed element.</param>
+    private void DrawDropdownList(in DropdownComponent dropdown, Rect box)
+    {
+        if (dropdown.Count == 0)
         {
             return;
         }
+
+        float row = dropdown.RowHeight > 0f ? dropdown.RowHeight : box.Height;
 
         for (var index = 0; index < dropdown.Count; index++)
         {

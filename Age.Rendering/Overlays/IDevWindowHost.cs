@@ -16,6 +16,14 @@ public interface IDevWindowHost
     /// <summary>Gets a value indicating whether the window exists and is not closing.</summary>
     bool IsOpen { get; }
 
+    /// <summary>Gets a value indicating whether the window of the operating system has the keyboard focus.</summary>
+    /// <remarks>
+    /// The keyboard of the machine is one, so the window that has the focus is the one a person is typing into. A game reads this to
+    /// know that a window beside it is holding the keys, which is what keeps a key typed into this window from also reaching the game.
+    /// A host that opens nothing answers <see langword="false"/>.
+    /// </remarks>
+    bool Focused { get; }
+
     /// <summary>Gets the size of the surface of the window, in pixels, which is what its content is laid out in.</summary>
     Vector2 Size { get; }
 

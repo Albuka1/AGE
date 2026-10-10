@@ -394,6 +394,43 @@ public sealed class PrototypeSceneTests
         loaded.Get<SpriteAnimationComponent>(restored).State.Should().Be("walk");
     }
 
+    [Fact]
+    public void PrototypeScene_APrunedComponentBeforeTheWalkGaveUp_IsStillWrittenInFull()
+    {
+        using ServiceProvider provider = Create();
+        SpawnService spawner = provider.GetRequiredService<SpawnService>();
+        ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+        var world = new World();
+        Entity goblin = spawner.Spawn(world, "Goblin");
+
+        // The sprite differs from the prototype in one field, so the walk of the prototype prunes it first; the entity then loses a
+        // component that a prototype declares later in the document, so the whole entity has to be written in full. What was pruned
+        // before the walk gave up must not survive: the entity is written in full or it is written as a difference, never as a
+        // difference that lost the fields of a component the prototype does not supply.
+        ref SpriteComponent sprite = ref world.GetRef<SpriteComponent>(goblin);
+        sprite.Color = Color.Red;
+        world.Remove<SpriteAnimationComponent>(goblin);
+
+        string json = scenes.Save(world);
+
+        using (JsonDocument document = JsonDocument.Parse(json))
+        {
+            JsonElement entity = document.RootElement.GetProperty("Entities")[0];
+
+            entity.GetProperty("Prototype").ValueKind.Should().Be(JsonValueKind.Null);
+            entity.GetProperty("Components").TryGetProperty("Sprite", out JsonElement written).Should().BeTrue();
+
+            // The sprite is written whole rather than as the one field that differed: the prototype is not named, so nothing would
+            // supply the fields that were pruned.
+            written.TryGetProperty("TexturePath", out _).Should().BeTrue("a scene of no prototype carries every field of the component");
+        }
+
+        var loaded = new World();
+        scenes.Load(loaded, json);
+
+        loaded.Get<SpriteComponent>(loaded.Enumerate().Single()).Color.Should().Be(Color.Red);
+    }
+
     /// <summary>Returns a scene of one entity that names a prototype and carries no component of its own.</summary>
     private static string Scene(string prototypeId) => $$"""
         {

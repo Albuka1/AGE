@@ -33,11 +33,16 @@ public struct SliderComponent : IComponent
     /// <summary>Gets or sets the highest number the slider holds.</summary>
     public float Maximum;
 
-    /// <summary>Gets or sets the number the slider holds, which is kept inside the range.</summary>
+    /// <summary>Gets or sets the number the slider holds.</summary>
+    /// <remarks>
+    /// What is stored is the number as it was written and what is read is that number kept inside the range, so the authored value
+    /// survives however the fields were assigned: a document that writes <c>Value</c> before <c>Minimum</c> and <c>Maximum</c> reads the
+    /// value it wrote once the range is there, rather than the range it was clamped against when the range was still zero.
+    /// </remarks>
     public float Value
     {
-        readonly get => _value;
-        set => _value = Math.Clamp(value, MathF.Min(Minimum, Maximum), MathF.Max(Minimum, Maximum));
+        readonly get => Math.Clamp(_value, MathF.Min(Minimum, Maximum), MathF.Max(Minimum, Maximum));
+        set => _value = value;
     }
 
     /// <summary>Gets or sets a value indicating whether the slider reacts to input.</summary>
@@ -56,7 +61,7 @@ public struct SliderComponent : IComponent
         readonly get
         {
             float span = Maximum - Minimum;
-            return MathF.Abs(span) < float.Epsilon ? 0f : Math.Clamp((_value - Minimum) / span, 0f, 1f);
+            return MathF.Abs(span) < float.Epsilon ? 0f : Math.Clamp((Value - Minimum) / span, 0f, 1f);
         }
 
         set => Value = Minimum + (Math.Clamp(value, 0f, 1f) * (Maximum - Minimum));

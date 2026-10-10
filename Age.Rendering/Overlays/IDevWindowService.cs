@@ -39,6 +39,14 @@ public interface IDevWindowService
     /// <summary>Gets a value indicating whether the window of the operating system is open.</summary>
     bool IsOpen { get; }
 
+    /// <summary>Gets a value indicating whether the window of the operating system has the keyboard focus.</summary>
+    /// <remarks>
+    /// The keyboard of the machine is one, so while this window has the focus the keys that are typed belong to it rather than to the
+    /// game: a game reads this to keep its own console closed and to leave the keys of its character alone. A window that is closed
+    /// answers <see langword="false"/>, so a game that never opened one reads the keys as its own.
+    /// </remarks>
+    bool Focused { get; }
+
     /// <summary>Gets the pages of the window, in the order they were added, which is the order their tabs are drawn in.</summary>
     IReadOnlyList<IDevWindowTab> Tabs { get; }
 

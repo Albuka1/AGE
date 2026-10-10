@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the game on a black frame.
 - `WindowPointer` is handed to the page that is shown, so a page reads the pointer of its own window and acts on a click inside the
   body; a click on the frame of the window is the window's own and never reaches the page.
+- The developer window holds the keyboard only while it has the focus: `IDevWindowHost.Focused` and `IDevWindowService.Focused` report
+  it, tracked from the focus events of the window. A game keeps its own console and its own keys while the window stands beside it
+  without the focus, so the two windows are used side by side rather than one taking the input of the other, and a key that was held
+  when the focus moved is not left held by the window that never saw the release.
 
 - `IClipboardService` is the clipboard of the machine, which `SilkInputService` reads from the keyboard and `NullInputService` keeps
   in memory for a run with no window. The console uses it: Control and A, C, X and V select, copy, cut and paste, the caret is where

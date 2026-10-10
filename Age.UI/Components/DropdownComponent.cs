@@ -30,11 +30,16 @@ public struct DropdownComponent : IComponent
     /// <summary>Gets or sets the values the list offers, in the order they are shown.</summary>
     public string[]? Options;
 
-    /// <summary>Gets or sets the index of the chosen value, which is kept inside the list.</summary>
+    /// <summary>Gets or sets the index of the chosen value.</summary>
+    /// <remarks>
+    /// What is stored is the index as it was written and what is read is that index kept inside the list, so the authored choice
+    /// survives however the fields were assigned: a document that writes <c>Selected</c> before <c>Options</c> reads the value it chose
+    /// once the list is there, rather than the first row it was clamped to when the list was still empty.
+    /// </remarks>
     public int Selected
     {
-        readonly get => _selected;
-        set => _selected = Options is { Length: > 0 } options ? Math.Clamp(value, 0, options.Length - 1) : 0;
+        readonly get => Options is { Length: > 0 } options ? Math.Clamp(_selected, 0, options.Length - 1) : 0;
+        set => _selected = value;
     }
 
     /// <summary>Gets or sets a value indicating whether the list is open over what is under the element.</summary>
@@ -53,7 +58,7 @@ public struct DropdownComponent : IComponent
     public readonly int Count => Options?.Length ?? 0;
 
     /// <summary>Gets the chosen value, or an empty string when the list offers none.</summary>
-    public readonly string Value => Options is { Length: > 0 } options && _selected >= 0 && _selected < options.Length ? options[_selected] : string.Empty;
+    public readonly string Value => Options is { Length: > 0 } options && Selected >= 0 && Selected < options.Length ? options[Selected] : string.Empty;
 
     /// <summary>Gets the height of the open list, which is the height of a row for every value it offers.</summary>
     public readonly float ListHeight => Count * RowHeight;

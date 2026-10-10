@@ -99,10 +99,12 @@ public sealed class SceneSerializer : ISceneSerializer
             return null;
         }
 
-        // What the prototype already says is dropped only once all of it was read: an entity that lost a component of its
-        // prototype, or one whose component cannot be read, is written in full, and an entity that is written in full keeps
-        // every component it holds.
+        // What the prototype already says is gathered as it is read and written into the scene only once the whole of it was read:
+        // an entity that lost a component of its prototype, or one whose component cannot be read, is written in full, and a scene
+        // that is written in full keeps every component it holds rather than the ones that happened to be pruned before the walk
+        // gave up.
         List<string>? matches = null;
+        List<(string Name, JsonElement Values)>? pruned = null;
 
         foreach ((string name, JsonElement values) in declared)
         {
@@ -133,9 +135,18 @@ public sealed class SceneSerializer : ISceneSerializer
                 continue;
             }
 
-            if (Prune(component, expected) is JsonElement pruned)
+            if (Prune(component, expected) is JsonElement replacement)
             {
-                components[name] = pruned;
+                (pruned ??= []).Add((name, replacement));
+            }
+        }
+
+        // Every component of the prototype was read, so the scene now takes the shape it was gathered in.
+        if (pruned is not null)
+        {
+            foreach ((string name, JsonElement values) in pruned)
+            {
+                components[name] = values;
             }
         }
 

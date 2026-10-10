@@ -41,7 +41,13 @@ public static class VersionCheck
     /// <param name="folder">The folder the game runs from, which holds <c>game.version.json</c>.</param>
     /// <returns>The declaration, or null when the game ships no file and so declares nothing.</returns>
     /// <exception cref="ArgumentException"><paramref name="folder"/> is null, empty or whitespace.</exception>
-    /// <remarks>A file that cannot be read as JSON throws what the reader throws, because a game that ships a broken declaration is a game whose content is broken.</remarks>
+    /// <exception cref="InvalidDataException">The file is there and holds no declaration, which is a game that says nothing rather than one that says nothing was written for it.</exception>
+    /// <remarks>
+    /// A file that cannot be read as JSON throws what the reader throws, because a game that ships a broken declaration is a game whose
+    /// content is broken. A file that holds <c>null</c> is refused here rather than read as an absent declaration: the two are
+    /// different — one is a game that never wrote a file and one is a game that wrote a file saying nothing — and only the first is
+    /// the opt-out that a game without a declared contract takes.
+    /// </remarks>
     public static GameVersion? Read(string folder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
@@ -54,7 +60,10 @@ public static class VersionCheck
         }
 
         using FileStream stream = File.OpenRead(path);
-        return JsonSerializer.Deserialize<GameVersion>(stream, Options);
+
+        return JsonSerializer.Deserialize<GameVersion>(stream, Options)
+            ?? throw new InvalidDataException(
+                $"'{GameVersion.FileName}' holds no declaration. Write the version the game was built for, or remove the file to declare nothing.");
     }
 
     /// <summary>Reads the declaration of a game from the folder the process runs in.</summary>
@@ -94,6 +103,13 @@ public static class VersionCheck
     /// <summary>Returns the three numbers of a version, reading a version of fewer numbers as the one with zeros behind it.</summary>
     /// <param name="version">The version to read, such as <c>0.4.0</c> or <c>0.4.0-alpha.1</c>.</param>
     /// <returns>The three numbers, which are zero where the version names fewer of them.</returns>
+    /// <exception cref="ArgumentException">The version holds more than three numbers, or a number is not a non-negative integer.</exception>
+    /// <remarks>
+    /// A version that does not read is refused rather than rounded, because two versions that are compared are compared for what they
+    /// say: reading <c>0.4.x</c> as <c>0.4.0</c> would run a game of another contract, and a fourth number would be dropped without a
+    /// word. A version of fewer than three numbers is one that left the zeros behind it out, which is what <c>0.4</c> is for
+    /// <c>0.4.0</c>.
+    /// </remarks>
     private static (int Major, int Minor, int Patch) Numbers(string version)
     {
         // A suffix describes the build and not the contract, so it is dropped before the numbers are read: 0.4.0-alpha.1 is 0.4.0.
@@ -106,10 +122,35 @@ public static class VersionCheck
 
         string[] parts = version.Split('.');
 
-        return (Number(parts, 0), Number(parts, 1), Number(parts, 2));
+        if (parts.Length > 3)
+        {
+            throw new ArgumentException(
+                $"'{version}' names {parts.Length} numbers, and a version is a major, a minor and a patch number at most.",
+                nameof(version));
+        }
+
+        return (Number(version, parts, 0), Number(version, parts, 1), Number(version, parts, 2));
     }
 
-    /// <summary>Returns one number of a split version, or zero when it holds none there or that part is not a number.</summary>
-    private static int Number(string[] parts, int index) =>
-        index < parts.Length && int.TryParse(parts[index], out int value) ? value : 0;
+    /// <summary>Returns one number of a split version, or zero when the version names fewer than that many of them.</summary>
+    /// <param name="version">The whole version, which an error names.</param>
+    /// <param name="parts">The numbers the version was split into.</param>
+    /// <param name="index">The number to read, counting from zero.</param>
+    /// <returns>The number, or zero when the version is shorter than that.</returns>
+    /// <exception cref="ArgumentException">The part is present and is not a non-negative integer.</exception>
+    /// <remarks>
+    /// A part that is there is read strictly: rounding a part that does not read would compare two versions as the same contract when
+    /// the game named another one, which is the mistake this whole check exists to catch.
+    /// </remarks>
+    private static int Number(string version, string[] parts, int index)
+    {
+        if (index >= parts.Length)
+        {
+            return 0;
+        }
+
+        return int.TryParse(parts[index], out int value) && value >= 0
+            ? value
+            : throw new ArgumentException($"'{version}' holds '{parts[index]}' where a number is expected.", nameof(version));
+    }
 }
