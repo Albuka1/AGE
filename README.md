@@ -112,6 +112,9 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 The following work is planned but not part of the current foundation: the features the engine does
 not have yet, then the platform work.
 
+[PROGRESS.md](PROGRESS.md) records what of the plan is already in the code and what is left, and is the place to
+check before starting a step — the planning documents themselves are local notes and are not committed.
+
 - Sprite sheets and animation.
 - UI widgets: slider, drop-down, check box, text field, scrollable panel, with anchors and clipping.
 - Positional audio with a listener.
