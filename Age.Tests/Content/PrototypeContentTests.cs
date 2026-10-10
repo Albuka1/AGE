@@ -43,6 +43,32 @@ public sealed class PrototypeContentTests
     }
 
     [Fact]
+    public void PrototypeContent_ASpriteOfLayers_ReachesTheComponentWithTheLayersOfTheDocument()
+    {
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+        PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+
+        // The kind that reads a prototype as an entity is what a game registers, and what a spawn asks the content for.
+        prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Load(assets, "Prototypes");
+
+        var world = new World();
+        Entity beacon = provider.GetRequiredService<SpawnService>().Spawn(world, "Beacon");
+
+        SpriteComponent sprite = world.Get<SpriteComponent>(beacon);
+        sprite.Size.Should().Be(new Vector2(40f, 40f), "the layers of a sprite are drawn at the box that the document writes");
+        sprite.Layers.Should().HaveCount(2, "the layers of a document reach the component in the order they are written");
+        sprite.Layers![0].Name.Should().Be("base");
+        sprite.Layers[0].Image.Should().Be("Textures/Tiles/tiles.bmp");
+        sprite.Layers[0].Shader.Should().BeNull("a layer that names no shader is drawn with the program of the engine");
+        sprite.Layers[1].Name.Should().Be("pulse");
+        sprite.Layers[1].Image.Should().Be("Textures/Tiles/tiles.bmp");
+        sprite.Layers[1].Shader.Should().Be("Shaders/pulse.frag");
+    }
+
+    [Fact]
     public void PrototypeManager_Load_ReadsEveryDocumentOfAFolderInOrderAndForgetsNothingElse()
     {
         string root = Path.Combine(Path.GetTempPath(), "age-content-" + Guid.NewGuid().ToString("N"));

@@ -84,6 +84,99 @@ public sealed class CameraTests
         act.Should().Throw<InvalidOperationException>();
     }
 
+    [Fact]
+    public void Camera2D_Fit_AWindowOfTheShapeOfTheDesign_ShowsExactlyThatArea()
+    {
+        Camera2D camera = Camera2D.Fit(new Vector2(1280f, 720f), new Vector2(1600f, 900f));
+
+        // The world is scaled by one over the zoom, so the zoom of a design that fills the window is the ratio of the two.
+        camera.Zoom.Should().BeApproximately(0.8f, Tolerance);
+        camera.ViewportSize.Should().Be(new Vector2(1600f, 900f));
+        camera.VisibleWorld.Size.X.Should().BeApproximately(1280f, 0.01f);
+        camera.VisibleWorld.Size.Y.Should().BeApproximately(720f, 0.01f);
+    }
+
+    [Fact]
+    public void Camera2D_Fit_AContainedDesignInASquarerWindow_ShowsMoreOfItThanItCrops()
+    {
+        // A window in 4:3 for a design in 16:9: the zoom that contains the design is the one of its width, so the view is
+        // taller than the design by the difference of the shapes, and nothing of the design is cropped.
+        Camera2D camera = Camera2D.Fit(new Vector2(1280f, 720f), new Vector2(1600f, 1200f), CameraFit.Contain);
+
+        camera.Zoom.Should().BeApproximately(0.8f, Tolerance);
+        camera.VisibleWorld.Position.Should().Be(Vector2.Zero, "the whole of the design is in view, so the extra room is below and to the right of it");
+        camera.VisibleWorld.Size.X.Should().BeApproximately(1280f, 0.01f);
+        camera.VisibleWorld.Size.Y.Should().BeApproximately(960f, 0.01f);
+    }
+
+    [Fact]
+    public void Camera2D_Fit_ACoveringDesignInASquarerWindow_KeepsTheDesignHeightAndCropsTheWidth()
+    {
+        Camera2D camera = Camera2D.Fit(new Vector2(1280f, 720f), new Vector2(1600f, 1200f), CameraFit.Cover);
+
+        camera.Zoom.Should().BeApproximately(0.6f, Tolerance);
+
+        // The window shows 960 units of the design across, so 320 of them are cropped: half of that on each side, which keeps the
+        // middle of the design at the middle of the window.
+        camera.VisibleWorld.Position.X.Should().BeApproximately(160f, 0.01f);
+        camera.VisibleWorld.Position.Y.Should().BeApproximately(0f, 0.01f);
+        camera.VisibleWorld.Size.X.Should().BeApproximately(960f, 0.01f);
+        camera.VisibleWorld.Size.Y.Should().BeApproximately(720f, 0.01f);
+    }
+
+    [Fact]
+    public void Camera2D_Fit_ACoveringDesignInATallerWindow_CropsTheWidthInTheMiddle()
+    {
+        // A window that is taller than the shape of the design: the zoom that covers it is the one of its height, so the height
+        // of the design fills the window and what is shown across is narrower than the design by 320 units, shared by its sides.
+        Camera2D camera = Camera2D.Fit(new Vector2(1280f, 720f), new Vector2(1280f, 960f), CameraFit.Cover);
+
+        camera.Zoom.Should().BeApproximately(0.75f, Tolerance);
+        camera.VisibleWorld.Size.X.Should().BeApproximately(960f, 0.01f);
+        camera.VisibleWorld.Size.Y.Should().BeApproximately(720f, 0.01f);
+        camera.VisibleWorld.Position.Should().Be(new Vector2(160f, 0f));
+    }
+
+    [Fact]
+    public void Camera2D_Fit_ACoveringDesignInAWiderWindow_CropsTheHeightInTheMiddle()
+    {
+        // And the other way round: a window that is wider than the shape of the design fills with the width of it and shows
+        // 548.57 units of the height, so the crop of 171.43 is shared by the top and the bottom of the design.
+        Camera2D camera = Camera2D.Fit(new Vector2(1280f, 720f), new Vector2(1680f, 720f), CameraFit.Cover);
+
+        camera.Zoom.Should().BeApproximately(1280f / 1680f, Tolerance);
+        camera.VisibleWorld.Size.X.Should().BeApproximately(1280f, 0.01f);
+        camera.VisibleWorld.Position.X.Should().BeApproximately(0f, 0.01f);
+        camera.VisibleWorld.Position.Y.Should().BeApproximately(85.71f, 0.01f);
+    }
+
+    [Theory]
+    [InlineData(1280f, 720f)]
+    [InlineData(3840f, 2160f)]
+    public void Camera2D_Fit_ADesignFillingTheWindow_IsTheSameScaleOnBothAxes(float width, float height)
+    {
+        Camera2D camera = Camera2D.Fit(new Vector2(1280f, 720f), new Vector2(width, height), CameraFit.Cover);
+
+        camera.Zoom.Should().BeApproximately(1280f / width, Tolerance);
+        camera.Zoom.Should().BeApproximately(720f / height, Tolerance);
+    }
+
+    [Fact]
+    public void Camera2D_Fit_ADesignThatIsNotARealArea_IsRefused()
+    {
+        Action fit = () => Camera2D.Fit(Vector2.Zero, new Vector2(1280f, 720f));
+
+        fit.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void Camera2D_Fit_AWindowThatIsNotARealSize_IsRefused()
+    {
+        Action fit = () => Camera2D.Fit(new Vector2(1280f, 720f), Vector2.Zero);
+
+        fit.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     private static Vector2 Project(Matrix4x4 matrix, Vector2 point)
     {
         (float x, float y, _) = ProjectClip(matrix, point);

@@ -86,6 +86,38 @@ public sealed class PrototypeSceneTests
     }
 
     [Fact]
+    public void PrototypeScene_ASpriteOfLayers_IsWrittenAndReadBack()
+    {
+        using ServiceProvider provider = Create();
+        ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+        var world = new World();
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new SpriteComponent
+        {
+            Size = new Vector2(40f, 40f),
+            Color = Color.White,
+            Layers =
+            [
+                new SpriteLayer { Name = "base", Image = "Textures/Entities/thing.bmp" },
+                new SpriteLayer { Name = "pulse", Image = "Textures/Entities/thing.bmp", Shader = "Shaders/pulse.frag" },
+            ],
+        });
+
+        string json = scenes.Save(world);
+
+        var loaded = new World();
+        scenes.Load(loaded, json);
+
+        SpriteComponent sprite = loaded.Get<SpriteComponent>(loaded.Enumerate().Single());
+        sprite.Layers.Should().NotBeNull("the layers of a sprite are data of a document rather than state of a run");
+
+        SpriteLayer[] layers = sprite.Layers!;
+        layers.Select(layer => layer.Name).Should().Equal(new[] { "base", "pulse" }, "the order the document writes is what the layers are drawn in");
+        layers[0].Image.Should().Be("Textures/Entities/thing.bmp");
+        layers[1].Shader.Should().Be("Shaders/pulse.frag");
+    }
+
+    [Fact]
     public void PrototypeScene_APrototypeThatTheContentDoesNotHold_IsRefusedAndLeavesTheWorldAsItWas()
     {
         using ServiceProvider provider = Create();

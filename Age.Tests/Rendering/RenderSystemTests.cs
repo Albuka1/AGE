@@ -191,6 +191,96 @@ public sealed class RenderSystemTests
         textures.MissingCount.Should().Be(0);
     }
 
+    [Fact]
+    public void RenderSystem_ASpriteOfLayers_DrawsEveryLayerOfItAtTheBoxOfTheSprite()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var textures = new TextureService(new CountingImageLoader(), renderer);
+        var system = new RenderSystem(renderer, new SpriteSorter(), textures);
+        Entity entity = CreateSprite(world, new Vector2(100f, 100f), size: new Vector2(32f, 32f));
+        world.GetRef<SpriteComponent>(entity).Layers =
+        [
+            new SpriteLayer { Name = "base", Image = "Textures/Tiles/one.bmp" },
+            new SpriteLayer { Name = "over", Image = "Textures/Tiles/two.bmp" },
+        ];
+
+        system.Render(world, Camera(1280f, 720f));
+
+        renderer.Starts.Should().Equal(new[] { new Vector2(100f, 100f), new Vector2(100f, 100f) }, "every layer of a sprite is drawn at the box of the sprite");
+        renderer.Textures.Should().HaveCount(2);
+        renderer.Textures[1].Should().NotBe(renderer.Textures[0], "a layer names an image of its own");
+        renderer.Programs.Should().OnlyContain(shader => shader == null, "a layer that names no shader is drawn with the program of the engine");
+        textures.MissingCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void RenderSystem_AShaderOfALayer_DrawsThatLayerWithItAndHandsTheEngineProgramBack()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var shaders = new RecordingShaderService();
+        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        Entity entity = CreateSprite(world, new Vector2(100f, 100f));
+        world.GetRef<SpriteComponent>(entity).Layers =
+        [
+            new SpriteLayer { Name = "base" },
+            new SpriteLayer { Name = "pulse", Shader = "Shaders/pulse.frag" },
+            new SpriteLayer { Name = "over" },
+        ];
+
+        system.Render(world, Camera(1280f, 720f));
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/pulse.frag" }, "the stage of a layer is compiled on the first frame that draws it");
+        renderer.Programs.Should().HaveCount(3);
+        renderer.Programs[0].Should().BeNull("the layer before the shader is drawn with the program of the engine");
+        renderer.Programs[1].Should().NotBeNull("the layer that names a shader is drawn with it");
+        shaders.IsAlive(renderer.Programs[1]!.Value).Should().BeTrue("the handle is one that the service still holds");
+        renderer.Programs[2].Should().BeNull("the layer after the shader is drawn with the program of the engine again");
+        renderer.ProgramAtEndOfFrame.Should().BeNull("the passes that follow the world draw with the program of the engine");
+
+        system.Render(world, Camera(1280f, 720f));
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/pulse.frag" }, "the pass keeps the program of a layer rather than asking for it on every frame");
+    }
+
+    [Fact]
+    public void RenderSystem_AShaderThatCannotBeLoaded_IsAskedForOnceAndTheLayerIsDrawnWithoutIt()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var shaders = new RecordingShaderService { Fail = true };
+        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        Entity entity = CreateSprite(world, new Vector2(100f, 100f));
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Shader = "Shaders/Nowhere/gone.frag" }];
+
+        system.Render(world, Camera(1280f, 720f));
+        system.Render(world, Camera(1280f, 720f));
+
+        renderer.Starts.Should().HaveCount(2, "a layer whose shader cannot be loaded is drawn with the program of the engine rather than left out");
+        renderer.Programs.Should().OnlyContain(shader => shader == null);
+        shaders.Loaded.Should().Equal(new[] { "Shaders/Nowhere/gone.frag" }, "a stage that is not there is reported once rather than read on every frame");
+    }
+
+    [Fact]
+    public void RenderSystem_AnotherAttachment_CompilesTheStagesOfTheLayersAgain()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var shaders = new RecordingShaderService();
+        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        Entity entity = CreateSprite(world, new Vector2(100f, 100f));
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Shader = "Shaders/pulse.frag" }];
+
+        system.Render(world, Camera(1280f, 720f));
+        renderer.AttachToAnotherWindow();
+        system.Render(world, Camera(1280f, 720f));
+
+        shaders.Loaded.Should().Equal(
+            new[] { "Shaders/pulse.frag", "Shaders/pulse.frag" },
+            "a program of the window before is gone with the device of it, so the stage is compiled again for the device that is there now");
+    }
+
     private static Camera2D Camera(float width, float height, float zoom = 1f) => new()
     {
         Position = Vector2.Zero,
@@ -239,15 +329,80 @@ public sealed class RenderSystemTests
         }
     }
 
+    /// <summary>A shader service that records what it was asked for, which is what tells a stage that is compiled once from one that is compiled on every frame.</summary>
+    private sealed class RecordingShaderService : IShaderService
+    {
+        private readonly List<string> _loaded = [];
+        private readonly Dictionary<string, ShaderHandle> _shaders = new(StringComparer.Ordinal);
+        private readonly ResourcePool<string, uint> _slots = new();
+
+        public List<string> Loaded => _loaded;
+
+        public bool Fail { get; init; }
+
+        public int Count => _shaders.Count;
+
+        public ShaderHandle Load(string fragmentPath, string? vertexPath = null)
+        {
+            _loaded.Add(fragmentPath);
+
+            if (Fail)
+            {
+                throw new FileNotFoundException($"There is no stage at '{fragmentPath}'.");
+            }
+
+            if (!_shaders.TryGetValue(fragmentPath, out ShaderHandle shader))
+            {
+                ResourceHandle slot = _slots.Add((uint)(_shaders.Count + 1), fragmentPath);
+                shader = new ShaderHandle(slot, (uint)(_shaders.Count + 1), 0);
+                _shaders[fragmentPath] = shader;
+            }
+
+            return shader;
+        }
+
+        public bool IsAlive(ShaderHandle shader) =>
+            _shaders.ContainsValue(shader);
+
+        public bool Unload(ShaderHandle shader)
+        {
+            foreach ((string path, ShaderHandle held) in _shaders)
+            {
+                if (held == shader)
+                {
+                    _shaders.Remove(path);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void UnloadAll() => _shaders.Clear();
+    }
+
     private sealed class RecordingRenderer : IRenderer
     {
         public List<Vector2> Starts { get; } = [];
 
         public List<TextureHandle> Textures { get; } = [];
 
+        /// <summary>Gets the shader that every drawn quad was drawn with, in the order the quads were drawn, where null is the program of the engine.</summary>
+        public List<ShaderHandle?> Programs { get; } = [];
+
+        /// <summary>Gets the shader that was used when the frame ended, which is what the passes after the world draw with.</summary>
+        public ShaderHandle? ProgramAtEndOfFrame { get; private set; }
+
+        public uint DeviceGeneration { get; private set; }
+
+        private ShaderHandle? _currentShader;
+
         private int _created;
 
         public Vector2 ViewportSize => new(1280f, 720f);
+
+        /// <summary>Makes the renderer report the attachment of another window, which is what a window swap does to a game.</summary>
+        public void AttachToAnotherWindow() => DeviceGeneration++;
 
         public void Attach(IWindowService window)
         {
@@ -261,10 +416,15 @@ public sealed class RenderSystemTests
         {
         }
 
+        public void UseShader(ShaderHandle shader) => _currentShader = shader;
+
+        public void ResetShader() => _currentShader = null;
+
         public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
         {
             Starts.Add(position);
             Textures.Add(texture);
+            Programs.Add(_currentShader);
         }
 
         public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f) =>
@@ -278,9 +438,7 @@ public sealed class RenderSystemTests
         {
         }
 
-        public void EndFrame()
-        {
-        }
+        public void EndFrame() => ProgramAtEndOfFrame = _currentShader;
 
         public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => new(++_created);
 

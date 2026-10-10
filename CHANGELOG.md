@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A sprite is drawn from layers, each of them with an image and a shader of its own: `SpriteComponent.Layers` holds them in the
+  order they are drawn, every layer is drawn over the one before it at the position, the size and the colour of the sprite, and a
+  layer that names no shader is drawn with the program of the engine, which is what an unshaded layer is. The stage of a layer is
+  compiled on the first frame that draws it and kept while the renderer stays attached to the window that compiled it, so a layer
+  costs one lookup per frame rather than one file read; a stage that cannot be loaded is reported once in the log and the layer is
+  drawn without it. A document writes a layer where it writes the sprite, so `Age.Content.Lint` checks the image and the stage of
+  every layer against the files of a build the way it checks the image of a sprite.
+- A game draws with a shader of its own: `IShaderService` reads the stages of a shader from the content, compiles them with the
+  renderer and keeps one program per pair of paths, and `IRenderer.UseShader`, `SetUniform` and `SetSampler` draw the quads
+  that follow with it — the quads that were collected before a shader or a uniform changes are drawn first, because one draw
+  call samples one program, one texture and one set of uniforms. A shader is written in the OpenGL Shading Language under the
+  header of the engine, which names what a shader of a game reads and writes: `UV`, `COLOR`, `TEXTURE`,
+  `TEXTURE_PIXEL_SIZE` and `TIME`. A fragment shader alone is the common case: the engine draws it with the vertex stage that
+  places the quad, and a game that writes a vertex stage of its own takes the placement over. The samplers of a game start at
+  the third texture unit, because the first one is where the engine binds the image that is being drawn and the second one is
+  where it binds the surface that a stage reads as `SCREEN_TEXTURE`.
+- A shader post-processes what a frame has drawn so far: the header of a stage names the surface that the pass is drawing into as
+  `SCREEN_TEXTURE` with `SCREEN_SIZE`, `SCREEN_PIXEL_SIZE`, `SCREEN_UV` and a reader of it, `sampleScreen`, and the engine copies
+  that surface into a texture before the first quad of a program that declares the sampler is drawn — the world, the text and the
+  interface as they stand when the pass runs, never what the pass is writing. The copy is read from the bottom row of a surface
+  upwards, which is the order a framebuffer holds, so `sampleScreen` and `SCREEN_UV` flip the vertical axis for a shader that
+  thinks in the coordinates of the frame.
+- A frame of several layers is built from render targets: `IRenderer.CreateRenderTarget` makes a surface with a texture of its
+  own, `BeginRenderTarget` points the draws of a pass at it and answers with its size in `ViewportSize`, `EndRenderTarget` points
+  them at the window again, and what was drawn into a target is a texture that a shader binds as a sampler or that a pass draws as
+  a quad, which is what a picture that is processed more than once needs. A surface is cleared at most once in a frame, so a
+  round trip through a target leaves the clear of the window alone, and a target is deleted with the device of the window it was
+  made on, together with the handles of it that a game no longer names.
+- The interface of a game is authored against a resolution of its own and laid out at any other: `CanvasComponent` holds the
+  design resolution, the mode of the scaler and the axis it follows — `Match` blends the ratio of the width and the ratio of the
+  height, so zero keeps the whole design across the screen and one down it — and resolves the scale of the canvas together with
+  the size of it in design units. `RectTransformComponent` gains the anchors of an element, `AnchorMin`, `AnchorMax`, `Pivot`,
+  `AnchoredPosition` and `SizeDelta`, which an element that sets `Anchored` is placed and sized by, and `UILayoutSystem` is what
+  resolves them into the pixels of the window — a frame system, so it runs while a clock is paused, and it runs before the
+  pointer test of the interface and before the pass that draws it. An element that does not set `Anchored` stands where
+  `Position` and `Size` put it, exactly as before, which is what content written for one resolution keeps doing.
+- The world is authored against a design area as well: `Camera2D.Fit` builds a camera that shows an area of a fixed size in a
+  window of any shape and size, with `CameraFit.Contain` keeping the whole area in view and `CameraFit.Cover` filling the window
+  and cropping the edges, so a map that is laid out for a window of 1280 by 720 draws the same view on a display of 3840 by 2160
+  and in a window of another shape. A camera that leaves its zoom at one keeps showing one unit of the world per pixel of the
+  window, which is what a game that shows more of its world in a larger window wants.
 - A text that names no font is drawn with the font of the engine, so a game shows a word of its content without loading
   anything, and the console, the numbers of a frame and the lines a game holds without an entity are drawn with it as well:
   `TextDefaults` is the stack of the engine, which covers the Latin and Cyrillic letters and the punctuation a translation uses
@@ -32,6 +73,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A frame costs a handful of draw calls rather than one for every quad of it: the quads that share a program and a texture are
+  collected and drawn in one call, and a quad that carries a colour of its own samples a texture of one white pixel, which is
+  what lets it be drawn in the same call as the sprites, the glyphs and the rectangles around it. A frame of a game that draws a
+  map of sprites, a line of text and an interface of it is a few hundred quads, which was a few hundred uploads and draw calls.
 - **Breaking:** the text of a world and the text of an interface are one component, and `TextLabelComponent` is gone. A label
   is a `TextComponent` on an entity that has a `RectTransformComponent`, and its text is laid out into the box of that
   rectangle, where a line of an entity with a `TransformComponent` stands at the transform. The component names a `Key` of the
@@ -44,15 +89,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is what a panel that follows its title or a button as wide as its word needs. The text is laid out again when the language
   of the game changes and not on every frame, and the built-in bitmap font is measured through the same seam as any other
   font, so text with no font of its own can be wrapped and aligned like one.
+- `Camera2D.Fit` with `CameraFit.Cover` crops the design area around its middle rather than taking the crop off the right and
+  the bottom, so what a game places at the middle of its area is at the middle of the window at any shape of it — a game that
+  wants the area at another place sets `Position` of the camera it was given. `CameraFit.Contain` is what it was: the whole of
+  the area is in view from the origin of the world.
 
 ### Fixed
 
+- A window that a person resized, and a game that switched to a full screen, drew into the viewport of the frame before,
+  because the renderer measured the window again but never pointed the device at the new size: a frame now reads the framebuffer
+  of the window as it begins and sets the viewport to it, which is also what makes a display that scales fill every pixel of the
+  window. What a camera measures a game in stays the size of the window, so a game keeps drawing in the units it was written in
+  and sees more of its world rather than a stretched one.
+- The programs that a game compiled through the renderer are deleted when the renderer lets go of a device, as the program of
+  the engine is, and a handle of the window before is refused by `UseShader` rather than handed to a device that has never seen
+  it. A release refuses a program that this renderer did not compile, so a number that belongs to another device is never
+  deleted by mistake.
 - A language whose documents cannot be read is no longer kept as an empty one, so a caller that fixed the content reads it
   again instead of living with the half of a language. A language that is asked for and that the game does not hold says so
   once, with the languages the game does have, and its folder is not walked, so the same missing folder is not reported
   twice. `Age.Content.Lint` refuses a locale document that is written outside the folder of a language rather than taking its
   file name for one, and the comments about the Russian plural forms say what the rule does: everything that is not one or
   few takes `many`, and `other` belongs to a count that is not whole, which a rule of whole numbers never sees.
+- A frame that drew into a target, drew into the window and came back to the target cleared it a second time, because only the
+  surface of the last call was remembered: every surface that a frame cleared is remembered now, so what a pass drew into a
+  target is still there when a later pass of the same frame draws into it again.
+- A shader that a renderer compiled for a window it was attached to before is no longer handed out after another attachment: a
+  handle carries the attachment that compiled its program as `ShaderHandle.Generation`, `UseShader` and `ReleaseShader` refuse a
+  handle of an attachment that is gone — even when the device gave the number of that program to a program of its own — and
+  `IShaderService` compiles the stages again for the window that is there now, so a game that loads a shader after a window was
+  attached keeps drawing with it. `IRenderer.DeviceGeneration` is the number that tells the two attachments apart, and a render
+  target is released and refused in the same way: a handle carries the attachment that created it, and `ReleaseRenderTarget`
+  compares the whole handle before it deletes anything by number.
 
 ## [0.3.0] - 2026-10-09
 

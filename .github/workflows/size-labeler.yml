@@ -1,24 +1,53 @@
 name: Size Labeler
+
+# The label of a size is a convenience of a review rather than something that decides whether a change is sound, so this job
+# never fails a run. The thresholds are computed here rather than by the third-party action that used to build a container for
+# every pull request, which started to fail on its own image and took the checks of a pull request down with it.
+
+# The event is pull_request_target rather than pull_request, because a pull request that comes from a fork is drawn with a token
+# that can only read under pull_request, and this job writes a label. What runs is the workflow of the base branch, nothing is
+# checked out, and nothing that an author of a pull request controls is read here: the numbers of the payload and the names of
+# the labels below are all that this job touches.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
+
 jobs:
   size:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
-      - uses: codelytv/pr-size-labeler@v1
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          xs_label: 'size/XS'
-          xs_max_size: '10'
-          s_label: 'size/S'
-          s_max_size: '100'
-          m_label: 'size/M'
-          m_max_size: '500'
-          l_label: 'size/L'
-          l_max_size: '1000'
-          xl_label: 'size/XL'
-          fail_if_xl: 'false'
-          message_if_xl: 'This PR is very large. Consider splitting it.'
+      - name: Label the size of the pull request
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No step checks anything out, so there is no remote for gh to take the repository from: it is told which one it is,
+          # which is what keeps the creation of a label and the edit of the pull request on this repository.
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+        run: |
+          set -eu
+
+          lines=$((ADDITIONS + DELETIONS))
+
+          if [ "$lines" -le 10 ]; then label='size/XS'
+          elif [ "$lines" -le 100 ]; then label='size/S'
+          elif [ "$lines" -le 500 ]; then label='size/M'
+          elif [ "$lines" -le 1000 ]; then label='size/L'
+          else label='size/XL'
+          fi
+
+          gh label create "$label" --force --description 'The size of a pull request' --color ededed
+
+          for other in size/XS size/S size/M size/L size/XL; do
+            if [ "$other" != "$label" ]; then
+              gh pr edit "$PR" --remove-label "$other" 2>/dev/null || true
+            fi
+          done
+
+          gh pr edit "$PR" --add-label "$label"
+
+          echo "The pull request changes $lines lines, which is $label."
