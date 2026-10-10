@@ -40,7 +40,7 @@ public sealed class MaterialService : IMaterialService
     private readonly ILogger<MaterialService>? _logger;
     private readonly Dictionary<string, Declared> _declared = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MaterialProgram> _programs = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ShaderHandle> _inline = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string Fragment, string Vertex), ShaderHandle> _inline = new();
     private readonly HashSet<string> _broken = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Exception> _failed = new(StringComparer.Ordinal);
     private readonly List<string> _missing = [];
@@ -132,20 +132,28 @@ public sealed class MaterialService : IMaterialService
     private static IMaterialService.UniformValue Value(string id, string uniform, JsonProperty kind)
     {
         string name = kind.Name.ToLowerInvariant();
-        bool color = name == "color";
-        int count = name switch
+        IMaterialService.UniformKind read = name switch
         {
-            "float" => 1,
-            "int" => 1,
-            "vec2" => 2,
-            "vec3" => 3,
-            "vec4" or "color" => 4,
+            "float" => IMaterialService.UniformKind.Float,
+            "int" => IMaterialService.UniformKind.Int,
+            "vec2" => IMaterialService.UniformKind.Vec2,
+            "vec3" => IMaterialService.UniformKind.Vec3,
+            "vec4" => IMaterialService.UniformKind.Vec4,
+            "color" => IMaterialService.UniformKind.Color,
             _ => throw new InvalidOperationException($"The uniform '{uniform}' of the material '{id}' is of the kind '{kind.Name}', and a material sends a float, an int, a vec2, a vec3, a vec4 or a color."),
+        };
+
+        int count = read switch
+        {
+            IMaterialService.UniformKind.Vec2 => 2,
+            IMaterialService.UniformKind.Vec3 => 3,
+            IMaterialService.UniformKind.Vec4 or IMaterialService.UniformKind.Color => 4,
+            _ => 1,
         };
 
         float[] numbers = Numbers(id, uniform, kind.Value, count);
 
-        if (color)
+        if (read == IMaterialService.UniformKind.Color)
         {
             // A colour of the content is written the way a colour of a scene is, a byte for every channel, and a stage reads the
             // four channels between zero and one: the division happens here rather than in every frame that sends the value.
@@ -155,7 +163,7 @@ public sealed class MaterialService : IMaterialService
             }
         }
 
-        return new IMaterialService.UniformValue(uniform, numbers);
+        return new IMaterialService.UniformValue(uniform, read, numbers);
     }
 
     /// <summary>Reads the numbers of a value, which are the ones a renderer is handed.</summary>
@@ -212,17 +220,15 @@ public sealed class MaterialService : IMaterialService
     /// <inheritdoc />
     ShaderHandle IMaterialService.Shader(Material material)
     {
-        if (material.Id is not string id)
+        // A layer that writes the path of a stage is drawn by it, whatever else it names: the stage is the frame of a program, and
+        // a game that shades one sprite differently writes the stage rather than the values of the one it shares. The pair of paths
+        // is what the shader service keeps a program under, so two layers that write the same pair draw in one call, and a stage
+        // that is not there is reported once rather than asked for on every frame.
+        if (material.Fragment is string own)
         {
-            // A layer that names no material of the content is drawn by the stages it writes itself: the program under the pair
-            // of paths is one the shader service keeps, so two layers that write the same pair draw in one call, and a stage that
-            // is not there is remembered as one that could not be read rather than asked for on every frame.
-            if (material.Fragment is not string own)
-            {
-                return default;
-            }
+            var key = (Fragment: own, Vertex: material.Vertex ?? string.Empty);
 
-            if (_inline.TryGetValue(own, out ShaderHandle held))
+            if (_inline.TryGetValue(key, out ShaderHandle held))
             {
                 return held;
             }
@@ -230,15 +236,24 @@ public sealed class MaterialService : IMaterialService
             try
             {
                 ShaderHandle handle = _shaders.Load(own, material.Vertex);
-                _inline[own] = handle;
+                _inline[key] = handle;
                 return handle;
             }
             catch (Exception exception) when (exception is FileNotFoundException or InvalidDataException or InvalidOperationException or ObjectDisposedException or FormatException or ArgumentException)
             {
-                _inline[own] = default;
+                // The stage is asked for once, and the layer that names it is drawn with the program of the engine from then on:
+                // a mistake of the content is reported where it is found rather than on every frame that draws the layer.
+                _inline[key] = default;
                 _broken.Add(own);
+                _logger?.LogError("The stage '{Stage}' of a layer cannot be loaded, so the layer is drawn with the program of the engine: {Reason}", own, exception.Message);
                 return default;
             }
+        }
+
+        if (material.Id is not string id)
+        {
+            // A layer that names no stage and no material is drawn with the program of the engine.
+            return default;
         }
 
         if (_programs.TryGetValue(id, out MaterialProgram compiled))
@@ -255,6 +270,7 @@ public sealed class MaterialService : IMaterialService
         {
             _failed[id] = new KeyNotFoundException($"The content holds no material under the identifier '{id}'.");
             _missing.Add(id);
+            _logger?.LogError("The layer names the material '{Material}', and no document of the content declares one, so the layer is drawn with the program of the engine.", id);
             return default;
         }
 
@@ -268,6 +284,7 @@ public sealed class MaterialService : IMaterialService
         {
             _failed[id] = exception;
             _missing.Add(id);
+            _logger?.LogError("The material '{Material}' cannot be read, so the layer is drawn with the program of the engine: {Reason}", id, exception.Message);
             return default;
         }
     }
@@ -308,13 +325,21 @@ public sealed class MaterialService : IMaterialService
     }
 
     /// <summary>Sends one value that a document declared to a renderer, which draws the quads that follow with it.</summary>
-    /// <remarks>A value reaches the renderer by the width it was read as, so a stage reads one number as a float or an int and four as a colour, which is what the document said it is.</remarks>
+    /// <remarks>
+    /// A value reaches the renderer by the kind it was read as, and the kind is not a guess: a document that says <c>int</c> is
+    /// handed to the overload that sets a whole number, so a stage that declares an <c>int</c> is given an <c>int</c> rather than a
+    /// float that the device would have converted. Everything else is one number or a vector of them.
+    /// </remarks>
     private static void Send(IRenderer renderer, in IMaterialService.UniformValue uniform)
     {
+        if (uniform.Kind == IMaterialService.UniformKind.Int)
+        {
+            renderer.SetUniform(uniform.Name, (int)uniform.Numbers.Span[0]);
+            return;
+        }
+
         if (uniform.Numbers.Length == 1)
         {
-            // One number is a float rather than an int, because a document that means a whole number is read as one and the
-            // renderer is handed the same value either way: what a stage declares is what it reads it as.
             renderer.SetUniform(uniform.Name, uniform.Numbers.Span[0]);
             return;
         }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Age.Assets;
 using Age.Audio;
 using Age.Content;
@@ -331,6 +332,123 @@ public sealed class RenderSystemTests
         materials.Missing.Should().BeEmpty("the content of the engine names a material that a document declares");
     }
 
+    [Fact]
+    public void MaterialService_AnIntUniform_IsSentAsAWholeNumber()
+    {
+        // A document that says int means a whole number, and the renderer is handed one: a stage that declares an int is given an
+        // int rather than a float that the device would have converted, which is what the kind of a value is for.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Steps", "int", "8");
+        ShaderHandle shader = ((IMaterialService)materials).Shader(new Material { Id = "Pulse" });
+
+        ((IMaterialService)materials).SetShader(renderer, shader, new Material { Id = "Pulse" });
+
+        renderer.Integers.Should().ContainKey("Steps", "a value of the kind int is set with the overload of a whole number");
+        renderer.Integers["Steps"].Should().Be(8);
+        renderer.Uniforms.Should().NotContainKey("Steps", "a whole number is not a number that a stage reads as a float");
+    }
+
+    [Fact]
+    public void MaterialService_AFloatUniform_IsSentAsANumber()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+        ShaderHandle shader = ((IMaterialService)materials).Shader(new Material { Id = "Pulse" });
+
+        ((IMaterialService)materials).SetShader(renderer, shader, new Material { Id = "Pulse" });
+
+        renderer.Uniforms["Speed"].Should().Equal(4f);
+        renderer.Integers.Should().BeEmpty("a float is not sent as a whole number");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAStage_DrawsWithThatStageEvenWhenItNamesAMaterial()
+    {
+        // The stage is the frame of a program and the identifier is where its values come from, so a layer that writes a stage is
+        // drawn by it: the values of the material it names still reach the shader, because the layer did not replace them.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new() { Id = "Pulse", Fragment = "Shaders/own.frag" };
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/own.frag" }, "the stage the layer writes is the one it is drawn by");
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 4f }, "the values of the material the layer names are still sent");
+    }
+
+    [Fact]
+    public void MaterialService_TwoVertexStagesOfOneFragment_AreNotOneProgram()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+
+        ShaderHandle first = ((IMaterialService)materials).Shader(new Material { Fragment = "Shaders/pulse.frag", Vertex = "Shaders/one.vert" });
+        ShaderHandle second = ((IMaterialService)materials).Shader(new Material { Fragment = "Shaders/pulse.frag", Vertex = "Shaders/two.vert" });
+
+        second.Should().NotBe(first, "two vertices of one fragment are two programs, so the cache of the inline stages is keyed by both paths");
+        shaders.Loaded.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void RenderSystem_AnotherAttachment_ResetsTheCompiledMaterialsWithoutAGameAskingForIt()
+    {
+        // A renderer that was attached to another window lets go of the device that compiled the programs, so the pass reads the
+        // attachment as a frame opens and tells the materials to let go of what they compiled: nothing of a game has to remember
+        // the call, which is what keeps a handle of a window that is gone from being drawn with.
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Entity entity = CreateSprite(world, new Vector2(100f, 100f));
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "glow", Material = new Material { Id = "Pulse" } }];
+
+        system.Render(world, Camera(1280f, 720f));
+        renderer.AttachToAnotherWindow();
+        system.Render(world, Camera(1280f, 720f));
+
+        shaders.Loaded.Should().Equal(
+            new[] { "Shaders/pulse.frag", "Shaders/pulse.frag" },
+            "the program of the window before went away with the device of it, so the pass compiled the stage again for the one that is there now");
+        materials.IsRegistered("Pulse").Should().BeTrue("the declared materials of the content are not forgotten, only what they compiled");
+    }
+
+    /// <summary>Registers a material of one uniform with a service, which is what a content does when it is read.</summary>
+    private static MaterialPrototype Register(MaterialService materials, string id, string fragment, string uniform, string kind, string value)
+    {
+        MaterialPrototype prototype = MaterialPrototype.Read(new Prototype(
+            id,
+            MaterialPrototype.Kind,
+            parent: null,
+            nameKey: null,
+            descKey: null,
+            file: $"{id}.yml",
+            line: 1,
+            components: [],
+            fields:
+            [
+                new PrototypeComponent("fragment", JsonDocument.Parse($"\"{fragment}\"").RootElement.Clone(), $"{id}.yml", 2),
+                new PrototypeComponent("uniforms", JsonDocument.Parse($"{{\"{uniform}\":{{\"{kind}\":{value}}}}}").RootElement.Clone(), $"{id}.yml", 3),
+            ]));
+
+        materials.Register(id, prototype);
+        materials.Build();
+        return prototype;
+    }
+
     /// <summary>Builds a container that holds the components and the content of every assembly of the engine.</summary>
     private static ServiceProvider Create() => new ServiceCollection()
         .AddAgeCore()
@@ -395,8 +513,8 @@ public sealed class RenderSystemTests
     private sealed class RecordingShaderService : IShaderService
     {
         private readonly List<string> _loaded = [];
-        private readonly Dictionary<string, ShaderHandle> _shaders = new(StringComparer.Ordinal);
-        private readonly ResourcePool<string, uint> _slots = new();
+        private readonly Dictionary<(string Fragment, string Vertex), ShaderHandle> _shaders = new();
+        private readonly ResourcePool<(string Fragment, string Vertex), uint> _slots = new();
 
         public List<string> Loaded => _loaded;
 
@@ -413,11 +531,15 @@ public sealed class RenderSystemTests
                 throw new FileNotFoundException($"There is no stage at '{fragmentPath}'.");
             }
 
-            if (!_shaders.TryGetValue(fragmentPath, out ShaderHandle shader))
+            // The pair of stages is what a program is, which is what the real service keeps: two vertices of one fragment are two
+            // programs, and a double that keyed by the fragment alone would hand out one handle for both of them.
+            var pair = (Fragment: fragmentPath, Vertex: vertexPath ?? string.Empty);
+
+            if (!_shaders.TryGetValue(pair, out ShaderHandle shader))
             {
-                ResourceHandle slot = _slots.Add((uint)(_shaders.Count + 1), fragmentPath);
+                ResourceHandle slot = _slots.Add((uint)(_shaders.Count + 1), pair);
                 shader = new ShaderHandle(slot, (uint)(_shaders.Count + 1), 0);
-                _shaders[fragmentPath] = shader;
+                _shaders[pair] = shader;
             }
 
             return shader;
@@ -428,11 +550,11 @@ public sealed class RenderSystemTests
 
         public bool Unload(ShaderHandle shader)
         {
-            foreach ((string path, ShaderHandle held) in _shaders)
+            foreach (((string Fragment, string Vertex) pair, ShaderHandle held) in _shaders)
             {
                 if (held == shader)
                 {
-                    _shaders.Remove(path);
+                    _shaders.Remove(pair);
                     return true;
                 }
             }
@@ -454,6 +576,9 @@ public sealed class RenderSystemTests
 
         /// <summary>Gets the values that were sent for a shader, by the name of the uniform, which is what a material sends before it draws.</summary>
         public Dictionary<string, float[]> Uniforms { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Gets the whole numbers that were sent for a shader, by the name of the uniform, which is what a value of the kind int is.</summary>
+        public Dictionary<string, int> Integers { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Gets the shader that was used when the frame ended, which is what the passes after the world draw with.</summary>
         public ShaderHandle? ProgramAtEndOfFrame { get; private set; }
@@ -487,7 +612,11 @@ public sealed class RenderSystemTests
 
         public void SetUniform(string name, float value) => Uniforms[name] = [value];
 
-        public void SetUniform(string name, int value) => Uniforms[name] = [value];
+        public void SetUniform(string name, int value)
+        {
+            Integers[name] = value;
+            Uniforms.Remove(name);
+        }
 
         public void SetUniform(string name, ReadOnlySpan<float> values) => Uniforms[name] = values.ToArray();
 

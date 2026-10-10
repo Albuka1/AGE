@@ -87,12 +87,43 @@ public interface IMaterialService
     /// </summary>
     /// <remarks>
     /// A value belongs to one layer rather than to the program, and a document writes it the way GLSL names its type, so a value
-    /// that a stage reads as a float and one it reads as an int are told apart:
-    /// <c>Uniforms: { Speed: { float: 4.0 }, Tint: { color: 255, 220, 120, 255 } }</c>. A material that names no value keeps the
-    /// one the stage was written with, and a name that the stage does not declare is ignored by the device, which is what a
-    /// uniform of one stage and not another looks like in practice.
+    /// that a stage reads as a float and one it reads as an int are told apart and the renderer is handed one or the other:
+    /// <c>Uniforms: { Speed: { float: 4.0 }, Steps: { int: 8 } }</c>. A material that names no value keeps the one the stage was
+    /// written with, and a name that the stage does not declare is ignored by the device, which is what a uniform of one stage and
+    /// not another looks like in practice.
     /// </remarks>
     /// <param name="Name">The name of the uniform, as the stage declares it.</param>
+    /// <param name="Kind">The kind the value was read as, which is what a renderer is handed it by.</param>
     /// <param name="Numbers">The numbers of the value, in the order the document wrote them.</param>
-    public readonly record struct UniformValue(string Name, ReadOnlyMemory<float> Numbers);
+    public readonly record struct UniformValue(string Name, UniformKind Kind, ReadOnlyMemory<float> Numbers);
+
+    /// <summary>
+    /// The kind of a uniform of a material, which is the type a stage declares it as.
+    /// </summary>
+    /// <remarks>
+    /// The kind is what tells a whole number from a number, because a document writes both as digits and only the document knows
+    /// which one it meant: a value of the kind <see cref="Int"/> is set on a renderer as an <c>int</c> and one of every other kind
+    /// as a <c>float</c>. A <see cref="Color"/> is the four numbers of a colour, written the way every colour of the content is
+    /// written, in bytes, and sent as the four channels between zero and one that a stage draws with.
+    /// </remarks>
+    public enum UniformKind
+    {
+        /// <summary>One number, which a stage declares as <c>float</c>.</summary>
+        Float,
+
+        /// <summary>One whole number, which a stage declares as <c>int</c>.</summary>
+        Int,
+
+        /// <summary>Two numbers, which a stage declares as <c>vec2</c>.</summary>
+        Vec2,
+
+        /// <summary>Three numbers, which a stage declares as <c>vec3</c>.</summary>
+        Vec3,
+
+        /// <summary>Four numbers, which a stage declares as <c>vec4</c>.</summary>
+        Vec4,
+
+        /// <summary>Four numbers that a document wrote in bytes, which a stage declares as <c>vec4</c> and reads as a colour.</summary>
+        Color,
+    }
 }

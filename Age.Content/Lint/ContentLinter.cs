@@ -78,10 +78,19 @@ public sealed class ContentLinter
     /// <param name="options">The root of the game and the folders to read, or null for a folder that is not read at all.</param>
     /// <returns>What every pass read and what is wrong with it, in the order of the passes.</returns>
     /// <exception cref="ArgumentNullException">The options are null.</exception>
+    /// <exception cref="InvalidOperationException">A folder of the options does not belong to the root they name.</exception>
     /// <remarks>
+    /// <para>
     /// This is the call a build makes: one question about the whole content, one answer a person can read, and a mistake that
     /// names the pass it came from rather than a list that mixes a document with a string. The passes are made in the order the
     /// folders are named on <see cref="LintOptions"/>, so a build reads its content the same way everywhere.
+    /// </para>
+    /// <para>
+    /// The root of the options is checked against the loader before anything is read, because the folders of a lint are resolved
+    /// by the loader that the linter was made with rather than by the options: a root that the loader does not read is a lint of
+    /// the wrong game, and reporting it is what keeps a build from passing over a folder it never opened. A loader that reports
+    /// where its files live is one this can check, and a loader that does not is left alone, because only it knows its own root.
+    /// </para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -99,6 +108,12 @@ public sealed class ContentLinter
     public LintResult Lint(LintOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        if (_assets.Root is string loaded && !SameRoot(loaded, options.Root))
+        {
+            throw new InvalidOperationException(
+                $"The options name '{options.Root}' as the root of the game, and the loader of the linter reads '{loaded}', so the folders would be resolved in a content that nothing asked about: initialize the loader with '{options.Root}', or name the root it reads.");
+        }
 
         var reports = new List<LintReport>(3);
 
@@ -118,6 +133,15 @@ public sealed class ContentLinter
         }
 
         return new LintResult(reports);
+    }
+
+    /// <summary>Determines whether two roots name the same folder, comparing them as paths of this machine.</summary>
+    private static bool SameRoot(string left, string right)
+    {
+        string a = Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string b = Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return string.Equals(a, b, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     /// <summary>Reads every document of a folder and reports what is wrong with the content.</summary>

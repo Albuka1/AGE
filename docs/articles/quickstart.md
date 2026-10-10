@@ -684,7 +684,7 @@ struct PulseUniforms
 
 PulseUniforms uniforms = prototypes.Get<MaterialPrototype>("Pulse").Read<PulseUniforms>(components);
 
-materials.SetShader(renderer, materials.Shader(new Material { Id = "Pulse" }), [new IMaterialService.UniformValue("Speed", [uniforms.Speed * 2f])]);
+materials.SetShader(renderer, materials.Shader(new Material { Id = "Pulse" }), [new IMaterialService.UniformValue("Speed", IMaterialService.UniformKind.Float, [uniforms.Speed * 2f])]);
 ```
 
 ## Load and play a sound

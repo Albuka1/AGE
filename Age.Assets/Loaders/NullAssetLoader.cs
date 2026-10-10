@@ -32,6 +32,9 @@ public sealed class NullAssetLoader : IAssetLoader
     public NullAssetLoader(ILogger<NullAssetLoader>? logger = null) => _logger = logger;
 
     /// <inheritdoc />
+    public string? Root => _root;
+
+    /// <inheritdoc />
     public void Initialize(string gameRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gameRoot);

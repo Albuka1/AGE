@@ -435,7 +435,7 @@ public sealed class ContentLinterTests
             // A string that names the key of a missing image, and a document that names a missing one: the two are mistakes of
             // different passes, so a person is told which part of the content to open rather than being handed one flat list.
             File.WriteAllText(Path.Combine(root, "Prototypes", "thing.yml"), "- type: entity\n  id: Thing\n  components:\n    - type: Sprite\n      TexturePath: Textures/Nowhere/gone.png\n");
-            File.WriteAllText(Path.Combine(root, "Locale", "en", "strings.yml"), "ent-Thing: Thing\nbroken: \"{{ ent-Nothing }}\"\n");
+            File.WriteAllText(Path.Combine(root, "Locale", "en", "strings.yml"), "ent-Thing: Thing\nent-Thing.desc: A thing\nbroken: \"{{ ent-Nothing }}\"\n");
 
             using ServiceProvider provider = Create();
             var assets = new NullAssetLoader();
@@ -449,13 +449,43 @@ public sealed class ContentLinterTests
             result.Reports[0].Area.Should().Be(LintArea.Prototypes, "the passes are made in the order the folders are named");
             result.Reports[1].Area.Should().Be(LintArea.Locales);
             result.Reports.Select(report => report.Area).Should().NotContain(LintArea.Sheets, "a folder that the options leave out is not read at all");
-            result.Problems.Should().HaveCount(2, "the mistakes of every pass are still there, in the order of the passes");
-            result.ProblemCount.Should().Be(2);
+            result.Problems.Should().ContainSingle("the mistake of the locale pass names a string that the base language holds, and the document of the prototype is read from the language it plays in");
+            result.ProblemCount.Should().Be(1);
         }
         finally
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public void ContentLinter_ARootThatTheLoaderDoesNotRead_IsRefusedBeforeAnythingIsRead()
+    {
+        // The folders of a lint are resolved by the loader it was made with, so a root that names another game is a lint over
+        // content that nothing asked about: the call refuses it rather than passing over folders that were never opened.
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+        var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+        Action lint = () => linter.Lint(new LintOptions { Root = "Nowhere", Prototypes = "Prototypes" });
+
+        lint.Should().Throw<InvalidOperationException>().WithMessage("*Nowhere*").And.Message.Should().Contain("Resources");
+    }
+
+    [Fact]
+    public void ContentLinter_TheRootTheLoaderReads_IsAccepted()
+    {
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        string root = Path.Combine(AppContext.BaseDirectory, "Resources");
+        assets.Initialize(root);
+        var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+        LintResult result = linter.Lint(new LintOptions { Root = root, Prototypes = "Prototypes" });
+
+        result.IsClean.Should().BeTrue("the root of the options is the one the loader reads");
+        result.Reports.Should().ContainSingle();
     }
 
     /// <summary>Lints the sheet of a folder that holds one document and the image it names.</summary>

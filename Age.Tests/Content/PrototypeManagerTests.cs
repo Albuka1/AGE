@@ -70,6 +70,31 @@ public sealed class PrototypeManagerTests
     }
 
     [Fact]
+    public void PrototypeManager_AnEntityThatWritesAFieldOfItsOwn_IsRefused()
+    {
+        // An entity carries components and nothing else, so a field beside them is a mistake of a document rather than data that
+        // is read and dropped: the kind that reads an entity is what refuses it, with the name of the field and the line.
+        PrototypeManager prototypes = Create();
+        prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Add("goblin.yml", """
+            - type: entity
+              id: Goblin
+              components:
+                - type: Transform
+                  Position:
+                    X: 1
+                    Y: 2
+              speed: 4
+            """);
+
+        Action build = () => prototypes.Build();
+
+        PrototypeException error = build.Should().Throw<PrototypeException>().Subject.Single();
+        error.Message.Should().Contain("speed").And.Contain("components");
+        error.File.Should().Be("goblin.yml");
+    }
+
+    [Fact]
     public void PrototypeManager_Build_KeepsAFieldOfAKindThatIsNotAComponent()
     {
         // A document of a kind that is not a thing — a material, a recipe, a faction — writes the data of that kind rather than

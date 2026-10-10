@@ -25,6 +25,7 @@ public sealed class RenderSystem : IRenderPass
     private readonly ILogger<RenderSystem>? _logger;
     private readonly List<Entity> _sprites = new();
     private ShaderHandle _currentShader;
+    private uint _generation;
 
     /// <summary>Initializes the system with a renderer and a sorter.</summary>
     /// <param name="renderer">The renderer that draws the sprites.</param>
@@ -56,6 +57,16 @@ public sealed class RenderSystem : IRenderPass
     public void Render(World world, in Camera2D camera)
     {
         ArgumentNullException.ThrowIfNull(world);
+
+        // A renderer that was attached to another window holds a device of its own, and every program compiled against the one
+        // before it went away with it: the pass reads the attachment of the device as a frame opens and tells the materials to
+        // let go of what they compiled, which is what keeps a handle of a window that is gone from being drawn with. This is the
+        // one place a frame begins for the world, so nothing of a game has to remember the call.
+        if (_generation != _renderer.DeviceGeneration)
+        {
+            _generation = _renderer.DeviceGeneration;
+            _materials?.Build();
+        }
 
         _renderer.SetCamera(camera);
         _renderer.BeginFrame(true);
