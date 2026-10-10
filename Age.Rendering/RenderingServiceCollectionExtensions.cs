@@ -50,6 +50,15 @@ public static class RenderingServiceCollectionExtensions
             provider.GetService<TextRenderer>(),
             provider.GetService<ITextSource>())
             .Add(provider.GetRequiredService<ConsoleTab>()));
+
+        // The developer window that stands beside the game is a window of the operating system: its host creates the window and the
+        // service draws the tabs into it. Register a host of your own — a null host leaves it with its pages and nothing drawn — to
+        // change where it is drawn, and the service is what a game pumps each frame.
+        services.AddSingleton<IDevWindowHost, SilkDevWindowHost>();
+        services.AddSingleton<IDevWindowService>(provider => new DevWindowService(
+            provider.GetRequiredService<IDevWindowHost>(),
+            provider.GetService<ITextSource>())
+            .Add(provider.GetRequiredService<ConsoleTab>()));
         services.AddSingleton(provider => new DevConsoleOverlay(
             provider.GetRequiredService<IConsoleService>(),
             provider.GetRequiredService<IInputService>(),

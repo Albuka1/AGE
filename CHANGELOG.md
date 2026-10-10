@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `DevWindowService` is the developer window as a window of the operating system rather than a panel inside the frame: it stands
+  beside the game, is moved and closed by the window manager and holds the same `IDevWindowTab` pages the in-frame `DevWindow` holds,
+  so a page written for one works in the other. It is drawn over an `IDevWindowHost`, which `SilkDevWindowHost` answers with a second
+  Silk.NET window and a context of its own, and `NullDevWindowHost` answers with a window that is never there for a headless run. The
+  window is created the first time it is opened and its size is kept while it is closed. Both windows carry crosses: the cross of a
+  tab removes that page, and the cross of the title bar closes the window.
 - `DevWindow` is the developer window of a game: a panel that stands over the frame, with a title bar that is dragged and a row of
   tabs, one of which is shown at a time. It holds a set of `IDevWindowTab`, so a game adds a page of its own without touching the
   window, and it draws the page inside a clip of the body so a tab cannot draw over the game around it. It opens with F1, is closed

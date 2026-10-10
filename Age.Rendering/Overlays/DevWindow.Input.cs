@@ -32,6 +32,14 @@ public sealed partial class DevWindow
         Rect window = WindowRect(_renderer.ViewportSize);
 
         Drag(window);
+
+        // The crosses are read before the tabs and the page, because a click on one is a click that closes and not one that picks a
+        // tab or lands on the page below it.
+        if (Clicked(window))
+        {
+            return;
+        }
+
         PickTab(window);
         WalkTabs();
 
@@ -40,6 +48,54 @@ public sealed partial class DevWindow
             _tabs[_active].Update(frame, BodyRect(window));
         }
     }
+
+    /// <summary>Closes a tab or the window when the cross of one was clicked, which is what the crosses are for.</summary>
+    /// <param name="window">The rectangle of the window as it is drawn this frame.</param>
+    /// <returns><see langword="true"/> when a cross took the click, so nothing below the title bar reads it.</returns>
+    /// <remarks>
+    /// The cross of the title bar closes the window itself, and the cross of a tab closes that tab. A tab that is not closable has no
+    /// cross and is not asked, so a page that reports what the engine holds stays where it is.
+    /// </remarks>
+    private bool Clicked(Rect window)
+    {
+        if (!_input.IsMouseButtonPressed(MouseButton.Left))
+        {
+            return false;
+        }
+
+        Vector2 pointer = _input.MousePosition;
+
+        // The cross of the window stands at the right end of the title bar, which is where a person reaches for it.
+        if (Contains(CloseRect(window.X + window.Width - TitleHeight, window.Y), pointer))
+        {
+            Close();
+            return true;
+        }
+
+        float x = window.X;
+
+        for (var index = 0; index < _tabs.Count; index++)
+        {
+            IDevWindowTab tab = _tabs[index];
+            float width = TabWidthOf(tab);
+
+            if (tab.Closable && Contains(CloseRect(x + width - TabHeight, window.Y + TitleHeight), pointer))
+            {
+                // Removing keeps the page that was on top on top when a tab before it went, which is what Remove answers.
+                Remove(tab);
+                return true;
+            }
+
+            x += width;
+        }
+
+        return false;
+    }
+
+    /// <summary>Returns the square of the cross that stands at the right end of a bar of the given width.</summary>
+    /// <param name="x">The left edge of the bar the cross stands in.</param>
+    /// <param name="y">The top edge of the bar the cross stands in.</param>
+    private static Rect CloseRect(float x, float y) => new(new Vector2(x + ((TitleHeight - CloseSize) / 2f), y + ((TitleHeight - CloseSize) / 2f)), new Vector2(CloseSize, CloseSize));
 
     /// <summary>Drags the window by its title bar with the left button, keeping it inside the frame.</summary>
     /// <param name="window">The rectangle of the window as it is drawn this frame.</param>

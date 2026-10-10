@@ -115,6 +115,39 @@ public sealed class DevWindowTests
         window.Update(new GameTime(delta, 0d));
     }
 
+    /// <summary>Clicks a point for one frame, which is how a cross or a tab is pressed with the pointer.</summary>
+    private static void Click(DevWindow window, FakeInput input, Vector2 point, double delta = 0.016d)
+    {
+        input.MovePointer(point);
+        input.BeginFrame();
+        input.PressMouse(MouseButton.Left);
+        window.Update(new GameTime(delta, 0d));
+    }
+
+    [Fact]
+    public void DevWindow_Update_TheCrossOfATabRemovesItAndTheCrossOfTheTitleBarClosesTheWindow()
+    {
+        var input = new FakeInput();
+        var first = new RecordingTab("one");
+        var second = new RecordingTab("two");
+        var window = new DevWindow(input, new RecordingRenderer()) { Position = new Vector2(64f, 64f) };
+        window.Add(first).Add(second);
+        window.Open();
+
+        // The cross of the first tab sits at the right end of its label: the label is 96 pixels wide at least, and the cross is a
+        // square of 12 pixels at its right end, just below the title bar.
+        Click(window, input, new Vector2(64f + 96f - 26f + 13f, 64f + 26f + 13f));
+
+        window.Tabs.Should().HaveCount(1, "the cross closes the tab it belongs to");
+        window.Tabs[0].Should().BeSameAs(second);
+        window.IsOpen.Should().BeTrue("closing a tab does not close the window");
+
+        // The cross of the window stands at the right end of the title bar, which is what closes the whole window.
+        Click(window, input, new Vector2(64f + 560f - 26f + 13f, 64f + 13f));
+
+        window.IsOpen.Should().BeFalse();
+    }
+
     /// <summary>A tab that remembers whether it was read and drawn, which is how a test reads which page is on top.</summary>
     private sealed class RecordingTab(string title) : IDevWindowTab
     {

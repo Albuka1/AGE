@@ -75,6 +75,15 @@ public sealed partial class DevWindow : IRenderPass
     /// <summary>The width of a tab that its label does not make wider, in pixels.</summary>
     private const float TabWidth = 96f;
 
+    /// <summary>The side of the square of a cross that closes a tab or the window, in pixels.</summary>
+    private const float CloseSize = 12f;
+
+    /// <summary>The colour of the cross of a tab that is not under the pointer.</summary>
+    private static readonly Color CloseColour = new(150, 150, 165);
+
+    /// <summary>The colour of the cross that the pointer is over, which is what makes it read as a button.</summary>
+    private static readonly Color CloseHotColour = new(255, 130, 130);
+
     private readonly IInputService _input;
     private readonly IRenderer _renderer;
     private readonly TextRenderer? _textRenderer;
@@ -159,6 +168,44 @@ public sealed partial class DevWindow : IRenderPass
         }
 
         return this;
+    }
+
+    /// <summary>Removes a tab from the window, which is what the cross of its label does.</summary>
+    /// <param name="tab">The tab to remove.</param>
+    /// <returns><see langword="true"/> when the tab was there and has been removed.</returns>
+    /// <exception cref="ArgumentNullException">The tab is null.</exception>
+    /// <remarks>
+    /// The index that was shown follows the tab that was taken: when the tab before it went, the same tab stays on top, and when the
+    /// tab itself went, the one that takes its place is shown. The last tab of a window may be removed, which leaves it open with
+    /// nothing in it rather than closing it, so a cross never closes a window by surprise.
+    /// </remarks>
+    public bool Remove(IDevWindowTab tab)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+
+        int index = _tabs.IndexOf(tab);
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        _tabs.RemoveAt(index);
+
+        if (_tabs.Count == 0)
+        {
+            _active = 0;
+        }
+        else if (index < _active)
+        {
+            _active--;
+        }
+        else if (index == _active)
+        {
+            _active = Math.Min(_active, _tabs.Count - 1);
+        }
+
+        return true;
     }
 
     /// <summary>Opens the window.</summary>

@@ -100,6 +100,7 @@ RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
 DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
 DevConsoleOverlay consoleOverlay = provider.GetRequiredService<DevConsoleOverlay>();
 DevWindow devWindow = provider.GetRequiredService<DevWindow>();
+IDevWindowService devWindowOut = provider.GetRequiredService<IDevWindowService>();
 
 // The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
 // content, so they are made before the loading starts. The settings and the language are read again in a loading step, once
@@ -586,6 +587,10 @@ console.Register("fit", "Reports how the camera of the world is built and switch
     console.Write($"world {(fitWorld ? "fitted" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of the world");
 });
 
+// The way out of the game is a command rather than a key, so a key does not have to be kept free for leaving and a person who types
+// `quit` is not surprised by it: the loop stops once the frame that runs the command is drawn, which is what the shutdown waits for.
+console.Register("quit", "Closes the game.", _ => gameLoop.Stop());
+
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The loading, the splash, the keys and the drawing run once per frame, and the simulation stays paused until
 // the last loading step is done, so nothing moves behind the logo. `Q` pauses the clock, which stops the steps without
@@ -666,6 +671,15 @@ gameLoop.Run(
         // below never sees while it is open: it opens with F1 and walks its pages with Tab.
         devWindow.Update(time);
 
+        // The window of the operating system stands beside the game rather than over it, so it is opened with a key of its own and
+        // pumped every frame: pumping it draws its page, which is what keeps it in step with the game without a loop of its own.
+        if (input.IsKeyPressed(Key.F2))
+        {
+            devWindowOut.Toggle();
+        }
+
+        devWindowOut.Pump(time);
+
         if (!consoleOverlay.IsVisible && !devWindow.IsOpen)
         {
             if (input.IsKeyPressed(Key.Q))
@@ -708,11 +722,6 @@ gameLoop.Run(
 
                 console.Write($"The world is {(fitWorld ? "fitted to the design area" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of it.");
             }
-
-            if (input.IsKeyPressed(Key.Escape))
-            {
-                gameLoop.Stop();
-            }
         }
 
         // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
@@ -754,7 +763,7 @@ gameLoop.Run(
         // line that is longer than the window continues on the line above rather than running off the edge.
         var hud = new (string Text, Color Colour)[]
         {
-            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, ` console, F1 dev window, F3 numbers", Color.White),
+            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, ` console, F1 dev panel, F2 dev window, F3 numbers, quit to leave", Color.White),
             (locale.Get("ui-entities", ("count", world.Enumerate().Count())), Color.White),
             ($"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Color(255, 220, 120)),
             ($"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Color(255, 220, 120)),
@@ -786,6 +795,10 @@ gameLoop.Run(
 // One call runs every step of the shutdown in the order the engine registered: the splash and what it uploaded, the
 // atlases and the textures of this frame, the samples of the sound device, the renderer, and the window itself last. The
 // container disposes the services when it goes out of scope, and every one of those calls is a no-op by then.
+// The window of the operating system is closed before the rest of the shutdown, because it owns a context of its own: what it holds
+// goes with it while the window of the game is still open.
+devWindowOut.Dispose();
+
 provider.GetRequiredService<GameShutdown>().Run();
 
 // Wraps a line of the HUD into the width of the window, one line per run of words that fits. A line of a developer is longer than

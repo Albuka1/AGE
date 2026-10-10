@@ -35,6 +35,13 @@ public interface IDevWindowTab
     /// <summary>Gets the name of the tab, which is what its label says.</summary>
     string Title { get; }
 
+    /// <summary>Gets a value indicating whether the tab may be closed by its cross, which is <see langword="true"/> by default.</summary>
+    /// <remarks>
+    /// A page that reports what the engine holds rather than a thing a person opened, such as the output of the console, may refuse to
+    /// close: a cross that is not drawn is a page that stays.
+    /// </remarks>
+    bool Closable => true;
+
     /// <summary>Reads the keys and the pointer of one frame while this tab is the one that is shown.</summary>
     /// <param name="frame">The time of the frame.</param>
     /// <param name="body">The rectangle inside the window that the tab owns, in the pixels of the frame.</param>

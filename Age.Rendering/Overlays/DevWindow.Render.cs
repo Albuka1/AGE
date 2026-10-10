@@ -32,6 +32,9 @@ public sealed partial class DevWindow
 
         Write(ResolveTitle(), new Vector2(window.X + Padding, window.Y + 5f), TitleTextColour);
 
+        // The cross of the window stands at the right end of the title bar, which is what closes the whole window.
+        DrawCross(CloseRect(window.X + window.Width - TitleHeight, window.Y));
+
         float x = window.X;
 
         for (var index = 0; index < _tabs.Count; index++)
@@ -42,6 +45,13 @@ public sealed partial class DevWindow
 
             _renderer.DrawRectangle(label, index == _active ? ActiveTabColour : InactiveTabColour);
             Write(tab.Title, new Vector2(x + Padding, window.Y + TitleHeight + 5f), TabTextColour);
+
+            // A tab that may be closed carries its own cross, which takes the click that closes just that page rather than the window.
+            if (tab.Closable)
+            {
+                DrawCross(CloseRect(x + width - TabHeight, window.Y + TitleHeight));
+            }
+
             x += width;
         }
 
@@ -59,9 +69,32 @@ public sealed partial class DevWindow
         _renderer.EndFrame();
     }
 
-    /// <summary>Returns the width of a tab, which its label makes wider than the least a tab is drawn at.</summary>
+    /// <summary>Returns the width of a tab, which its label and its cross make wider than the least a tab is drawn at.</summary>
     /// <param name="tab">The tab whose label is measured.</param>
-    private float TabWidthOf(IDevWindowTab tab) => Math.Max(TabWidth, Measure(tab.Title).X + (2f * Padding));
+    private float TabWidthOf(IDevWindowTab tab) => Math.Max(TabWidth, Measure(tab.Title).X + (2f * Padding) + (tab.Closable ? TabHeight : 0f));
+
+    /// <summary>Draws the cross of a bar, which is what closes a tab or the window.</summary>
+    /// <param name="rect">The square the cross stands in.</param>
+    /// <remarks>
+    /// The cross is two thin bars rather than two lines, because the renderer draws rectangles and no diagonals: what a person sees
+    /// is the same X as the one on any window of a desktop, and the colour turns when the pointer is over it, which is what makes it
+    /// read as a button before it is pressed.
+    /// </remarks>
+    private void DrawCross(Rect rect)
+    {
+        Color colour = Contains(rect, _input.MousePosition) ? CloseHotColour : CloseColour;
+        const float Thickness = 2f;
+        float side = rect.Width;
+        int steps = (int)(side / Thickness);
+
+        for (var step = 0; step <= steps; step++)
+        {
+            float offset = step * (side - Thickness) / steps;
+
+            _renderer.DrawRectangle(new Rect(new Vector2(rect.X + offset, rect.Y + offset), new Vector2(Thickness, Thickness)), colour);
+            _renderer.DrawRectangle(new Rect(new Vector2(rect.X + side - Thickness - offset, rect.Y + offset), new Vector2(Thickness, Thickness)), colour);
+        }
+    }
 
     /// <summary>Draws a line of the window with the fonts of the engine, or with the built-in font when it has none.</summary>
     /// <param name="text">The characters of the line.</param>
