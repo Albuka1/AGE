@@ -1,7 +1,14 @@
 using Age.Assets;
+using Age.Audio;
+using Age.Content;
+using Age.Content.Prototypes;
 using Age.Core;
+using Age.Input;
+using Age.Physics;
 using Age.Rendering;
+using Age.UI;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Age.Tests;
@@ -220,12 +227,13 @@ public sealed class RenderSystemTests
         var world = new World();
         var renderer = new RecordingRenderer();
         var shaders = new RecordingShaderService();
-        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
         Entity entity = CreateSprite(world, new Vector2(100f, 100f));
         world.GetRef<SpriteComponent>(entity).Layers =
         [
             new SpriteLayer { Name = "base" },
-            new SpriteLayer { Name = "pulse", Shader = "Shaders/pulse.frag" },
+            new SpriteLayer { Name = "pulse", Material = new Material { Fragment = "Shaders/pulse.frag" } },
             new SpriteLayer { Name = "over" },
         ];
 
@@ -250,9 +258,10 @@ public sealed class RenderSystemTests
         var world = new World();
         var renderer = new RecordingRenderer();
         var shaders = new RecordingShaderService { Fail = true };
-        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
         Entity entity = CreateSprite(world, new Vector2(100f, 100f));
-        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Shader = "Shaders/Nowhere/gone.frag" }];
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Material = new Material { Fragment = "Shaders/Nowhere/gone.frag" } }];
 
         system.Render(world, Camera(1280f, 720f));
         system.Render(world, Camera(1280f, 720f));
@@ -268,18 +277,71 @@ public sealed class RenderSystemTests
         var world = new World();
         var renderer = new RecordingRenderer();
         var shaders = new RecordingShaderService();
-        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
         Entity entity = CreateSprite(world, new Vector2(100f, 100f));
-        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Shader = "Shaders/pulse.frag" }];
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Material = new Material { Fragment = "Shaders/pulse.frag" } }];
 
         system.Render(world, Camera(1280f, 720f));
         renderer.AttachToAnotherWindow();
+        materials.Build();
         system.Render(world, Camera(1280f, 720f));
 
         shaders.Loaded.Should().Equal(
             new[] { "Shaders/pulse.frag", "Shaders/pulse.frag" },
             "a program of the window before is gone with the device of it, so the stage is compiled again for the device that is there now");
     }
+
+    [Fact]
+    public void MaterialService_AMaterialOfTheContent_DrawsItsLayerWithItsStageAndSendsItsValues()
+    {
+        // The whole path of a material: a document says the stage and the values of the uniforms, the service reads them where the
+        // content is read, and a frame sends them before it draws the layer. This is the path the sample runs, with a renderer that
+        // records what it was handed rather than a device.
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+
+        PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+        prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
+        prototypes.Load(assets, "Prototypes");
+
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        materials.Register(prototypes);
+        materials.Build();
+
+        materials.IsRegistered("Pulse").Should().BeTrue("the content of the engine declares the material of the beacon");
+
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        Entity beacon = provider.GetRequiredService<SpawnService>().Spawn(world, "Beacon");
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
+
+        Camera2D camera = Camera(1280f, 720f);
+        system.Render(world, in camera);
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/pulse.frag" }, "the stage of the material is the one the document named");
+        renderer.Programs.Should().HaveCount(2, "the beacon is a sprite of two layers");
+        renderer.Programs[0].Should().BeNull("the layer that names no material draws with the program of the engine");
+        renderer.Programs[1].Should().NotBeNull("the layer that names the material draws with its stage");
+        renderer.Uniforms.Should().ContainKey("Speed", "the values of the material reach the renderer before the layer is drawn");
+        renderer.Uniforms["Speed"].Should().Equal(4f);
+        materials.Missing.Should().BeEmpty("the content of the engine names a material that a document declares");
+    }
+
+    /// <summary>Builds a container that holds the components and the content of every assembly of the engine.</summary>
+    private static ServiceProvider Create() => new ServiceCollection()
+        .AddAgeCore()
+        .AddAgeContent()
+        .AddAgeAssets()
+        .AddAgeInput()
+        .AddAgeAudio()
+        .AddAgePhysics()
+        .AddAgeUI()
+        .AddAgeRendering()
+        .BuildServiceProvider();
 
     private static Camera2D Camera(float width, float height, float zoom = 1f) => new()
     {
@@ -390,6 +452,9 @@ public sealed class RenderSystemTests
         /// <summary>Gets the shader that every drawn quad was drawn with, in the order the quads were drawn, where null is the program of the engine.</summary>
         public List<ShaderHandle?> Programs { get; } = [];
 
+        /// <summary>Gets the values that were sent for a shader, by the name of the uniform, which is what a material sends before it draws.</summary>
+        public Dictionary<string, float[]> Uniforms { get; } = new(StringComparer.Ordinal);
+
         /// <summary>Gets the shader that was used when the frame ended, which is what the passes after the world draw with.</summary>
         public ShaderHandle? ProgramAtEndOfFrame { get; private set; }
 
@@ -419,6 +484,12 @@ public sealed class RenderSystemTests
         public void UseShader(ShaderHandle shader) => _currentShader = shader;
 
         public void ResetShader() => _currentShader = null;
+
+        public void SetUniform(string name, float value) => Uniforms[name] = [value];
+
+        public void SetUniform(string name, int value) => Uniforms[name] = [value];
+
+        public void SetUniform(string name, ReadOnlySpan<float> values) => Uniforms[name] = values.ToArray();
 
         public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
         {

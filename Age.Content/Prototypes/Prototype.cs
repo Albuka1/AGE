@@ -23,7 +23,8 @@ public sealed class Prototype : IPrototype
     /// <param name="file">The file the prototype was read from, which an error mentions.</param>
     /// <param name="line">The line of the file, counting from one.</param>
     /// <param name="components">The components and their values, in the order the documents declared them.</param>
-    public Prototype(string id, string kind, string? parent, string? nameKey, string? descKey, string file, int line, IReadOnlyList<PrototypeComponent> components)
+    /// <param name="fields">The fields of the document that are not one of the reserved ones, in the order they were written.</param>
+    public Prototype(string id, string kind, string? parent, string? nameKey, string? descKey, string file, int line, IReadOnlyList<PrototypeComponent> components, IReadOnlyList<PrototypeComponent>? fields = null)
     {
         Id = id;
         Kind = kind;
@@ -33,6 +34,7 @@ public sealed class Prototype : IPrototype
         File = file;
         Line = line;
         Components = components;
+        Fields = fields ?? [];
     }
 
     /// <inheritdoc />
@@ -64,6 +66,14 @@ public sealed class Prototype : IPrototype
 
     /// <summary>Gets the components and the values they start with, in the order the documents declared them.</summary>
     public IReadOnlyList<PrototypeComponent> Components { get; }
+
+    /// <summary>Gets the fields of the document that are not one of the reserved ones, in the order they were written.</summary>
+    /// <remarks>
+    /// A document of a kind that is not a thing — a material, a recipe, a faction — writes its own fields, and the manager carries
+    /// them the way it carries a component so that the kind reads one name, one file and one line wherever it looks. A field of a
+    /// game is data rather than state of a run, so it travels with the identifier the same way the components do.
+    /// </remarks>
+    public IReadOnlyList<PrototypeComponent> Fields { get; }
 
     /// <summary>Determines whether the prototype carries a component.</summary>
     /// <param name="name">The name a document uses for the component.</param>

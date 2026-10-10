@@ -70,15 +70,23 @@ public sealed class PrototypeManagerTests
     }
 
     [Fact]
-    public void PrototypeManager_Build_RefusesAFieldThatIsNotAPrototypeField()
+    public void PrototypeManager_Build_KeepsAFieldOfAKindThatIsNotAComponent()
     {
+        // A document of a kind that is not a thing — a material, a recipe, a faction — writes the data of that kind rather than
+        // the components of an entity, and the manager carries it so the kind reads one name, one file and one line wherever it
+        // looks. What a document of an entity writes is checked by the registry of the components, which refuses a name nothing
+        // reads.
         PrototypeManager prototypes = Create();
 
-        Action add = () => prototypes.Add("sword.yml", "- id: Sword\n  type: thing\n  damage: 5");
+        prototypes.Add("sword.yml", "- id: Sword\n  type: thing\n  damage: 5");
+        prototypes.Build();
 
-        PrototypeException error = add.Should().Throw<PrototypeException>().Subject.Single();
-        error.Line.Should().Be(3);
-        error.Message.Should().Contain("'damage'").And.Contain("components");
+        Prototype sword = prototypes.Get<Prototype>("Sword");
+        sword.Fields.Should().ContainSingle();
+        sword.Fields[0].Name.Should().Be("damage", "a field of the kind travels with the identifier");
+        sword.Fields[0].Values.GetInt32().Should().Be(5);
+        sword.Fields[0].File.Should().Be("sword.yml");
+        sword.Fields[0].Line.Should().Be(3);
     }
 
     [Fact]

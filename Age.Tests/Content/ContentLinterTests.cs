@@ -27,7 +27,7 @@ public sealed class ContentLinterTests
         LintReport report = linter.Lint("Prototypes");
 
         report.IsClean.Should().BeTrue("the content of the engine is what a build ships");
-        report.Count.Should().Be(5);
+        report.Count.Should().Be(6, "the content of the engine holds the entities, the items and the material of the beacon");
     }
 
     [Fact]
@@ -121,9 +121,10 @@ public sealed class ContentLinterTests
     {
         // A layer names what a build has to ship twice: the image it draws and the stage that draws it. Both are read out of
         // the list of layers rather than out of the fields of the component, so a path written inside a layer is checked the
-        // same way as one written at the top of a sprite.
+        // same way as one written at the top of a sprite, and a layer that names a material of the content instead names a
+        // document rather than a file.
         LintReport report = LintWith(
-            "- type: entity\n  id: Fine\n  components:\n    - type: Sprite\n      Layers:\n        - Name: base\n          Image: Textures/Entities/thing.bmp\n        - Name: pulse\n          Image: Textures/Entities/thing.bmp\n          Shader: Shaders/pulse.frag\n",
+            "- type: entity\n  id: Fine\n  components:\n    - type: Sprite\n      Layers:\n        - Name: base\n          Image: Textures/Entities/thing.bmp\n        - Name: pulse\n          Image: Textures/Entities/thing.bmp\n          Material:\n            Fragment: Shaders/pulse.frag\n",
             ("Textures/Entities/thing.bmp", string.Empty),
             ("Shaders/pulse.frag", "void main() { COLOR = sampleTexture(UV); }"));
 
@@ -455,6 +456,7 @@ public sealed class ContentLinterTests
     {
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
         return prototypes;
     }
 

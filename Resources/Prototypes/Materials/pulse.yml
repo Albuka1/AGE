@@ -1,0 +1,13 @@
+# A material is what draws a layer of a sprite: the stage of a shader and the values its uniforms start with. It lives in the
+# content rather than beside every entity, so a hundred sprites that shine the same way are a hundred references to this one
+# document rather than a hundred paths, and a change of the glow is a change here rather than in every prototype.
+#
+# A value is written the way GLSL names its type, because a document writes numbers and a stage reads them as a float, an int or
+# a vector: 'float' is one number, and 'color' and 'vec2' through 'vec4' are their numbers separated by commas, with a colour
+# written the way every other colour of the content is written, in bytes from zero to 255.
+- type: material
+  id: Pulse
+  fragment: Shaders/pulse.frag
+  uniforms:
+    Speed:
+      float: 4.0

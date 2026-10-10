@@ -1,6 +1,7 @@
 using Age.Core;
 using Age.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Age.Rendering;
 
@@ -29,6 +30,9 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<SpriteAnimationSystem>();
         services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<IShaderService, ShaderService>();
+        services.AddSingleton<IMaterialService>(provider => new MaterialService(
+            provider.GetRequiredService<IShaderService>(),
+            provider.GetService<ILogger<MaterialService>>()));
         services.AddSingleton(provider => new TextRenderer(
             provider.GetRequiredService<IRenderer>(),
             provider.GetService<IFontService>(),

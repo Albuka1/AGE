@@ -52,6 +52,7 @@ public sealed class PrototypeContentTests
 
         // The kind that reads a prototype as an entity is what a game registers, and what a spawn asks the content for.
         prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
         prototypes.Load(assets, "Prototypes");
 
         var world = new World();
@@ -62,10 +63,10 @@ public sealed class PrototypeContentTests
         sprite.Layers.Should().HaveCount(2, "the layers of a document reach the component in the order they are written");
         sprite.Layers![0].Name.Should().Be("base");
         sprite.Layers[0].Image.Should().Be("Textures/Tiles/tiles.bmp");
-        sprite.Layers[0].Shader.Should().BeNull("a layer that names no shader is drawn with the program of the engine");
+        sprite.Layers[0].Material.Id.Should().BeNull("a layer that names no material is drawn with the program of the engine");
         sprite.Layers[1].Name.Should().Be("pulse");
         sprite.Layers[1].Image.Should().Be("Textures/Tiles/tiles.bmp");
-        sprite.Layers[1].Shader.Should().Be("Shaders/pulse.frag");
+        sprite.Layers[1].Material.Id.Should().Be("Pulse", "a layer names the material of the content rather than the path of a stage");
     }
 
     [Fact]
@@ -111,6 +112,10 @@ public sealed class PrototypeContentTests
     {
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register<Prototype>("entity", prototype => prototype);
+
+        // The content of the engine holds a material, which is a kind of its own: a game that reads the content of the engine
+        // registers the kind that reads it, which is what a document of that kind is refused without.
+        prototypes.Register<Prototype>(MaterialPrototype.Kind, prototype => prototype);
         return prototypes;
     }
 }

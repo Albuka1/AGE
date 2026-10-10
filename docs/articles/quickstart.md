@@ -573,13 +573,14 @@ draws it:
           Image: Textures/Tiles/tiles.bmp
         - Name: pulse
           Image: Textures/Tiles/tiles.bmp
-          Shader: Shaders/pulse.frag
+          Material:
+            Id: Pulse
 ```
 
 The layers are drawn in the order the document writes them, so the first one is at the bottom, and every layer is drawn at the
 position, the size and the colour of the sprite: a sprite of layers writes `Size`, because the engine does not read the size of an
 image back from the device, and it writes `Color`, because a sprite that names no colour draws its layers in no colour at all. A
-layer that names no `Shader` is drawn with the program of the engine, which is what an unshaded layer is.
+layer that names no `Material` is drawn with the program of the engine, which is what an unshaded layer is.
 
 ```csharp
 world.Set(beacon, new SpriteComponent
@@ -589,17 +590,75 @@ world.Set(beacon, new SpriteComponent
     Layers =
     [
         new SpriteLayer { Name = "base", Image = "Textures/Tiles/tiles.bmp" },
-        new SpriteLayer { Name = "pulse", Image = "Textures/Tiles/tiles.bmp", Shader = "Shaders/pulse.frag" },
+        new SpriteLayer { Name = "pulse", Image = "Textures/Tiles/tiles.bmp", Material = new Material { Id = "Pulse" } },
     ],
 });
 ```
 
-The stage of a layer is compiled on the first frame that draws it and kept while the renderer stays attached to the window it was
-compiled against, and the pass switches to another program only when a layer names one that the layer before it did not: one draw
-call samples one program, so the layers of a sprite that share a stage are drawn in one call and the layers that alternate are
-drawn in several. A stage that cannot be loaded is reported once in the log and its layer is drawn without it, which is what an
-image that is not there does as well. A part of a character that is placed or animated apart from the rest is still an entity of
-its own with a higher `ZOrder`; layers are what a part is when it is one picture drawn in one place.
+The program of a material is compiled on the first frame that draws it and kept while the renderer stays attached to the window it
+was compiled against, and the pass switches to another program only when a layer names one that the layer before it did not: one
+draw call samples one program, so the layers of a sprite that share a material are drawn in one call and the layers that alternate
+are drawn in several. A stage that cannot be loaded is reported once in the log and its layer is drawn without it, which is what
+an image that is not there does as well. A part of a character that is placed or animated apart from the rest is still an entity
+of its own with a higher `ZOrder`; layers are what a part is when it is one picture drawn in one place.
+
+## Draw a sprite with a material
+
+A layer that names the path of a stage writes the same program once per sprite, and the values of its uniforms are then the code
+of a game. A material is the same program as content instead: one document holds the stage and the values its uniforms start with,
+and every layer that names it is drawn by it, so a hundred sprites that shine the same way are a hundred names of one material and
+a change of the glow is a change in one file.
+
+```yaml
+- type: material
+  id: Pulse
+  fragment: Shaders/pulse.frag
+  uniforms:
+    Speed:
+      float: 4.0
+```
+
+A value is written as the kind of the uniform and the numbers behind it, and the kind is spelled the way GLSL spells it, so a
+value that a stage reads as a `float` and one it reads as an `int` are told apart:
+
+```yaml
+  uniforms:
+    Speed: { float: 4.0 }
+    Steps: { int: 8 }
+    Direction: { vec2: 1.0, 0.0 }
+    Tint: { color: 255, 220, 120, 255 }
+```
+
+`float` and `int` hold one number; `vec2` through `vec4` hold two to four of them; and `color` holds four numbers written the way
+every other colour of the content is written, in bytes, and read as the four channels between zero and one that a stage draws
+with. The stage of a material draws with the program of the engine unless the document names a vertex stage as well, and a value
+that its kind cannot hold is refused where the content is read: a material is data of a build, so a mistake in it is a message at
+the start of a game rather than a frame that quietly draws something else.
+
+```csharp
+IMaterialService materials = provider.GetRequiredService<IMaterialService>();
+
+foreach (MaterialPrototype material in prototypes.Enumerate<MaterialPrototype>())
+{
+    materials.Register(material.Id, material);
+}
+
+materials.Build();
+```
+
+A game reads its own values with the same document: `Read<T>` reads the uniforms of a material into the struct that holds them,
+which is what a pass of a game sends each frame.
+
+```csharp
+struct PulseUniforms
+{
+    public float Speed;
+}
+
+PulseUniforms uniforms = prototypes.Get<MaterialPrototype>("Pulse").Read<PulseUniforms>(components);
+
+materials.SetShader(renderer, materials.Shader(new Material { Id = "Pulse" }), [new IMaterialService.UniformValue("Speed", [uniforms.Speed * 2f])]);
+```
 
 ## Load and play a sound
 

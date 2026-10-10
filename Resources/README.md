@@ -32,8 +32,9 @@ A path is written the same way everywhere: in the engine, in a document of conte
 | `Locale/ru/Entities` | `creatures.yml` and `props.yml`, the same keys in Russian | `Age.Tests` |
 | `Locale/ru/Items` | `items.yml`, the same keys in Russian | `Age.Tests` |
 | `Locale/ru/Ui` | `window.yml`, the same keys in Russian, with the three forms its counts are written in | `Age.Tests` |
-| `Prototypes/Entities` | `base.yml`, which declares `CreatureBase`, `goblin.yml`, which declares `Goblin` and inherits it, and `beacon.yml`, which declares `Beacon`, a sprite of two layers one of which is drawn with a shader | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
+| `Prototypes/Entities` | `base.yml`, which declares `CreatureBase`, `goblin.yml`, which declares `Goblin` and inherits it, and `beacon.yml`, which declares `Beacon`, a sprite of two layers one of which is drawn by the material `Pulse` | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Prototypes/Items` | `base.yml`, which declares `ItemBase`, and `sword.yml`, which declares `Sword` and inherits it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
+| `Prototypes/Materials` | `pulse.yml`, which declares the material `Pulse`: the stage `Shaders/pulse.frag` and the values its uniforms start with | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Entities` | `goblin.tga`, the frames of the goblin in a grid of four cells by two, and `goblin.yml`, the document that says where each state lies on it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Icons` | `icon-20.png`, `icon-40.png` and `icon-60.png`, the window icon in the three sizes the operating system picks from | `Age.Rendering` |
 | `Textures/Logo` | `logo-320.png`, the logo the splash screen shows | `Age.Rendering` |

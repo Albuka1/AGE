@@ -111,6 +111,7 @@ public sealed class SpawnServiceTests
 
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register(EntityPrototype.Kind, _ => ghost);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 
         var assets = new NullAssetLoader();
         assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
@@ -158,6 +159,7 @@ public sealed class SpawnServiceTests
 
             PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
             prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+            prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 
             var assets = new NullAssetLoader();
             assets.Initialize(root);
@@ -203,6 +205,7 @@ public sealed class SpawnServiceTests
 
             PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
             prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+            prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 
             var assets = new NullAssetLoader();
             assets.Initialize(root);
@@ -230,6 +233,7 @@ public sealed class SpawnServiceTests
 
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 
         var assets = new NullAssetLoader();
         assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));

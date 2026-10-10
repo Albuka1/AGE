@@ -40,6 +40,7 @@ using ServiceProvider provider = new ServiceCollection()
 
 PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
 prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 
 IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
 assets.Initialize(root);

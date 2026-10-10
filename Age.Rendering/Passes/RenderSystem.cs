@@ -21,28 +21,25 @@ public sealed class RenderSystem : IRenderPass
     private readonly SpriteSorter _sorter;
     private readonly ITextureService? _textures;
     private readonly ISpriteSheetService? _sheets;
-    private readonly IShaderService? _shaders;
+    private readonly IMaterialService? _materials;
     private readonly ILogger<RenderSystem>? _logger;
     private readonly List<Entity> _sprites = new();
-    private readonly Dictionary<string, ShaderHandle> _layerShaders = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _brokenShaders = new(StringComparer.Ordinal);
     private ShaderHandle _currentShader;
-    private uint _shaderGeneration;
 
     /// <summary>Initializes the system with a renderer and a sorter.</summary>
     /// <param name="renderer">The renderer that draws the sprites.</param>
     /// <param name="sorter">The sorter that puts them in the order of their <see cref="SpriteComponent.ZOrder"/>.</param>
     /// <param name="textures">The service that resolves the image a sprite names, or null to draw only the handles a game set.</param>
     /// <param name="sheets">The service that resolves the frame a sprite names, or null to draw only whole images.</param>
-    /// <param name="shaders">The service that resolves the shader a layer names, or null to draw every layer with the program of the engine.</param>
+    /// <param name="materials">The service that resolves the shader of a layer and sends its uniforms, or null to draw every layer with the program of the engine.</param>
     /// <param name="logger">The logger that reports a shader that cannot be loaded, or null to report nothing.</param>
-    /// <remarks>A container passes all of the services, which is what lets a sprite of a prototype or a scene name its image, the part of it to draw and the shader of a layer.</remarks>
+    /// <remarks>A container passes all of the services, which is what lets a sprite of a prototype or a scene name its image, the part of it to draw and the material that draws a layer.</remarks>
     public RenderSystem(
         IRenderer renderer,
         SpriteSorter sorter,
         ITextureService? textures = null,
         ISpriteSheetService? sheets = null,
-        IShaderService? shaders = null,
+        IMaterialService? materials = null,
         ILogger<RenderSystem>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(renderer);
@@ -51,7 +48,7 @@ public sealed class RenderSystem : IRenderPass
         _sorter = sorter;
         _textures = textures;
         _sheets = sheets;
-        _shaders = shaders;
+        _materials = materials;
         _logger = logger;
     }
 
@@ -115,7 +112,14 @@ public sealed class RenderSystem : IRenderPass
 
         foreach (SpriteLayer layer in layers)
         {
-            SetShader(Shader(layer));
+            ShaderHandle shader = _materials?.Shader(layer.Material) ?? default;
+            SetShader(shader);
+
+            if (_materials is not null)
+            {
+                _materials.SetShader(_renderer, shader, layer.Material);
+            }
+
             _renderer.DrawSprite(Texture(layer), transform.Position, size, sprite.Color, transform.Rotation);
         }
     }
@@ -147,60 +151,6 @@ public sealed class RenderSystem : IRenderPass
     /// <returns>The handle of the image, the placeholder when the image is not there, or a zero handle for a layer that names none.</returns>
     private TextureHandle Texture(in SpriteLayer layer) =>
         _textures is not null && layer.Image is string path ? _textures.Resolve(path) : default;
-
-    /// <summary>Returns the shader of a layer, compiling the stage it names on the first call for that path.</summary>
-    /// <param name="layer">The layer that is being drawn.</param>
-    /// <returns>The handle of the shader, or a default handle when the layer names none or its stage cannot be loaded.</returns>
-    /// <remarks>
-    /// A stage is compiled against the device of the window that the renderer was attached to, so the cache of this pass belongs
-    /// to one attachment: <see cref="IRenderer.DeviceGeneration"/> is read as a layer is resolved, and another attachment empties
-    /// the cache, because a handle of the window before names a program that is gone. A stage that cannot be loaded is the
-    /// mistake a person looks for in the log, so it is reported once per path rather than on every frame, and the layer is drawn
-    /// with the program of the engine from then on. That is what an image that is not there does as well: a mistake in the
-    /// content of a game is visible rather than fatal to a frame.
-    /// </remarks>
-    private ShaderHandle Shader(in SpriteLayer layer)
-    {
-        if (_shaders is null || string.IsNullOrWhiteSpace(layer.Shader))
-        {
-            return default;
-        }
-
-        if (_shaderGeneration != _renderer.DeviceGeneration)
-        {
-            _layerShaders.Clear();
-            _brokenShaders.Clear();
-            _shaderGeneration = _renderer.DeviceGeneration;
-        }
-
-        if (_layerShaders.TryGetValue(layer.Shader, out ShaderHandle cached))
-        {
-            return cached;
-        }
-
-        if (_brokenShaders.Contains(layer.Shader))
-        {
-            return default;
-        }
-
-        try
-        {
-            ShaderHandle shader = _shaders.Load(layer.Shader);
-            _layerShaders[layer.Shader] = shader;
-            return shader;
-        }
-        catch (Exception exception) when (exception is FileNotFoundException or InvalidDataException or InvalidOperationException or ObjectDisposedException)
-        {
-            _brokenShaders.Add(layer.Shader);
-            _logger?.LogError(
-                "The shader '{Shader}' of the layer '{Layer}' cannot be loaded, so the layer is drawn without it: {Reason}",
-                layer.Shader,
-                layer.Name ?? "<unnamed>",
-                exception.Message);
-
-            return default;
-        }
-    }
 
     /// <summary>Returns the texture to draw for a sprite and the part of it that is drawn.</summary>
     /// <param name="world">The world that holds the sprite, which a resolved handle is written back into.</param>

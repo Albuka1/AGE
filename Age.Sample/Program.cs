@@ -71,7 +71,20 @@ assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
 PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
 SpawnService spawner = provider.GetRequiredService<SpawnService>();
 prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 Console.WriteLine($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
+
+// A material is the stage of a shader and the values its uniforms start with, read from the content: a layer of a sprite names
+// the material rather than the path of a stage, so a sprite that pulses is a line of a document rather than a line of code, and
+// the same material draws every sprite that names it.
+IMaterialService materials = provider.GetRequiredService<IMaterialService>();
+
+foreach (MaterialPrototype material in prototypes.Enumerate<MaterialPrototype>())
+{
+    materials.Register(material.Id, material);
+}
+
+materials.Build();
 
 ITextureService textures = provider.GetRequiredService<ITextureService>();
 
