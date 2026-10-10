@@ -174,14 +174,30 @@ public sealed class DevWindowService : IDevWindowService
 
         _host.BeginFrame(true);
 
-        // The frame is drawn before the events are read, because what the pointer is over is what tells a cross that it is hot, and
-        // the pointer of the last frame is the best answer this one has: a frame that read before it drew would colour a cross by
-        // where the pointer was two frames ago.
-        Draw();
+        Vector2? clicked = null;
+        bool open = false;
 
-        if (!_host.Pump(out Vector2? clicked))
+        // The frame of the window is closed whatever happens in it: a page that throws, or a draw of the frame that fails, does not
+        // leave the frame of the host open for the frame that follows, which would swap a buffer that was never ended. The early
+        // return that a closed window takes goes through the same close, so the host is never ended twice.
+        try
+        {
+            // The frame is drawn before the events are read, because what the pointer is over is what tells a cross that it is hot, and
+            // the pointer of the last frame is the best answer this one has: a frame that read before it drew would colour a cross by
+            // where the pointer was two frames ago.
+            Draw();
+
+            open = _host.Pump(out clicked);
+        }
+        finally
         {
             _host.EndFrame();
+        }
+
+        // A window that the window manager closed is disposed here rather than kept, so the next `devwindow` opens a window of its
+        // own rather than finding one that is on its way out.
+        if (!open)
+        {
             Close();
             return;
         }
@@ -200,8 +216,6 @@ public sealed class DevWindowService : IDevWindowService
             var pointer = new WindowPointer(_host.Pointer, insideBody, _host.PointerDown);
             _tabs[_active].Update(frame, Body(_host.Size), pointer);
         }
-
-        _host.EndFrame();
     }
 
     /// <inheritdoc />

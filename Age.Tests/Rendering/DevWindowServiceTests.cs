@@ -151,6 +151,47 @@ public sealed class DevWindowServiceTests
         host.Pushed.Should().BeEquivalentTo([tab.RenderedBody], "the page is drawn inside the body of the window");
     }
 
+    [Fact]
+    public void DevWindowService_APageThatThrows_StillEndsTheFrameOfTheWindow()
+    {
+        // A page that fails does not leave the frame of the window open: the host is ended in a finally, so the frame that follows
+        // swaps a buffer that was ended rather than one that was begun and left.
+        var host = new FakeHost();
+        var service = new DevWindowService(host);
+        service.Add(new FakeTab("one") { ThrowOnUpdate = true });
+        service.Open();
+
+        Action pump = () => service.Pump(new GameTime(0.016d, 0.016d));
+
+        pump.Should().Throw<InvalidOperationException>();
+        host.Began.Should().Be(1);
+        host.Ended.Should().Be(1, "the frame of the window is ended even when a page throws");
+    }
+
+    [Fact]
+    public void DevWindowService_AWindowClosedByTheWindowManager_EndsTheFrameExactlyOnce()
+    {
+        // The early return that a closed window takes closes the frame it began, and only once: the close does not end the frame a
+        // second time.
+        var host = new FakeHost();
+        var service = new DevWindowService(host);
+        service.Add(new FakeTab("one"));
+        service.Open();
+
+        host.CloseFromTheWindowManager();
+        service.Pump(new GameTime(0.016d, 0.016d));
+
+        host.Began.Should().Be(0, "a window that is already closed never begins a frame");
+        host.Ended.Should().Be(0);
+
+        // The next pump after the window was disposed opens a window of its own and pumps one frame, begun and ended once.
+        service.Open();
+        service.Pump(new GameTime(0.016d, 0.032d));
+
+        host.Began.Should().Be(1);
+        host.Ended.Should().Be(1);
+    }
+
     /// <summary>A page that remembers whether it was read, which is how a test reads which page is on top.</summary>
     private sealed class FakeTab(string title) : IDevWindowTab
     {
@@ -163,7 +204,18 @@ public sealed class DevWindowServiceTests
         /// <summary>Gets the body the page was drawn in, which is what says the page was given the room inside the frame of the window.</summary>
         public Rect RenderedBody { get; private set; }
 
-        public void Update(in GameTime frame, Rect body, in WindowPointer pointer) => Updated = true;
+        /// <summary>Gets or sets a value indicating whether the page throws when it is read, which is what a page that fails looks like.</summary>
+        public bool ThrowOnUpdate { get; init; }
+
+        public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
+        {
+            Updated = true;
+
+            if (ThrowOnUpdate)
+            {
+                throw new InvalidOperationException("The page of the tab failed.");
+            }
+        }
 
         public void Render(IRenderer renderer, Rect body) => RenderedBody = body;
     }
@@ -203,13 +255,15 @@ public sealed class DevWindowServiceTests
             return IsOpen;
         }
 
-        public void BeginFrame(bool clear)
-        {
-        }
+        public void BeginFrame(bool clear) => Began++;
 
-        public void EndFrame()
-        {
-        }
+        public void EndFrame() => Ended++;
+
+        /// <summary>Gets the number of frames that were begun, which is what a test compares with the number that were ended.</summary>
+        public int Began { get; private set; }
+
+        /// <summary>Gets the number of frames that were ended, which is what says a frame was closed exactly once.</summary>
+        public int Ended { get; private set; }
 
         public void DrawRectangle(Rect rect, Color color)
         {
