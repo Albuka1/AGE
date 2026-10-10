@@ -329,6 +329,11 @@ void SubscribeEvents(World subscribed)
 
 const float MoveSpeed = 240f;
 
+// The two numbers the HUD of this game is drawn by: the height of a line of its font and the margin it keeps from the edges of
+// the window. They are constants rather than magic numbers because the loop that stacks the lines and the line that is cut both read them.
+const float HudLineHeight = 30f;
+const float HudMargin = 12f;
+
 // The settings of this game become commands of the console: `spawnLifetime 0.5` changes what the line below reads from then on.
 cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen lives, in seconds.");
 
@@ -564,9 +569,6 @@ gameLoop.Run(
             ? $"paused at tick {timestep.Tick}"
             : $"tick {timestep.Tick} at {timestep.TimeScale:0.##}x";
 
-        fonts.Draw(font, $"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, Tab console, F1 numbers", new Vector2(24f, 24f), Color.White);
-        fonts.Draw(font, $"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", new Vector2(24f, 56f), Color.White);
-
         // The size of the frame and the scale that the canvas of the interface resolved for it, which is what makes the effect
         // of a resize visible without opening the console: `ui` and `fit` report the same numbers line by line. The lines of
         // this HUD are drawn at pixels of the window rather than through the canvas, because they are numbers of a developer
@@ -574,12 +576,23 @@ gameLoop.Run(
         Entity canvasOf = world.Enumerate<CanvasComponent>().FirstOrDefault();
         CanvasComponent canvasState = world.Has<CanvasComponent>(canvasOf) ? world.Get<CanvasComponent>(canvasOf) : default;
 
-        fonts.Draw(font, $"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Vector2(24f, 152f), new Color(255, 220, 120));
+        // The HUD is stacked from the bottom of the window and every line is cut to its width, which is what keeps it inside a
+        // small window and clear of the developer overlay: the overlay owns the top of the frame, the HUD the bottom of it, and
+        // a line that is longer than the window stops at its edge rather than running off it.
+        var hud = new (string Text, Color Colour)[]
+        {
+            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, Tab console, F1 numbers", Color.White),
+            (locale.Get("ui-entities", ("count", world.Enumerate().Count())), Color.White),
+            ($"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Color(255, 220, 120)),
+            ($"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Color(255, 220, 120)),
+            ($"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", Color.White),
+        };
 
-        // A count of things is a string of the content rather than a number this game writes: Russian writes three forms of it
-        // where English writes two, so the line says what the language says. `loc ru` changes it while the game runs.
-        fonts.Draw(font, locale.Get("ui-entities", ("count", world.Enumerate().Count())), new Vector2(24f, 88f), Color.White);
-        fonts.Draw(font, $"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Vector2(24f, 120f), new Color(255, 220, 120));
+        for (int index = 0; index < hud.Length; index++)
+        {
+            float y = renderer.ViewportSize.Y - ((hud.Length - index) * HudLineHeight) - HudMargin;
+            DrawHud(fonts, font, hud[index].Text, y, hud[index].Colour, renderer.ViewportSize.X);
+        }
 
         renderer.EndFrame();
     });
@@ -589,6 +602,22 @@ gameLoop.Run(
 // atlases and the textures of this frame, the samples of the sound device, the renderer, and the window itself last. The
 // container disposes the services when it goes out of scope, and every one of those calls is a no-op by then.
 provider.GetRequiredService<GameShutdown>().Run();
+
+// Draws one line of the HUD, cut to the width of the window. A line of a developer is longer than a small window is wide, and a
+// draw of it would run off the edge of the frame and over whatever else the game puts there; the line is measured first and the
+// characters are dropped from its end until it fits, which is what a text that reports the state of a frame wants rather than an
+// error of the device.
+static void DrawHud(IFontService fonts, FontHandle font, string text, float y, Color colour, float width)
+{
+    float available = width - (2f * HudMargin);
+
+    while (text.Length > 1 && fonts.Measure(font, text).X > available)
+    {
+        text = text[..^1];
+    }
+
+    fonts.Draw(font, text, new Vector2(HudMargin, y), colour);
+}
 
 static void MoveFirstSprite(World world, Entity entity, IInputService input, GameTime time)
 {
