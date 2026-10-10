@@ -23,6 +23,7 @@ public sealed class TextureService : ITextureService, IDisposable
     private readonly ResourcePool<string, uint> _textures = new();
     private readonly List<string> _missing = [];
     private readonly HashSet<string> _broken = new(StringComparer.Ordinal);
+    private readonly Dictionary<int, Vector2> _sizes = [];
     private TextureHandle? _error;
 
     /// <summary>Initializes the service with the decoder and the renderer it works through.</summary>
@@ -105,8 +106,17 @@ public sealed class TextureService : ITextureService, IDisposable
             throw;
         }
 
+        // The size of the image is remembered beside its texture, so a sprite that names no size is drawn at the size of the file: the
+        // device is not asked how large a texture it uploaded is, and the pixels are the one place the number is known.
+        _sizes[uploaded.Id] = new Vector2(image.Width, image.Height);
+
         return new TextureHandle(slot, uploaded.Id);
     }
+
+    /// <inheritdoc />
+    /// <remarks>A handle the renderer made itself is not one this service decoded, so its size is unknown and answers zero.</remarks>
+    public Vector2 Size(TextureHandle texture) =>
+        _sizes.TryGetValue(texture.Id, out Vector2 size) ? size : Vector2.Zero;
 
     /// <inheritdoc />
     public bool IsAlive(TextureHandle texture) => texture.Resource.IsValid && _textures.TryGet(texture.Resource, out _);
@@ -121,6 +131,7 @@ public sealed class TextureService : ITextureService, IDisposable
 
         _renderer.ReleaseTexture(new TextureHandle((int)id));
         _textures.Release(texture.Resource);
+        _sizes.Remove((int)id);
         return true;
     }
 
@@ -154,6 +165,7 @@ public sealed class TextureService : ITextureService, IDisposable
         // The placeholder belongs to the renderer, which deletes it with its own objects: the service lets go of the
         // handle, so the next call asks for a new one rather than handing out a texture that is gone.
         _error = null;
+        _sizes.Clear();
 
         failure?.Throw();
     }
@@ -185,7 +197,9 @@ public sealed class TextureService : ITextureService, IDisposable
         const string Word = "ERROR";
         Write(pixels, Size, Word, (Size - (Word.Length * BitmapFontMetrics.GlyphWidth)) / 2, (Size - BitmapFontMetrics.GlyphHeight) / 2);
 
-        return _renderer.CreateTexture(pixels, Size, Size);
+        TextureHandle handle = _renderer.CreateTexture(pixels, Size, Size);
+        _sizes[handle.Id] = new Vector2(Size, Size);
+        return handle;
     }
 
     /// <summary>Writes a word of the built-in font into a buffer of pixels, which is how the placeholder says what it is.</summary>

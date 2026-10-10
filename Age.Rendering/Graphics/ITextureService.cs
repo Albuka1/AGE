@@ -1,3 +1,5 @@
+using Age.Core;
+
 namespace Age.Rendering;
 
 /// <summary>
@@ -64,6 +66,16 @@ public interface ITextureService
     /// <param name="texture">The handle to check.</param>
     /// <returns><see langword="true"/> while the texture is loaded. A handle the renderer made itself, and a handle from before an unload, both return <see langword="false"/>.</returns>
     bool IsAlive(TextureHandle texture);
+
+    /// <summary>Returns the size of a loaded texture in pixels, which is what a sprite that names no size is drawn at.</summary>
+    /// <param name="texture">The handle of the texture.</param>
+    /// <returns>The width and the height of the image, or zero for a handle this service did not load and does not know the size of.</returns>
+    /// <remarks>
+    /// The size is remembered when the image is decoded, because the device is not asked how large a texture it uploaded is: a sprite
+    /// that leaves <c>Size</c> at zero draws at the size of the image it names, and content says nothing about a number the file
+    /// already holds.
+    /// </remarks>
+    Vector2 Size(TextureHandle texture);
 
     /// <summary>Deletes the texture behind the handle and forgets its path, so loading the path again decodes it anew.</summary>
     /// <param name="texture">The handle of the texture to delete.</param>
