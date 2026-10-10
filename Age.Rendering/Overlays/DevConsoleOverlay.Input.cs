@@ -55,21 +55,30 @@ public sealed partial class DevConsoleOverlay
     {
         _frameTime = frame.Total;
 
-        if (_input.IsKeyPressed(OpenKey))
+        bool opened = _input.IsKeyPressed(OpenKey);
+
+        if (opened)
         {
             Toggle();
         }
 
         if (!_console.IsOpen)
         {
-            // A closing panel is already gone as far as the game is concerned: the keys of this frame belong to the game again.
-            ApplyPause();
+            // A closing panel is already gone as far as the game is concerned, and the clock was put back by the toggle that
+            // closed it: the keys of this frame belong to the game again.
             return;
         }
 
         if (_input.IsKeyPressed(Key.Escape))
         {
             Toggle();
+            return;
+        }
+
+        // The frame that opened the console drops the characters of that frame, because the key that opened it produces one of
+        // its own: a console of a terminal does not print the grave accent that summoned it.
+        if (opened)
+        {
             return;
         }
 

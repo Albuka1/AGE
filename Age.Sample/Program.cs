@@ -524,6 +524,10 @@ gameLoop.Run(
 
         started = true;
 
+        // The splash is over, so the clock runs: this is the one place the simulation is let go, and from here the tick of the
+        // HUD counts the steps of this game. `Q` and the console below own the clock from now on, so nothing resets it on a frame.
+        timestep.Paused = false;
+
         // The frame systems run on the time of this frame, whether or not the simulation advanced, so the interface and
         // the overlays of this game keep working while the clock is paused.
         world.UpdateFrame(time, pipeline);
@@ -536,9 +540,6 @@ gameLoop.Run(
         // another: the console reports the height of its panel and the overlay is offset by it.
         overlay.TopMargin = consoleOverlay.PanelHeight;
         overlay.Update(time);
-
-        // The splash is over, so the clock runs: from here the tick of the HUD counts the steps of this game.
-        timestep.Paused = false;
 
         if (!consoleOverlay.IsVisible)
         {
