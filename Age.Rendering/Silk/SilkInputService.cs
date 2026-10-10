@@ -45,6 +45,9 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
     public Vector2 MousePosition => _tracker.MousePosition;
 
     /// <inheritdoc />
+    public float MouseWheel => _tracker.MouseWheel;
+
+    /// <inheritdoc />
     public string TypedCharacters => _typed.ToString();
 
     /// <inheritdoc />
@@ -114,6 +117,9 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
     /// <inheritdoc />
     public bool IsMouseButtonPressed(MouseButton button) => _tracker.IsMouseButtonPressed(button);
 
+    /// <summary>Records how far the wheel of the mouse was turned, which the device reports as an event rather than as a state.</summary>
+    private void OnMouseWheel(IMouse mouse, ScrollWheel wheel) => _tracker.SetMouseWheel(wheel.Y);
+
     /// <summary>Closes the input context and releases its devices. Calling it more than once does nothing.</summary>
     public void Dispose()
     {
@@ -144,6 +150,7 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
         _keyboard.KeyChar += OnKeyChar;
         _mouse.MouseDown += OnMouseDown;
         _mouse.MouseUp += OnMouseUp;
+        _mouse.Scroll += OnMouseWheel;
     }
 
     private void OnKeyDown(IKeyboard keyboard, Key key, int scancode) => _tracker.KeyDown(key);

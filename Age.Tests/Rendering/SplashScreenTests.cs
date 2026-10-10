@@ -368,5 +368,7 @@ public sealed class SplashScreenTests
         public bool IsMouseButtonDown(MouseButton button) => false;
 
         public bool IsMouseButtonPressed(MouseButton button) => PressedButtons.Contains(button);
+
+        public float MouseWheel => 0f;
     }
 }

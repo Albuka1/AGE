@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Age.Assets;
 using Age.Audio;
 using Age.Content;
@@ -96,11 +97,59 @@ DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
 DevConsoleOverlay consoleOverlay = provider.GetRequiredService<DevConsoleOverlay>();
 
 // The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
-// content, so they are made before the loading starts. The last loading step reads the settings and the language, which is
-// why they are here rather than among the steps.
+// content, so they are made before the loading starts. The settings and the language are read again in a loading step, once
+// the loader knows where the game keeps its files, which is the step that turns the choice of a person into what the game
+// plays: a setting that a settings file holds wins over the language the system is set to.
 IConsoleService console = provider.GetRequiredService<IConsoleService>();
 CVarService cvars = provider.GetRequiredService<CVarService>();
 Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
+
+// Where the choices of a person are kept: a file beside the executable, next to the scene this game saves, so a setting that
+// was written while the game ran is what the next run starts with. The language is one of those settings, which is what makes
+// a choice survive a restart.
+string settingsPath = Path.Combine(AppContext.BaseDirectory, "settings.json");
+
+// The settings file is meant to be read and changed by a person, so it is written with the indentation of a document rather
+// than as one line, and the names of the settings are kept as they were registered.
+var SettingsJson = new JsonSerializerOptions { WriteIndented = true };
+
+// Writes every setting of this game to the settings file, which is what `cvars set` does after a setting takes a value: the
+// file holds one pair per setting, so what a person chose is read back the next time rather than asked again.
+void SaveSettings()
+{
+    string json = JsonSerializer.Serialize(
+        cvars.Values.ToDictionary(cvar => cvar.Name, cvar => cvar.Text),
+        SettingsJson);
+
+    File.WriteAllText(settingsPath, json);
+}
+
+// Reads the settings file, when there is one, and writes what it holds over the settings of this game. A file that is not
+// there or does not read leaves every setting as it was registered, which is what a first run is.
+void LoadSettings()
+{
+    if (!File.Exists(settingsPath))
+    {
+        return;
+    }
+
+    Dictionary<string, string> written;
+
+    try
+    {
+        written = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(settingsPath), SettingsJson) ?? [];
+    }
+    catch (JsonException)
+    {
+        console.WriteWarning($"the settings file '{settingsPath}' does not read, so the settings start as they were registered");
+        return;
+    }
+
+    // The service reports how many settings a configuration source wrote, and the language is applied after them: a file that
+    // holds a language that this game does not ship leaves the one the system chose.
+    cvars.Apply(written);
+    locale.Language = cvars.Get<string>("locale");
+}
 
 // Sprites that `E` puts on screen. A timer of two seconds on each one destroys it, so the slot of a destroyed entity is
 // handed out again for the next one and this game keeps no book of its own. The string of the HUD remembers which entity
@@ -108,6 +157,10 @@ Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Conte
 Entity lastSpawned = default;
 
 loading.Add(() => assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources")));
+
+// The settings of a person are read once the loader knows where the game keeps its files: the language of the settings file
+// wins over the one the system is set to, which is what makes a choice survive a restart.
+loading.Add(LoadSettings);
 
 // The content of a game is data: a document under Resources/Prototypes declares a prototype by its identifier, names the
 // components it carries with the values they start with, and inherits the rest from a parent. The manager reads every
@@ -337,14 +390,16 @@ const float MoveSpeed = 240f;
 const float HudLineHeight = 30f;
 const float HudMargin = 12f;
 
-// The settings of this game become commands of the console: `spawnLifetime 0.5` changes what the line below reads from then on.
+// The settings of this game become commands of the console: `cvars set spawnLifetime 0.5` changes what the line below reads
+// from then on, and what a person chooses is written to a file beside the executable, so it is what the game starts with the
+// next time rather than what it was built with.
 cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen lives, in seconds.");
 
-// The language the strings are read in is a setting rather than a way the game was built: the command 'loc' changes it while
-// the game runs, and everything that asks the locale service for a key answers in the new language from then on. The language
-// starts as the one the system is set to, when the game ships that language, and as the base language otherwise.
+// The language the strings are read in is a setting rather than a way the game was built: a person changes it while the game
+// runs, and everything that asks the locale service for a key answers in the new language from then on. It starts as the one
+// the system is set to, when the game ships that language, and as the base language otherwise, and a choice that was written
+// to the settings file wins over both.
 cvars.Register("locale", locale.Language, "The language the strings of the game are read in, such as en or ru.");
-locale.Language = cvars.Get<string>("locale");
 
 // The levels of the command after the name: `cvars` lists the settings (registered by the service itself), `cvars get <name>`
 // answers one, and `cvars set <name> <value>` writes it. The words are levels of a tree rather than parts of one name, so each of
@@ -371,10 +426,11 @@ console.Register("cvars set", "Writes a setting. Usage: cvars set spawnLifetime 
     string value = string.Join(' ', arguments.Skip(1));
 
     // The service reports a name or a value that does not fit in the console itself, so this only answers the new value when the
-    // write went through.
+    // write went through, and a write that went through is kept: the choice survives the next run without anyone saving it.
     if (cvars.SetFromText(name, value))
     {
         console.Write($"{name} = {cvars.GetText(name)}");
+        SaveSettings();
     }
 });
 
@@ -424,7 +480,13 @@ console.Register("loc", "Reports the language the strings are read in, and switc
 {
     if (arguments.Count > 0)
     {
-        locale.Language = arguments[0];
+        // The language is a setting, so switching it writes the setting as well: the `loc` command and `cvars set locale` say
+        // the same thing, and a language that was chosen is the one the game starts in the next time.
+        if (cvars.SetFromText("locale", arguments[0]))
+        {
+            locale.Language = cvars.Get<string>("locale");
+            SaveSettings();
+        }
     }
 
     console.Write($"language {locale.Language}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve");

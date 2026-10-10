@@ -26,15 +26,23 @@ public sealed class InputStateTracker : IInputService
     private readonly HashSet<MouseButton> _mouseDown = new();
     private readonly HashSet<MouseButton> _mousePressed = new();
     private Vector2 _mousePosition;
+    private float _mouseWheel;
 
     /// <inheritdoc />
     public Vector2 MousePosition => _mousePosition;
+
+    /// <inheritdoc />
+    public float MouseWheel => _mouseWheel;
 
     /// <inheritdoc />
     public void BeginFrame()
     {
         _pressed.Clear();
         _mousePressed.Clear();
+
+        // The wheel is a measurement of one frame rather than a state that is held, so what the last frame reported is forgotten
+        // with the transitions and only what this frame reports is answered.
+        _mouseWheel = 0f;
     }
 
     /// <summary>Records that the key went down and reports it as pressed for the current frame.</summary>
@@ -68,6 +76,10 @@ public sealed class InputStateTracker : IInputService
     /// <summary>Records that the pointer moved.</summary>
     /// <param name="position">The new pointer position, in screen pixels.</param>
     public void MouseMove(Vector2 position) => _mousePosition = position;
+
+    /// <summary>Records how far the wheel of the mouse was turned, which a backend reports as it reads the device.</summary>
+    /// <param name="notches">The notches of this report, added to whatever the frame already holds, where a positive value is a wheel turned away from the person.</param>
+    public void SetMouseWheel(float notches) => _mouseWheel += notches;
 
     /// <summary>Records that the button went down and reports it as pressed for the current frame.</summary>
     /// <param name="button">The button that went down.</param>
@@ -104,6 +116,7 @@ public sealed class InputStateTracker : IInputService
         _pressed.Clear();
         _mouseDown.Clear();
         _mousePressed.Clear();
+        _mouseWheel = 0f;
     }
 
     /// <inheritdoc />

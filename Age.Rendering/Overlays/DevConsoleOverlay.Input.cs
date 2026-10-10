@@ -124,6 +124,15 @@ public sealed partial class DevConsoleOverlay
             _scrolled -= Math.Max(1, _visibleLines - 1);
         }
 
+        // The wheel walks the output a row at a time, which is what a person reaches for first: a notch away from them scrolls
+        // back through the log, and one toward them walks forward to the newest line.
+        float wheel = _input.MouseWheel;
+
+        if (wheel != 0f)
+        {
+            _scrolled += (int)MathF.Round(wheel);
+        }
+
         // Tab takes the chosen suggestion, and completes the word when there is nothing to take: the rows are drawn under the
         // line, which is where a person reads the choice, so the list is answered before the completion.
         if (_input.IsKeyPressed(Key.Tab) && !TakeSuggestion())

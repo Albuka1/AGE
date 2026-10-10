@@ -51,4 +51,8 @@ public sealed class NullInputService : IInputService, ITextInputService
     /// <inheritdoc />
     /// <remarks>The press is reported on the first frame in which <see cref="State"/> holds the button, so the double follows the same transition rule as a service that reads a device.</remarks>
     public bool IsMouseButtonPressed(MouseButton button) => button == MouseButton.Left && _mouseDownThisFrame && !_mouseDownLastFrame;
+
+    /// <inheritdoc />
+    /// <remarks>No wheel exists without a window, so this reports that the wheel did not move.</remarks>
+    public float MouseWheel => 0f;
 }

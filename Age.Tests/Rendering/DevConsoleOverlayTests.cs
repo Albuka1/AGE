@@ -230,11 +230,13 @@ public sealed class DevConsoleOverlayTests
     }
 
     [Fact]
-    public void DevConsoleOverlay_Update_ThePageKeysScrollTheOutput()
+    public void DevConsoleOverlay_Render_ThePageKeysScrollTheOutput()
     {
         var console = new ConsoleService();
         var input = new FakeInputService();
-        DevConsoleOverlay overlay = Create(console, input);
+        var renderer = new RecordingRenderer();
+        DevConsoleOverlay overlay = Create(console, input, renderer: renderer);
+        overlay.AnimationDuration = 0f;
 
         overlay.VisibleLines = 4;
 
@@ -245,20 +247,50 @@ public sealed class DevConsoleOverlayTests
 
         Press(overlay, input, overlay.OpenKey);
 
-        // A page up walks back through the output, which is what reads a log that is longer than the panel. The keys walk the
-        // output rather than the history or the line, so the console stays open and the line that is being typed is left alone.
+        // The newest lines are the ones in view, which is where the answer to a line that was just run is.
+        overlay.Render(new World(), new Camera2D());
+        renderer.Drawn.Should().Contain("line 19");
+        renderer.Drawn.Should().NotContain("line 0");
+
+        // A page up walks back through the output, so the rows in view become the older ones rather than the newest.
         Press(overlay, input, Key.PageUp);
-        Press(overlay, input, Key.PageUp);
+        renderer.Drawn.Clear();
+        overlay.Render(new World(), new Camera2D());
+        renderer.Drawn.Should().NotContain("line 19", "the scroll moved the output up");
+        renderer.Drawn.Should().Contain("line 14");
 
         console.IsOpen.Should().BeTrue("the page keys scroll the output rather than close the console");
-        console.Input.Should().BeEmpty("scrolling does not type into the line");
+    }
 
-        // The page down walks forward again, and a scroll that runs past the end settles there rather than going negative.
-        Press(overlay, input, Key.PageDown);
-        Press(overlay, input, Key.PageDown);
-        Press(overlay, input, Key.PageDown);
+    [Fact]
+    public void DevConsoleOverlay_Update_TheWheelScrollsTheOutput()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var renderer = new RecordingRenderer();
+        DevConsoleOverlay overlay = Create(console, input, renderer: renderer);
+        overlay.AnimationDuration = 0f;
 
-        console.IsOpen.Should().BeTrue("the page keys do not disturb the state of the console");
+        overlay.VisibleLines = 4;
+
+        for (var index = 0; index < 20; index++)
+        {
+            console.Write($"line {index}");
+        }
+
+        Press(overlay, input, overlay.OpenKey);
+
+        // A notch away from the person scrolls back through the log, which is what a wheel is for.
+        Turn(overlay, input, 1f);
+        renderer.Drawn.Clear();
+        overlay.Render(new World(), new Camera2D());
+        renderer.Drawn.Should().NotContain("line 19", "the wheel moved the output up");
+
+        // A notch toward the person walks forward again to the newest line.
+        Turn(overlay, input, -1f);
+        renderer.Drawn.Clear();
+        overlay.Render(new World(), new Camera2D());
+        renderer.Drawn.Should().Contain("line 19", "the wheel moved the output back to its end");
     }
 
 
@@ -326,6 +358,14 @@ public sealed class DevConsoleOverlayTests
         overlay.Update(new GameTime(delta, 0d));
     }
 
+    /// <summary>Turns the wheel for one frame: the frame opens, the device reports the wheel, and the console reads it.</summary>
+    private static void Turn(DevConsoleOverlay overlay, FakeInputService input, float notches, double delta = 0.016d)
+    {
+        input.BeginFrame();
+        input.Wheel(notches);
+        overlay.Update(new GameTime(delta, 0d));
+    }
+
     /// <summary>Builds a console over the services a test drives, with the fakes it does not look at.</summary>
     private static DevConsoleOverlay Create(
         ConsoleService console,
@@ -353,7 +393,16 @@ public sealed class DevConsoleOverlayTests
         /// <summary>Records a key as held without a transition, which is what a device reports for a key that stays down.</summary>
         public void Hold(Key key) => _down.Add(key);
 
-        public void BeginFrame() => _pressed.Clear();
+        /// <summary>Records how far the wheel was turned for the frame that is open, which a test sets to scroll the output.</summary>
+        public void Wheel(float notches) => MouseWheel = notches;
+
+        public void BeginFrame()
+        {
+            _pressed.Clear();
+
+            // The wheel is a measurement of one frame rather than a state that is held, so the frame boundary forgets it.
+            MouseWheel = 0f;
+        }
 
         public bool IsKeyDown(Key key) => _down.Contains(key);
 
@@ -362,6 +411,9 @@ public sealed class DevConsoleOverlayTests
         public bool IsMouseButtonDown(MouseButton button) => false;
 
         public bool IsMouseButtonPressed(MouseButton button) => false;
+
+        /// <summary>Gets or sets how far the wheel was turned for the frame that is open, which a test sets to scroll the output.</summary>
+        public float MouseWheel { get; set; }
     }
 
     /// <summary>Reports the characters of one frame, which is what a service that reads a device reports.</summary>
@@ -409,5 +461,44 @@ public sealed class DevConsoleOverlayTests
         public void EndFrame() => throw new NotSupportedException();
 
         public void Dispose() => throw new NotSupportedException();
+    }
+
+    /// <summary>A renderer that records the lines the panel draws, which is how a test reads what the scroll shows.</summary>
+    private sealed class RecordingRenderer : IRenderer
+    {
+        /// <summary>Gets the lines of text that were drawn since the last <see cref="Clear"/>, in the order they were drawn.</summary>
+        public List<string> Drawn { get; } = [];
+
+        public Vector2 ViewportSize => new(1280f, 720f);
+
+        public void Attach(IWindowService window) => throw new NotSupportedException();
+
+        public void SetCamera(Camera2D camera) => throw new NotSupportedException();
+
+        public void BeginFrame(bool clear)
+        {
+        }
+
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f) => throw new NotSupportedException();
+
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f) => throw new NotSupportedException();
+
+        public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => throw new NotSupportedException();
+
+        public void ReleaseTexture(TextureHandle texture) => throw new NotSupportedException();
+
+        public void DrawRectangle(Rect rect, Color color)
+        {
+        }
+
+        public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color) => Drawn.Add(new string(text));
+
+        public void EndFrame()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }

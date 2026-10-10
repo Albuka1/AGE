@@ -78,6 +78,8 @@ public sealed class DevOverlayTests
         public bool IsMouseButtonDown(MouseButton button) => false;
 
         public bool IsMouseButtonPressed(MouseButton button) => false;
+
+        public float MouseWheel => 0f;
     }
 
     /// <summary>Reports the characters of one frame, which is what a service that reads a device reports.</summary>

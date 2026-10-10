@@ -181,6 +181,26 @@ public sealed class LocaleTests : IDisposable
     }
 
     [Fact]
+    public void Locale_ABuildBeforeTheLoaderKnowsItsRoot_ReadsTheDocumentsOnceItDoes()
+    {
+        string folder = Path.Combine(_root, LocaleService.Folder, "en", "Ui");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "window.yml"), "ui-title: Make a choice\n");
+
+        var assets = new NullAssetLoader();
+
+        // A host that makes the service before it says where its files are, which is what a game whose first loading step is the
+        // one that initializes the loader does: the answer that is taken now is empty, and the fix is that it is not remembered.
+        var locale = new LocaleService(assets, null, CultureInfo.InvariantCulture);
+        locale.Get("ui-title").Should().Be("ui-title", "the loader has no root yet, so nothing can be read");
+
+        assets.Initialize(_root);
+
+        locale.Get("ui-title").Should().Be("Make a choice", "the first real ask reads the documents rather than the empty answer that was taken before");
+        locale.Count.Should().Be(1);
+    }
+
+    [Fact]
     public void Locale_StartsInTheLanguageOfTheSystemThatTheGameShips()
     {
         var assets = new NullAssetLoader();

@@ -201,6 +201,15 @@ public sealed class LocaleService : ILocaleService
             return loaded;
         }
 
+        // A loader that has not been initialized has no root, so it can neither list the languages nor read a document: an
+        // answer that is taken now would be empty and remembered, which is what a language would then say for the whole run.
+        // The language is answered empty without being kept, so the first real ask, once the game has said where its files
+        // are, reads the documents and keeps them.
+        if (_assets.Root is null)
+        {
+            return new LocaleLanguage(language, new Dictionary<string, LocaleString>(StringComparer.Ordinal));
+        }
+
         if (!Languages.Contains(language, StringComparer.Ordinal))
         {
             // A language the game does not have is answered by the base language, and a game that holds no strings at all is a

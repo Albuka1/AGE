@@ -47,4 +47,12 @@ public interface IInputService
     /// <param name="button">The button to inspect.</param>
     /// <returns><see langword="true"/> only on the frame the button went down.</returns>
     bool IsMouseButtonPressed(MouseButton button);
+
+    /// <summary>Gets how far the wheel of the mouse was turned during the current frame, in notches.</summary>
+    /// <remarks>
+    /// A positive value is a wheel that was turned away from the person, which is what scrolls a view up, and a negative value is
+    /// one that was turned toward them. The value is the sum of what the device reported for the frame, so a person who spins the
+    /// wheel quickly is not left behind by a frame that was slow, and it is zero on a frame that the wheel did not move.
+    /// </remarks>
+    float MouseWheel { get; }
 }
