@@ -14,6 +14,30 @@ using Microsoft.Extensions.Logging;
 
 var services = new ServiceCollection();
 
+// What this game was written for is what decides whether it runs at all: the version of the engine that the game declares in
+// `game.version.json` beside its executable is compared with the one that is running it, and a game of another contract is refused
+// here, before a window is opened or a service is built. Before 1.0 the minor number carries a change a game has to follow, so 0.4
+// and 0.5 are not the same contract; a game of the same contract that names another build runs with a line, which is the usual case
+// of a build that moved forward.
+GameVersion? declared = VersionCheck.ReadExecutable();
+
+if (declared is not null)
+{
+    VersionMatch match = VersionCheck.Compare(EngineVersion.Value, declared.Engine);
+
+    if (match == VersionMatch.Different)
+    {
+        Console.Error.WriteLine($"This game was written for AGE {declared.Engine} and the engine that is running it is {EngineVersion.Value}.");
+        Console.Error.WriteLine("The two do not name the same contract, so this game is not started: read the CHANGELOG for what changed between them.");
+        return 1;
+    }
+
+    if (match == VersionMatch.Compatible)
+    {
+        Console.Error.WriteLine($"This game was written for AGE {declared.Engine} and is running on {EngineVersion.Value}, a later build of the same contract.");
+    }
+}
+
 // What the engine and this game report goes into the console of the developer overlay, which is what makes a file that
 // failed to load or a device that refused something visible while the game runs. Logging is registered before
 // `AddAgeCore`, because that call adds a logger that reports nothing only while nothing else is registered.
@@ -489,7 +513,7 @@ IEnumerable<string> ValuesOf(string name) => name.ToLowerInvariant() switch
 // callback that draws it, and a command runs at the boundary of a step, so the last one that was drawn is what the game is
 // looking through when the command runs.
 Camera2D drawnThrough = new() { Zoom = 1f };
-string version = typeof(World).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+string version = EngineVersion.Value;
 
 console.Register("spawn", "Puts a sprite on screen, the same as pressing E.", _ => lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime")));
 console.Register("broken", "Puts a sprite whose image is not there on screen, which is what the ERROR placeholder is for.", _ => lastSpawned = SpawnMissing(world));
@@ -797,6 +821,10 @@ gameLoop.Run(
 devWindow.Dispose();
 
 provider.GetRequiredService<GameShutdown>().Run();
+
+// The game ran, so the process exits well: the only other exit is the one above, where a game of another major version of the engine
+// is refused before anything of it is built.
+return 0;
 
 // Wraps a line of the HUD into the width of the window, one line per run of words that fits. A line of a developer is longer than
 // a small window is wide, and a draw of it would run off the edge of the frame and over whatever else the game puts there; the

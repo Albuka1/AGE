@@ -93,6 +93,17 @@ try {
         throw 'Directory.Build.props holds no <Version>...</Version>, so there is nothing to bump.'
     }
 
+    # The two version files say the same thing as the build, and the script keeps them in step: the engine one is read when a game is
+    # compared with the engine in another repository, and the game one is what the sample declares it was written for. A release that
+    # bumped only the build would leave a game that refuses to start on the engine it ships with.
+    $versionFiles = @('engine.version.json', 'Age.Sample/game.version.json')
+
+    foreach ($file in $versionFiles) {
+        if (-not (Test-Path $file)) {
+            throw "The version file '$file' is not in the repository, so the release cannot keep it in step with the build."
+        }
+    }
+
     $changelog = Read-Text 'CHANGELOG.md'
     $newline = if ($changelog.Contains("`r`n")) { "`r`n" } else { "`n" }
     $closed = [regex]::Replace(
@@ -109,6 +120,8 @@ try {
 
     if ($DryRun) {
         Write-Host "    Directory.Build.props: <Version>$Version</Version>"
+        Write-Host "    engine.version.json: engine $Version"
+        Write-Host "    Age.Sample/game.version.json: engine $Version"
         Write-Host "    CHANGELOG.md: '## [Unreleased]' followed by '## [$Version] - $date'"
         Write-Host 'Dry run: nothing was written, built, committed or tagged.'
         return
@@ -116,6 +129,11 @@ try {
 
     Write-Text 'Directory.Build.props' $bumped
     Write-Text 'CHANGELOG.md' $closed
+
+    # The two version files are written as JSON rather than patched as text, so the number is one field and the shape of the file is
+    # what the engine reads, whatever whitespace a person left in it.
+    Write-Text 'engine.version.json' ("{`n  ""engine"": ""$Version""`n}`n")
+    Write-Text 'Age.Sample/game.version.json' ("{`n  ""engine"": ""$Version""`n}`n")
 
     try {
         Write-Step 'Building and testing what is about to be released'
@@ -132,13 +150,13 @@ try {
         }
     }
     catch {
-        # The two files are what the build and the tests just read, so a release that does not build leaves nothing behind.
-        git checkout -- Directory.Build.props CHANGELOG.md
+        # The files are what the build and the tests just read, so a release that does not build leaves nothing behind.
+        git checkout -- Directory.Build.props CHANGELOG.md engine.version.json Age.Sample/game.version.json
         throw
     }
 
     Write-Step "Committing 'release: $Version' and tagging $tag"
-    git add Directory.Build.props CHANGELOG.md
+    git add Directory.Build.props CHANGELOG.md engine.version.json Age.Sample/game.version.json
     git commit -m "release: $Version"
 
     # An annotated tag, because that is what a release is: it carries who made it and when, and it is what a push with

@@ -17,6 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- What this game was written for: the version of the engine it declares, which the engine compares with its own before the
+         game starts. The file lands beside the executable, which is where the engine reads it. -->
+    <None Include="game.version.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- The shared Resources folder lands next to the executable, which makes it the asset root of the game.
          The recordings of the decoder tests stay out: they belong to the test project, not to the sample. -->
     <Content Include="$(AgeResources)**" Exclude="$(AgeResources)Audio/Samples/**" Link="Resources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
