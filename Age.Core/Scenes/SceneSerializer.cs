@@ -124,9 +124,18 @@ public sealed class SceneSerializer : ISceneSerializer
                 return null;
             }
 
+            // A component that matches its prototype in every field is dropped whole. One that differs in some fields keeps only
+            // the fields that differ, so a sprite that changed its state does not carry the image, the size and the colour of its
+            // prototype a second time. What is left is written over the entity the prototype makes when the scene is read back.
             if (JsonElement.DeepEquals(component, expected))
             {
                 (matches ??= []).Add(name);
+                continue;
+            }
+
+            if (Prune(component, expected) is JsonElement pruned)
+            {
+                components[name] = pruned;
             }
         }
 
@@ -139,6 +148,47 @@ public sealed class SceneSerializer : ISceneSerializer
         }
 
         return prototypeId;
+    }
+
+    /// <summary>Returns a component with every field that the prototype already declares removed, or null when nothing can be removed.</summary>
+    /// <param name="component">The component as the entity carries it, written as a JSON object.</param>
+    /// <param name="prototype">The same component as the prototype declares it, in the same shape.</param>
+    /// <returns>The component with the fields that match the prototype left out, or null when the two do not share the shape a per-field comparison needs.</returns>
+    /// <remarks>
+    /// The comparison is a walk of the two objects rather than of the text, so the order of the fields does not matter and a value that
+    /// the prototype writes differently — an int where the component holds a float — is compared as the component reads it, which is
+    /// what <see cref="ComponentRegistration.Normalize"/> gives. A component that is not an object keeps whole: a field of a component
+    /// is what a document may leave out, and a value that is not an object has no fields to leave out.
+    /// </remarks>
+    private static JsonElement? Prune(JsonElement component, JsonElement prototype)
+    {
+        if (component.ValueKind != JsonValueKind.Object || prototype.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var kept = new List<(string Name, JsonElement Value)>();
+
+        foreach (JsonProperty field in component.EnumerateObject())
+        {
+            if (prototype.TryGetProperty(field.Name, out JsonElement declared) && JsonElement.DeepEquals(field.Value, declared))
+            {
+                continue;
+            }
+
+            kept.Add((field.Name, field.Value));
+        }
+
+        // A component whose every field was removed is one the prototype already declares, which the caller drops whole rather than
+        // writing an object with nothing in it.
+        if (kept.Count == 0 || kept.Count == component.EnumerateObject().Count())
+        {
+            return null;
+        }
+
+        return JsonSerializer.SerializeToElement(
+            kept.ToDictionary(field => field.Name, field => field.Value),
+            AgeJsonContext.Default.Options);
     }
 
     /// <inheritdoc />
@@ -236,7 +286,7 @@ public sealed class SceneSerializer : ISceneSerializer
                 }
             }
 
-            var components = new List<(ComponentRegistration Registration, object Component)>(saved.Components.Count);
+            var components = new List<(ComponentRegistration Registration, JsonElement Values)>(saved.Components.Count);
 
             foreach ((string name, JsonElement component) in saved.Components)
             {
@@ -245,17 +295,20 @@ public sealed class SceneSerializer : ISceneSerializer
                     throw new InvalidDataException($"The scene holds a component named '{name}', which is not registered. Register it before loading the scene.");
                 }
 
-                object value;
+                // The values are kept as they were written rather than read into a component here, because how they are written over
+                // depends on the entity: over the component a prototype made, a field the scene leaves out keeps what the prototype gave
+                // it, and that is a decision the world makes when the entity is there. Reading them once here still refuses a value this
+                // build cannot read, so a scene that is refused leaves the world alone.
                 try
                 {
-                    value = registration.Deserialize(component);
+                    registration.Deserialize(component);
                 }
                 catch (JsonException exception)
                 {
                     throw new InvalidDataException($"The component '{name}' of the scene cannot be read.", exception);
                 }
 
-                components.Add((registration, value));
+                components.Add((registration, component));
             }
 
             // The prototype of an entity is checked here, before the world is touched: a scene that names one needs the content
@@ -303,9 +356,11 @@ public sealed class SceneSerializer : ISceneSerializer
                 world.MapSceneId(entity, stagedEntity.Id);
             }
 
-            foreach ((ComponentRegistration registration, object component) in stagedEntity.Components)
+            foreach ((ComponentRegistration registration, JsonElement values) in stagedEntity.Components)
             {
-                registration.Apply(world, entity, component);
+                // The values are written over the component the entity already carries, so a field the scene left out keeps what the
+                // prototype gave it; an entity that names no prototype carries nothing yet, so the whole value lands.
+                registration.Merge(world, entity, values);
             }
         }
     }
@@ -362,5 +417,5 @@ public sealed class SceneSerializer : ISceneSerializer
     /// <param name="Id">The identifier the scene knows the entity by, or zero when it carried none.</param>
     /// <param name="Prototype">The prototype the entity was created from, or null when the scene carries every component of it.</param>
     /// <param name="Components">The components of the entity, in the order the scene listed them.</param>
-    private sealed record StagedEntity(int Id, string? Prototype, List<(ComponentRegistration Registration, object Component)> Components);
+    private sealed record StagedEntity(int Id, string? Prototype, List<(ComponentRegistration Registration, JsonElement Values)> Components);
 }

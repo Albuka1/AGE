@@ -86,6 +86,42 @@ public sealed class PrototypeSceneTests
     }
 
     [Fact]
+    public void PrototypeScene_ADifferenceInOneField_KeepsOnlyThatFieldOfTheComponent()
+    {
+        using ServiceProvider provider = Create();
+        SpawnService spawner = provider.GetRequiredService<SpawnService>();
+        ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+        var world = new World();
+
+        Entity goblin = spawner.Spawn(world, "Goblin");
+
+        // The goblin keeps the position, the rotation and the size its prototype gave it and changes only its scale, so the scene
+        // should carry the scale and nothing else of the transform: a component is written as the fields that differ, not whole.
+        world.GetRef<TransformComponent>(goblin).Scale = new Vector2(3f, 3f);
+
+        string json = scenes.Save(world);
+
+        using (JsonDocument document = JsonDocument.Parse(json))
+        {
+            JsonElement transform = document.RootElement.GetProperty("Entities")[0].GetProperty("Components").GetProperty("Transform");
+
+            transform.EnumerateObject().Select(property => property.Name).Should().Equal(new[] { "Scale" }, "only the field that differs is written");
+            transform.GetProperty("Scale").GetProperty("X").GetDouble().Should().Be(3d);
+        }
+
+        // The fields the scene left out come back from the prototype rather than from a default of the structure.
+        var loaded = new World();
+        scenes.Load(loaded, json);
+
+        Entity restored = loaded.Enumerate().Single();
+        TransformComponent component = loaded.Get<TransformComponent>(restored);
+
+        component.Scale.Should().Be(new Vector2(3f, 3f), "the field the scene wrote wins");
+        component.Position.Should().Be(new Vector2(0f, 0f), "a field the scene left out keeps what the prototype gave it, which is the zero its document wrote");
+        loaded.Get<ColliderComponent>(restored).Size.Should().Be(new Vector2(24f, 24f), "a component the scene did not name at all comes from the prototype");
+    }
+
+    [Fact]
     public void PrototypeScene_ASpriteOfLayers_IsWrittenAndReadBack()
     {
         using ServiceProvider provider = Create();
