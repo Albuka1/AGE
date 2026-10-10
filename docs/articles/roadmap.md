@@ -32,6 +32,11 @@ What remains are the content features the engine does not have yet, and then the
   in front of the game — a set of such windows, and tabs inside a window, so the console, the tree of the interface and the
   textures each get a tab instead of a place on one strip over the game.
 - 2D lighting: a light that a sprite or the world is drawn under, which the renderer does not have today.
+- A sprite drawn through a mask: one sprite drawn only where another covers it, so a pupil stays inside its eye, a light falls
+  only on the floor it touches, and a portrait is cut to its frame. The clip of the renderer holds a draw inside a rectangle,
+  which is enough for a panel but not for a shape that a sprite carries, so what a mask needs is a stencil or a second draw of the
+  mask into the surface a pass already renders into, a component that names which sprite is the mask, and the pass that draws the
+  masked sprite where the mask was drawn.
 - Positional audio: voices whose position can change, a listener that follows the camera, and the falloff between them.
 - Hierarchy.
 - OBB collision and multiple contacts.

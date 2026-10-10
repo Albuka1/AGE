@@ -54,6 +54,10 @@ public sealed class TextRenderer
     private readonly Dictionary<string, Cached> _lines = new(StringComparer.Ordinal);
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
 
+    // The height of a line is remembered once the fonts of the defaults are there, which is what keeps a read that came too early
+    // from becoming the height of every line: reading it again bakes the fonts and settles the height for the rest of the run.
+    private float? _lineHeight;
+
     /// <summary>Initializes the renderer of text.</summary>
     /// <param name="renderer">The renderer that draws the glyphs and owns the built-in font.</param>
     /// <param name="fonts">The service that bakes the fonts of a style, or null to draw every text with the built-in font.</param>
@@ -103,10 +107,36 @@ public sealed class TextRenderer
 
     /// <summary>Gets the height of a line of the fonts that this renderer draws with.</summary>
     /// <remarks>
-    /// A caller that stacks lines of its own, such as a console or a list of numbers, advances by this. Reading it bakes the
-    /// fonts that the defaults name, which the service then answers from its cache.
+    /// A caller that stacks lines of its own, such as a console or a list of numbers, advances by this. Reading it once the fonts
+    /// are there bakes the fonts that the defaults name, which the service then answers from its cache, and the height is remembered
+    /// from then on. A caller may read it before the game is ready to load its fonts — an overlay asks for it while it is built,
+    /// which is before the asset loader of a game was given its root — and such a read answers the built-in height and is not
+    /// reported, because the fonts are not faulty, they are simply not loadable yet: the next read bakes them and remembers the
+    /// height, and a bake that fails for another reason is reported then.
     /// </remarks>
-    public float LineHeight => Measurer(new TextStyle()).Measurer.Metrics.LineHeight;
+    public float LineHeight
+    {
+        get
+        {
+            if (_lineHeight is not float height)
+            {
+                var measurer = Measurer(new TextStyle(), report: false);
+                float resolved = measurer.Measurer.Metrics.LineHeight;
+
+                // The height is remembered once the fonts of the defaults are really there, so a read that fell back to the built-in
+                // font — because the game was not ready to load a font yet — is answered but not remembered, and the next read bakes
+                // the fonts and settles the height for the rest of the run.
+                if (!measurer.Faulted)
+                {
+                    _lineHeight = resolved;
+                }
+
+                return resolved;
+            }
+
+            return _lineHeight.Value;
+        }
+    }
 
     /// <summary>Draws a text that no entity carries, such as a line of a console or of the numbers of a frame.</summary>
     /// <param name="text">The text to draw. A leave of null or an empty text draws nothing and takes no room.</param>
@@ -179,7 +209,7 @@ public sealed class TextRenderer
             _remembered.Clear();
         }
 
-        (ITextMeasurer measurer, FontHandle font) = Measurer(text.Style);
+        (ITextMeasurer measurer, FontHandle font, _) = Measurer(text.Style);
         string resolved = Resolve(text);
         var laid = new LaidOut(
             text.Key,
@@ -216,7 +246,7 @@ public sealed class TextRenderer
             _lines.Clear();
         }
 
-        (ITextMeasurer measurer, _) = Measurer(style);
+        (ITextMeasurer measurer, _, _) = Measurer(style);
         var laid = new Cached(box, style, language, text, measurer, TextLayouter.Layout(text, measurer, style, box));
 
         _lines[text] = laid;
@@ -238,22 +268,24 @@ public sealed class TextRenderer
 
     /// <summary>Returns the measurer of a style, baking the fonts of its stack.</summary>
     /// <param name="style">The style whose fonts are baked.</param>
-    /// <returns>The measurer of the text and the font that draws its first line, which is a default handle for the built-in font.</returns>
+    /// <param name="report">Whether a font that cannot be baked is written to the log, which a caller that is only after the height of a line turns off.</param>
+    /// <returns>The measurer of the text, the font that draws its first line, and whether a bake of the stack failed.</returns>
     /// <remarks>
     /// A style that names no font is drawn with the defaults of this renderer, which is what makes a text of a game readable
-    /// without the game naming a font, and a font that cannot be baked is reported once and left out of the stack, so the
-    /// characters it covers fall to the font below it, or to the built-in font when nothing is left.
+    /// without the game naming a font, and a font that cannot be baked is left out of the stack, so the characters it covers fall to
+    /// the font below it, or to the built-in font when nothing is left.
     /// </remarks>
-    private (ITextMeasurer Measurer, FontHandle Font) Measurer(in TextStyle style)
+    private (ITextMeasurer Measurer, FontHandle Font, bool Faulted) Measurer(in TextStyle style, bool report = true)
     {
         FontStyle[] fonts = style.Fonts is { Length: > 0 } named ? named : _defaults;
 
         if (_fonts is null || fonts.Length == 0)
         {
-            return (BitmapTextMeasurer.Instance, default);
+            return (BitmapTextMeasurer.Instance, default, false);
         }
 
         var stack = new List<(FontStyle Style, FontHandle Font)>(fonts.Length);
+        bool faulted = false;
 
         foreach (FontStyle font in fonts)
         {
@@ -268,13 +300,18 @@ public sealed class TextRenderer
             }
             catch (Exception exception) when (exception is ArgumentException or IOException or InvalidOperationException or UnauthorizedAccessException or NotSupportedException)
             {
-                Report(path, exception);
+                faulted = true;
+
+                if (report)
+                {
+                    Report(path, exception);
+                }
             }
         }
 
         return stack.Count == 0
-            ? (BitmapTextMeasurer.Instance, default)
-            : (new StackedTextMeasurer(_fonts, stack), stack[0].Font);
+            ? (BitmapTextMeasurer.Instance, default, faulted)
+            : (new StackedTextMeasurer(_fonts, stack), stack[0].Font, faulted);
     }
 
     /// <summary>Draws one line of a laid out text, in runs of one font each.</summary>

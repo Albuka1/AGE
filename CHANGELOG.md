@@ -64,6 +64,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An overlay that reads the height of a line while it is built — the numbers of a frame and the console of the engine both do — read it
+  before the asset loader of a game was given its root, so the fonts it names could not be baked yet and the engine reported a font that
+  could not be baked on every run. `TextRenderer.LineHeight` now answers the built-in height and reports nothing while the fonts are not
+  loadable yet, bakes them on the read after the game is ready, and remembers the height from then on; a font that really is faulty is
+  still reported by the draw that needs it.
 - The delete key of the console removed the selected text **and** the character after it, because it fell through to the single
   character removal once a selection had already gone: a selection is now the whole of what a delete removes, the way a console of a
   terminal removes the marked text and leaves the character behind it.
