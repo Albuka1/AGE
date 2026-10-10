@@ -61,49 +61,86 @@ windowService.Create(1280, 720, "AGE Sample");
 IRenderer renderer = provider.GetRequiredService<IRenderer>();
 renderer.Attach(windowService);
 
-IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
-assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+// A game that loads behind the logo says what it has to do and lets the frame show the logo and the bar under it while
+// the steps run, one per frame: the window is on screen from the first step rather than after the last one. The handles
+// the steps produce are declared here, because the callbacks of the frame read them and every one of them is assigned
+// before the loop that reads it runs.
+var loading = new List<Action>();
+int loadingStep = 0;
 
-// The content of a game is data: a document under Resources/Prototypes declares a prototype by its identifier, names the
-// components it carries with the values they start with, and inherits the rest from a parent. The manager reads every
-// file first and then resolves them, so a mistake in a document is a message here rather than a surprise in a fight. A
-// document whose type is `entity` is read as an entity, which is what a spawn makes out of it.
+IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
 PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
 SpawnService spawner = provider.GetRequiredService<SpawnService>();
-prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
-prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
-Console.WriteLine($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
-
-// A material is the stage of a shader and the values its uniforms start with, read from the content: a layer of a sprite names
-// the material rather than the path of a stage, so a sprite that pulses is a line of a document rather than a line of code, and
-// the same material draws every sprite that names it.
 IMaterialService materials = provider.GetRequiredService<IMaterialService>();
-
-foreach (MaterialPrototype material in prototypes.Enumerate<MaterialPrototype>())
-{
-    materials.Register(material.Id, material);
-}
-
-materials.Build();
-
 ITextureService textures = provider.GetRequiredService<ITextureService>();
+IFontService fonts = provider.GetRequiredService<IFontService>();
+IShaderService shaders = provider.GetRequiredService<IShaderService>();
+ISoundService sounds = provider.GetRequiredService<ISoundService>();
 
 // A sprite names its image by path, which is the one thing about a sprite that survives a save: the handle of a device
 // texture is never written to a scene. An image that a build does not ship is drawn as the placeholder of the texture
 // service and reported once, rather than taking the frame down with it.
 const string TilePath = "Textures/Tiles/tiles.bmp";
 
-IFontService fonts = provider.GetRequiredService<IFontService>();
-FontHandle font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04FF');
+FontHandle font = default;
+ShaderHandle vignette = default;
+SoundHandle click = default;
+
+Entity first = default;
+Entity second = default;
+Entity canvas = default;
+Entity panel = default;
+Entity corner = default;
+RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
+DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
+
+// The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
+// content, so they are made before the loading starts. The last loading step reads the settings and the language, which is
+// why they are here rather than among the steps.
+IConsoleService console = provider.GetRequiredService<IConsoleService>();
+CVarService cvars = provider.GetRequiredService<CVarService>();
+Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
+
+// Sprites that `E` puts on screen. A timer of two seconds on each one destroys it, so the slot of a destroyed entity is
+// handed out again for the next one and this game keeps no book of its own. The string of the HUD remembers which entity
+// was spawned last, with its generation.
+Entity lastSpawned = default;
+
+loading.Add(() => assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources")));
+
+// The content of a game is data: a document under Resources/Prototypes declares a prototype by its identifier, names the
+// components it carries with the values they start with, and inherits the rest from a parent. The manager reads every
+// file first and then resolves them, so a mistake in a document is a message here rather than a surprise in a fight. A
+// document whose type is `entity` is read as an entity, which is what a spawn makes out of it.
+loading.Add(() =>
+{
+    prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+    prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
+    Console.WriteLine($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
+});
+
+// A material is the stage of a shader and the values its uniforms start with, read from the content: a layer of a sprite names
+// the material rather than the path of a stage, so a sprite that pulses is a line of a document rather than a line of code, and
+// the same material draws every sprite that names it.
+loading.Add(() =>
+{
+    foreach (MaterialPrototype material in prototypes.Enumerate<MaterialPrototype>())
+    {
+        materials.Register(material.Id, material);
+    }
+
+    materials.Build();
+});
+
+// The font the HUD of this game is drawn in, the vignette over the frame, and the sound of a click: one step each, so the
+// bar under the logo moves three times while the three files are read.
+loading.Add(() => font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04FF'));
 
 // A shader of the content: the fragment stage under Resources/Shaders is read through the asset loader, compiled once, and drawn
 // with the vertex stage of the engine, which places the quad. This one is drawn over the frame at the end of it, which is what a
 // pass of a game adds of its own.
-IShaderService shaders = provider.GetRequiredService<IShaderService>();
-ShaderHandle vignette = shaders.Load("Shaders/vignette.frag");
-
-ISoundService sounds = provider.GetRequiredService<ISoundService>();
-SoundHandle click = sounds.Load("Audio/Effects/click.wav");
+loading.Add(() => vignette = shaders.Load("Shaders/vignette.frag"));
+loading.Add(() => click = sounds.Load("Audio/Effects/click.wav"));
 
 // The area of the world that this game is authored against, in world units, which is also the resolution that its interface
 // is authored against: the canvas of the interface scales it to the window, and `fit` of the console switches the camera of
@@ -112,100 +149,153 @@ SoundHandle click = sounds.Load("Audio/Effects/click.wav");
 var design = new Vector2(1280f, 720f);
 bool fitWorld = false;
 
-Entity first = world.CreateEntity();
-world.Set(first, new TransformComponent { Position = new Vector2(400f, 300f), Scale = new Vector2(1f, 1f) });
-world.Set(first, new SpriteComponent { TexturePath = TilePath, Size = new Vector2(64f, 64f), Color = Color.White, ZOrder = 0 });
-world.Set(first, new ColliderComponent { Size = new Vector2(64f, 64f) });
+VignettePass vignettePass = null!;
 
-Entity second = world.CreateEntity();
-world.Set(second, new TransformComponent { Position = new Vector2(430f, 315f), Scale = new Vector2(1f, 1f) });
-world.Set(second, new SpriteComponent { Size = new Vector2(64f, 64f), Color = Color.Green, ZOrder = 1 });
-world.Set(second, new ColliderComponent { Size = new Vector2(64f, 64f) });
-
-// A sprite of layers: two images drawn over one another at the same box, the second of them with a shader of its own, which is
-// what a layer is for. It is content like any other thing of the world, so the document names the layers; the pass of the world
-// compiles the stage of a layer the first time it draws it and keeps the program for every frame after that.
-spawner.Spawn(world, "Beacon", new Vector2(700f, 360f));
-
-// The interface of this game is authored against the resolution above rather than against pixels of a screen: the canvas
-// scales the whole of it to the window, and the elements below are anchored to the corners of that canvas instead of being put
-// at a pixel, so the same layout fits a display of any resolution and a window of any shape. The command `ui` reports the scale
-// that the layout resolved and changes the axis it follows while the game runs.
-Entity canvas = world.CreateEntity();
-world.Set(canvas, new CanvasComponent
+loading.Add(() =>
 {
-    IsRoot = true,
-    DesignSize = design,
-    ScaleMode = CanvasScaleMode.ScaleWithScreenSize,
-    Match = 0.5f,
+    first = world.CreateEntity();
+    world.Set(first, new TransformComponent { Position = new Vector2(400f, 300f), Scale = new Vector2(1f, 1f) });
+    world.Set(first, new SpriteComponent { TexturePath = TilePath, Size = new Vector2(64f, 64f), Color = Color.White, ZOrder = 0 });
+    world.Set(first, new ColliderComponent { Size = new Vector2(64f, 64f) });
+
+    second = world.CreateEntity();
+    world.Set(second, new TransformComponent { Position = new Vector2(430f, 315f), Scale = new Vector2(1f, 1f) });
+    world.Set(second, new SpriteComponent { Size = new Vector2(64f, 64f), Color = Color.Green, ZOrder = 1 });
+    world.Set(second, new ColliderComponent { Size = new Vector2(64f, 64f) });
+
+    // The second sprite turns with a tween of three seconds that starts over when it reaches the end. Nothing in this game
+    // advances it: the tween system does, on the time of every step, and the subscription writes the value into the transform
+    // of the entity it belongs to.
+    world.Set(second, TweenComponent.Between(0f, MathF.Tau, 3f, looping: true));
+
+    // A sprite of layers: two images drawn over one another at the same box, the second of them with a shader of its own, which is
+    // what a layer is for. It is content like any other thing of the world, so the document names the layers; the pass of the world
+    // compiles the stage of a layer the first time it draws it and keeps the program for every frame after that.
+    spawner.Spawn(world, "Beacon", new Vector2(700f, 360f));
+
+    // A line of text in the world, in the language the game plays in. The name of a prototype is a key rather than a text, so
+    // what a player reads is content: this line says the same thing as `locale.Get("ent-Goblin")` answers, and the `loc` command
+    // switches the language of a running game.
+    Entity label = world.CreateEntity();
+    world.Set(label, new TransformComponent { Position = new Vector2(300f, 180f), Scale = new Vector2(1f, 1f) });
+    world.Set(label, new TextComponent
+    {
+        // The line names a key rather than a string, so it says what the language of the game says: the command `loc ru` turns
+        // it into Russian without this game writing the name again.
+        Key = "ent-Goblin",
+        Style = new TextStyle
+        {
+            Fonts =
+            [
+                // The font is baked from the space to the end of the Cyrillic block, which is what a language with a script of
+                // its own needs: a character outside the range of a font is drawn as a space.
+                new FontStyle { Path = "Fonts/Cousine-Regular.ttf", PixelHeight = 24f, FirstCharacter = ' ', LastCharacter = '\u04FF' },
+            ],
+            Color = Color.White,
+        },
+        ZOrder = 10,
+    });
+
+    // The interface of this game is authored against the resolution above rather than against pixels of a screen: the canvas
+    // scales the whole of it to the window, and the elements below are anchored to the corners of that canvas instead of being put
+    // at a pixel, so the same layout fits a display of any resolution and a window of any shape. The command `ui` reports the scale
+    // that the layout resolved and changes the axis it follows while the game runs.
+    canvas = world.CreateEntity();
+    world.Set(canvas, new CanvasComponent
+    {
+        IsRoot = true,
+        DesignSize = design,
+        ScaleMode = CanvasScaleMode.ScaleWithScreenSize,
+        Match = 0.5f,
+    });
+
+    panel = world.CreateEntity();
+    world.Set(panel, new RectTransformComponent
+    {
+        // Anchored to the top-left corner of the canvas with a margin of its own, which is what keeps it there at any resolution.
+        Anchored = true,
+        AnchorMin = Vector2.Zero,
+        AnchorMax = Vector2.Zero,
+        Pivot = Vector2.Zero,
+        AnchoredPosition = new Vector2(100f, 100f),
+        SizeDelta = new Vector2(200f, 50f),
+        ZOrder = 0,
+        Visible = true,
+    });
+    world.Set(panel, new ButtonComponent { BaseColor = Color.Blue, Interactable = true });
+    world.Set(panel, new TextComponent
+    {
+        // A label of the interface names a key and a count rather than a string, so a button says what the language says, and
+        // its alignment is what centers the text in the box of the element.
+        Key = "ui-entities",
+        Count = 3,
+        Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
+    });
+
+    // The other corner of the same canvas, with the opposite anchor and pivot: this element keeps its margin from the bottom-right
+    // corner of the window however the window is resized, which is what the anchors are for.
+    corner = world.CreateEntity();
+    world.Set(corner, new RectTransformComponent
+    {
+        Anchored = true,
+        AnchorMin = new Vector2(1f, 1f),
+        AnchorMax = new Vector2(1f, 1f),
+        Pivot = new Vector2(1f, 1f),
+        AnchoredPosition = new Vector2(-100f, -100f),
+        SizeDelta = new Vector2(200f, 50f),
+        ZOrder = 1,
+        Visible = true,
+    });
+    world.Set(corner, new ButtonComponent { BaseColor = new Color(60, 90, 160), Interactable = true });
+    world.Set(corner, new TextComponent
+    {
+        Text = "corner anchor",
+        Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
+    });
+
+    RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
+    TextRenderSystem textRenderSystem = provider.GetRequiredService<TextRenderSystem>();
+    UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
+    renderPipeline.Add(renderSystem);
+
+    // The text of a world is a pass of its own, between the world and the interface: a line stands where the entity that carries
+    // it stands, so it belongs to the world, and it is drawn over the sprites and under the UI.
+    renderPipeline.Add(textRenderSystem);
+    renderPipeline.Add(uiRenderSystem);
+
+    // The vignette of this game is a pass like the ones of the engine, which is what the pipeline is for: it runs after the world
+    // and the interface and before the overlay, so the console and the numbers of the developer stay above it.
+    vignettePass = new VignettePass(renderer, vignette);
+    renderPipeline.Add(vignettePass);
+
+    // The developer overlay draws over everything else: the numbers of the frame and the console of the engine. Its keys are
+    // Tab for the console, which pauses the simulation while it is open, and F1 for the numbers.
+    overlay.ConsoleKey = Key.Tab;
+    renderPipeline.Add(overlay);
 });
 
-Entity panel = world.CreateEntity();
-world.Set(panel, new RectTransformComponent
+ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
+string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
+
+// A scene on disk replaces the world this game built, which is why this is the last step: the content is loaded by then, so a
+// document that names a prototype of the game resolves, and the game starts with the scene rather than with the entities above.
+loading.Add(() =>
 {
-    // Anchored to the top-left corner of the canvas with a margin of its own, which is what keeps it there at any resolution.
-    Anchored = true,
-    AnchorMin = Vector2.Zero,
-    AnchorMax = Vector2.Zero,
-    Pivot = Vector2.Zero,
-    AnchoredPosition = new Vector2(100f, 100f),
-    SizeDelta = new Vector2(200f, 50f),
-    ZOrder = 0,
-    Visible = true,
+    if (File.Exists(scenePath))
+    {
+        world = LoadScene(scenes, scenePath);
+        first = FirstSprite(world);
+        Console.WriteLine($"Loaded the scene from {scenePath}.");
+    }
+
+    // A bus belongs to a world rather than to the game, so the subscriptions are made for the world that is there once every
+    // step ran: a scene that replaced it above has a bus of its own, and every handler has to be added to that one.
+    SubscribeEvents(world);
+
+    // One sprite is already on its way when the game starts, so the HUD has something to report and the slot logic runs
+    // before the first key press. It belongs to the world that is there now, which is the scene when there is one.
+    lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
 });
-world.Set(panel, new ButtonComponent { BaseColor = Color.Blue, Interactable = true });
-world.Set(panel, new TextComponent
-{
-    // A label of the interface names a key and a count rather than a string, so a button says what the language says, and
-    // its alignment is what centers the text in the box of the element.
-    Key = "ui-entities",
-    Count = 3,
-    Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
-});
-
-// The other corner of the same canvas, with the opposite anchor and pivot: this element keeps its margin from the bottom-right
-// corner of the window however the window is resized, which is what the anchors are for.
-Entity corner = world.CreateEntity();
-world.Set(corner, new RectTransformComponent
-{
-    Anchored = true,
-    AnchorMin = new Vector2(1f, 1f),
-    AnchorMax = new Vector2(1f, 1f),
-    Pivot = new Vector2(1f, 1f),
-    AnchoredPosition = new Vector2(-100f, -100f),
-    SizeDelta = new Vector2(200f, 50f),
-    ZOrder = 1,
-    Visible = true,
-});
-world.Set(corner, new ButtonComponent { BaseColor = new Color(60, 90, 160), Interactable = true });
-world.Set(corner, new TextComponent
-{
-    Text = "corner anchor",
-    Style = new TextStyle { Color = Color.White, Align = TextAlign.Center, VerticalAlign = TextVerticalAlign.Middle },
-});
-
-RenderSystem renderSystem = provider.GetRequiredService<RenderSystem>();
-TextRenderSystem textRenderSystem = provider.GetRequiredService<TextRenderSystem>();
-UIRenderSystem uiRenderSystem = provider.GetRequiredService<UIRenderSystem>();
-RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
-renderPipeline.Add(renderSystem);
-
-// The text of a world is a pass of its own, between the world and the interface: a line stands where the entity that carries
-// it stands, so it belongs to the world, and it is drawn over the sprites and under the UI.
-renderPipeline.Add(textRenderSystem);
-renderPipeline.Add(uiRenderSystem);
-
-// The vignette of this game is a pass like the ones of the engine, which is what the pipeline is for: it runs after the world
-// and the interface and before the overlay, so the console and the numbers of the developer stay above it.
-var vignettePass = new VignettePass(renderer, vignette);
-renderPipeline.Add(vignettePass);
-
-// The developer overlay draws over everything else: the numbers of the frame and the console of the engine. Its keys are
-// Tab for the console, which pauses the simulation while it is open, and F1 for the numbers.
-DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
-
-overlay.ConsoleKey = Key.Tab;
-renderPipeline.Add(overlay);
 IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
@@ -214,16 +304,6 @@ FixedTimestep timestep = provider.GetRequiredService<FixedTimestep>();
 // The simulation does not start until the splash is over, so the clock starts paused: no step runs behind the logo, and
 // the tick the HUD reports counts the simulation of this game rather than the frames of the splash.
 timestep.Paused = true;
-
-ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
-string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
-
-if (File.Exists(scenePath))
-{
-    world = LoadScene(scenes, scenePath);
-    first = FirstSprite(world);
-    Console.WriteLine($"Loaded the scene from {scenePath}.");
-}
 
 // A bus belongs to a world, so every world this game makes needs its subscriptions again: the collision system
 // announces each overlapping pair it found, the UI announces a press on a button, and a timer announces that it ran
@@ -247,66 +327,22 @@ void SubscribeEvents(World subscribed)
     });
 }
 
-SubscribeEvents(world);
-
 const float MoveSpeed = 240f;
 
-// The consoles of the engine: a game registers the commands that belong to it and the settings it wants to turn while it
-// runs. A setting becomes a command of its own, so `spawnLifetime 0.5` changes what this line below reads from then on.
-IConsoleService console = provider.GetRequiredService<IConsoleService>();
-CVarService cvars = provider.GetRequiredService<CVarService>();
-
+// The settings of this game become commands of the console: `spawnLifetime 0.5` changes what the line below reads from then on.
 cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen lives, in seconds.");
 
 // The language the strings are read in is a setting rather than a way the game was built: the command 'loc' changes it while
 // the game runs, and everything that asks the locale service for a key answers in the new language from then on. The language
 // starts as the one the system is set to, when the game ships that language, and as the base language otherwise.
-Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
 cvars.Register("locale", locale.Language, "The language the strings of the game are read in, such as en or ru.");
 locale.Language = cvars.Get<string>("locale");
-
-// A line of text in the world, in the language the game plays in. The name of a prototype is a key rather than a text, so
-// what a player reads is content: this line says the same thing as `locale.Get("ent-Goblin")` answers, and the `loc` command
-// switches the language of a running game.
-Entity label = world.CreateEntity();
-world.Set(label, new TransformComponent { Position = new Vector2(300f, 180f), Scale = new Vector2(1f, 1f) });
-world.Set(label, new TextComponent
-{
-    // The line names a key rather than a string, so it says what the language of the game says: the command `loc ru` turns
-    // it into Russian without this game writing the name again.
-    Key = "ent-Goblin",
-    Style = new TextStyle
-    {
-        Fonts =
-        [
-            // The font is baked from the space to the end of the Cyrillic block, which is what a language with a script of
-            // its own needs: a character outside the range of a font is drawn as a space.
-            new FontStyle { Path = "Fonts/Cousine-Regular.ttf", PixelHeight = 24f, FirstCharacter = ' ', LastCharacter = '\u04FF' },
-        ],
-        Color = Color.White,
-    },
-    ZOrder = 10,
-});
-
-// The second sprite turns with a tween of three seconds that starts over when it reaches the end. Nothing in this game
-// advances it: the tween system does, on the time of every step, and the subscription above writes the value into the
-// transform of the entity it belongs to.
-world.Set(second, TweenComponent.Between(0f, MathF.Tau, 3f, looping: true));
-
-// Sprites that `E` puts on screen. A timer of two seconds on each one destroys it, so the slot of a destroyed entity is
-// handed out again for the next one and this game keeps no book of its own. The string of the HUD remembers which entity
-// was spawned last, with its generation.
-Entity lastSpawned = default;
 
 // The camera that the last frame was drawn through, which a console command reads: the camera of a frame is built in the
 // callback that draws it, and a command runs at the boundary of a step, so the last one that was drawn is what the game is
 // looking through when the command runs.
 Camera2D drawnThrough = new() { Zoom = 1f };
 string version = typeof(World).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
-
-// One sprite is already on its way when the game starts, so the HUD has something to report and the slot logic runs
-// before the first key press.
-lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
 
 console.Register("spawn", "Puts a sprite on screen, the same as pressing E.", _ => lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime")));
 console.Register("broken", "Puts a sprite whose image is not there on screen, which is what the ERROR placeholder is for.", _ => lastSpawned = SpawnMissing(world));
@@ -397,9 +433,9 @@ console.Register("fit", "Reports how the camera of the world is built and switch
 });
 
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
-// frame rate. The splash, the keys and the drawing run once per frame, after the steps of that frame, and the simulation
-// stays paused until the splash is over, so nothing moves behind the logo. `Q` pauses the clock, which stops the steps
-// without stopping the frames, and holding `Tab` slows the simulation down with `FixedTimestep.TimeScale`.
+// frame rate. The loading, the splash, the keys and the drawing run once per frame, and the simulation stays paused until
+// the last loading step is done, so nothing moves behind the logo. `Q` pauses the clock, which stops the steps without
+// stopping the frames, and holding `Tab` slows the simulation down with `FixedTimestep.TimeScale`.
 bool started = false;
 
 gameLoop.Run(
@@ -420,19 +456,37 @@ gameLoop.Run(
     },
     render: time =>
     {
+        // The steps of the loading of this game run one per frame while the logo is on screen, and the bar under it shows how many
+        // of them are left: the window is drawn from the first frame rather than standing empty until everything is ready. A step
+        // that reads a file or compiles a program takes the frame it runs in, which is what the logo is there for.
+        if (loadingStep < loading.Count)
+        {
+            loading[loadingStep]();
+            loadingStep++;
+            splash.Progress = loadingStep / (float)loading.Count;
+
+            if (loadingStep == loading.Count)
+            {
+                // The last step is done, so the game starts now instead of waiting out the rest of the duration of the logo.
+                splash.End();
+            }
+        }
+
+        // The logo owns the frame until the loading is done, so the game never draws a world that is only half built: the
+        // splash is kept on screen by its own duration as well, and a duration that runs out early does not start the game.
+        if (loadingStep < loading.Count || splash.Draw(renderer, time, input))
+        {
+            return;
+        }
+
+        started = true;
+
         // The frame systems run on the time of this frame, whether or not the simulation advanced, so the interface and
         // the overlays of this game keep working while the clock is paused.
         world.UpdateFrame(time, pipeline);
 
         // The overlay reads the keys of this frame before the passes draw, which is what opens the console and runs a line.
         overlay.Update(time);
-
-        if (splash.Draw(renderer, time, input))
-        {
-            return;
-        }
-
-        started = true;
 
         // The splash is over, so the clock runs: from here the tick of the HUD counts the steps of this game.
         timestep.Paused = false;
