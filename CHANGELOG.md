@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `DevWindow` is the developer window of a game: a panel that stands over the frame, with a title bar that is dragged and a row of
+  tabs, one of which is shown at a time. It holds a set of `IDevWindowTab`, so a game adds a page of its own without touching the
+  window, and it draws the page inside a clip of the body so a tab cannot draw over the game around it. It opens with F1, is closed
+  with Escape, walks its pages with Tab and is kept inside the frame while it is dragged. `ConsoleTab` shows the output of the
+  console as its first page, so the window is useful the moment it is added.
+- `IClipboardService` is the clipboard of the machine, which `SilkInputService` reads from the keyboard and `NullInputService` keeps
+  in memory for a run with no window. The console uses it: Control and A, C, X and V select, copy, cut and paste, the caret is where
+  the next character lands, and the left and right, home and end keys move it while Shift extends the selection.
 - `IUserDataService` is the folder of a game that belongs to the person playing it: a game is installed read-only, so its settings,
   its saves and what it takes a picture of live under the roaming application data of the account rather than beside the executable.
   The service answers `Root`, `Data`, `Saves` and `Screenshots`, makes a folder on the first ask so a game that writes nothing

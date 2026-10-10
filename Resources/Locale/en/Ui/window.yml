@@ -5,3 +5,4 @@
 ui-entities.one: "{count} entity"
 ui-entities.other: "{count} entities"
 ui-console-title: "console"
+ui-dev-window-title: "developer window - drag the title bar, Tab walks the pages"

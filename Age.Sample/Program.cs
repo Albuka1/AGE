@@ -99,6 +99,7 @@ Entity corner = default;
 RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
 DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
 DevConsoleOverlay consoleOverlay = provider.GetRequiredService<DevConsoleOverlay>();
+DevWindow devWindow = provider.GetRequiredService<DevWindow>();
 
 // The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
 // content, so they are made before the loading starts. The settings and the language are read again in a loading step, once
@@ -335,6 +336,11 @@ loading.Add(() =>
     consoleOverlay.OpenKey = Key.GraveAccent;
     renderPipeline.Add(consoleOverlay);
     renderPipeline.Add(overlay);
+
+    // The developer window stands over everything else and holds its pages as tabs, the console output among them: it opens with
+    // F1, is dragged by its title bar and walks its pages with Tab while it is open.
+    devWindow.OpenKey = Key.F1;
+    renderPipeline.Add(devWindow);
 });
 
 ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
@@ -594,9 +600,10 @@ gameLoop.Run(
             return;
         }
 
-        // The console takes the whole input while it is open, so the keys that move the sprite belong to it rather than to the
-        // game: the sprite stands still while a line is being typed, whatever was held when the console opened.
-        if (!consoleOverlay.IsVisible)
+        // The console and the developer window take the whole input while they are open, so the keys that move the sprite belong to
+        // them rather than to the game: the sprite stands still while a line is being typed or a page is being read, whatever was
+        // held when one of them opened.
+        if (!consoleOverlay.IsVisible && !devWindow.IsOpen)
         {
             MoveFirstSprite(world, first, input, step);
         }
@@ -655,7 +662,11 @@ gameLoop.Run(
         overlay.TopMargin = consoleOverlay.PanelHeight;
         overlay.Update(time);
 
-        if (!consoleOverlay.IsVisible)
+        // The developer window is read after the console and the numbers, so a page of it takes the keys of a frame that the game
+        // below never sees while it is open: it opens with F1 and walks its pages with Tab.
+        devWindow.Update(time);
+
+        if (!consoleOverlay.IsVisible && !devWindow.IsOpen)
         {
             if (input.IsKeyPressed(Key.Q))
             {
@@ -743,7 +754,7 @@ gameLoop.Run(
         // line that is longer than the window continues on the line above rather than running off the edge.
         var hud = new (string Text, Color Colour)[]
         {
-            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, ` console, F3 numbers", Color.White),
+            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, ` console, F1 dev window, F3 numbers", Color.White),
             (locale.Get("ui-entities", ("count", world.Enumerate().Count())), Color.White),
             ($"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Color(255, 220, 120)),
             ($"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Color(255, 220, 120)),
