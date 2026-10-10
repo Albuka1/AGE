@@ -19,8 +19,9 @@ using Microsoft.Extensions.DependencyInjection;
 // has kinds of its own reads the same linter from its own host, because a kind is what the game registers:
 //
 //     var linter = new ContentLinter(prototypes, registry, assets, images);
-//     LintReport report = linter.Lint("Prototypes");
-//     LintReport sheets = linter.LintSheets("Textures");   // the grid of a sheet against its image, its version and its licence
+//     LintResult result = linter.Lint(new LintOptions { Root = "Resources", Prototypes = "Prototypes", Sheets = "Textures" });
+//
+// Every mistake is grouped under the pass that found it, which is what an editor and a person both want.
 //
 // Usage: dotnet run --project Age.Content.Lint -- [game root] [prototypes folder] [textures folder]
 string root = args.Length > 0 ? args[0] : "Resources";
@@ -46,30 +47,31 @@ IAssetLoader assets = provider.GetRequiredService<IAssetLoader>();
 assets.Initialize(root);
 
 var linter = new ContentLinter(prototypes, provider.GetRequiredService<ComponentRegistry>(), assets, provider.GetRequiredService<IImageLoader>());
-LintReport report = linter.Lint(folder);
-LintReport sheets = linter.LintSheets(textures);
-LintReport locales = linter.LintLocales("Locale");
 
-foreach (LintProblem problem in report.Problems)
+LintResult result = linter.Lint(new LintOptions
 {
-    Console.Error.WriteLine(problem);
+    Root = root,
+    Prototypes = folder,
+    Sheets = textures,
+    Locales = "Locale",
+});
+
+// A mistake is written under the pass that found it, so a person is told which part of the content to look at rather than being
+// handed one list that mixes a document with a string of a language.
+foreach (LintReport report in result.Reports)
+{
+    foreach (LintProblem problem in report.Problems)
+    {
+        Console.Error.WriteLine($"[{report.Area}] {problem}");
+    }
 }
 
-foreach (LintProblem problem in sheets.Problems)
+if (!result.IsClean)
 {
-    Console.Error.WriteLine(problem);
-}
-
-foreach (LintProblem problem in locales.Problems)
-{
-    Console.Error.WriteLine(problem);
-}
-
-if (!report.IsClean || !sheets.IsClean || !locales.IsClean)
-{
-    Console.Error.WriteLine($"The content of '{root}' holds {report.Problems.Count + sheets.Problems.Count + locales.Problems.Count} mistakes.");
+    Console.Error.WriteLine($"The content of '{root}' holds {result.ProblemCount} mistakes.");
     return 1;
 }
 
-Console.WriteLine($"The content of '{root}' is sound: prototypes {report.Count}, sheets {sheets.Count}, strings {locales.Count}.");
+string passes = string.Join(", ", result.Reports.Select(report => $"{report.Area} {report.Count}"));
+Console.WriteLine($"The content of '{root}' is sound: {passes}.");
 return 0;

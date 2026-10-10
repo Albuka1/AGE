@@ -34,10 +34,15 @@ namespace Age.Content.Lint;
 /// <code>
 /// var linter = new ContentLinter(prototypes, provider.GetRequiredService&lt;ComponentRegistry&gt;(), assets, images);
 ///
-/// LintReport report = linter.Lint("Prototypes");
-/// LintReport sheets = linter.LintSheets("Textures");
+/// LintResult result = linter.Lint(new LintOptions
+/// {
+///     Root = "Resources",
+///     Prototypes = "Prototypes",
+///     Sheets = "Textures",
+///     Locales = "Locale",
+/// });
 ///
-/// return report.IsClean &amp;&amp; sheets.IsClean ? 0 : 1;
+/// return result.IsClean ? 0 : 1;
 /// </code>
 /// </example>
 public sealed class ContentLinter
@@ -69,6 +74,52 @@ public sealed class ContentLinter
         _images = images;
     }
 
+    /// <summary>Reads every folder that the options name and reports what is wrong with the content, grouped by the pass that found it.</summary>
+    /// <param name="options">The root of the game and the folders to read, or null for a folder that is not read at all.</param>
+    /// <returns>What every pass read and what is wrong with it, in the order of the passes.</returns>
+    /// <exception cref="ArgumentNullException">The options are null.</exception>
+    /// <remarks>
+    /// This is the call a build makes: one question about the whole content, one answer a person can read, and a mistake that
+    /// names the pass it came from rather than a list that mixes a document with a string. The passes are made in the order the
+    /// folders are named on <see cref="LintOptions"/>, so a build reads its content the same way everywhere.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// LintResult result = linter.Lint(new LintOptions { Root = "Resources", Prototypes = "Prototypes", Sheets = "Textures" });
+    ///
+    /// foreach (LintReport report in result.Reports)
+    /// {
+    ///     foreach (LintProblem problem in report.Problems)
+    ///     {
+    ///         Console.Error.WriteLine($"[{report.Area}] {problem}");
+    ///     }
+    /// }
+    /// </code>
+    /// </example>
+    public LintResult Lint(LintOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var reports = new List<LintReport>(3);
+
+        if (options.Prototypes is string prototypes)
+        {
+            reports.Add(Lint(prototypes));
+        }
+
+        if (options.Sheets is string sheets)
+        {
+            reports.Add(LintSheets(sheets));
+        }
+
+        if (options.Locales is string locales)
+        {
+            reports.Add(LintLocales(locales));
+        }
+
+        return new LintResult(reports);
+    }
+
     /// <summary>Reads every document of a folder and reports what is wrong with the content.</summary>
     /// <param name="folder">The folder to read, relative to the game root, such as <c>Prototypes</c>.</param>
     /// <returns>What was read and what is wrong with it, which holds no problem when the content is sound.</returns>
@@ -90,13 +141,13 @@ public sealed class ContentLinter
         }
         catch (PrototypeException exception)
         {
-            return new LintReport(0, [new LintProblem(exception.File, exception.Line, exception.Message)]);
+            return new LintReport(LintArea.Prototypes, 0, [new LintProblem(exception.File, exception.Line, exception.Message)]);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
         {
             // A folder that cannot be walked, a loader that was never initialized, or a path that escapes the game root:
             // nothing was read, and the message of the loader is what a person has to be told.
-            return new LintReport(0, [new LintProblem(folder, 0, exception.Message)]);
+            return new LintReport(LintArea.Prototypes, 0, [new LintProblem(folder, 0, exception.Message)]);
         }
 
         var problems = new List<LintProblem>();
@@ -109,7 +160,7 @@ public sealed class ContentLinter
             }
         }
 
-        return new LintReport(count, problems);
+        return new LintReport(LintArea.Prototypes, count, problems);
     }
 
     /// <summary>Reads every document of a sprite sheet of a folder and checks it against the image beside it.</summary>
@@ -135,7 +186,7 @@ public sealed class ContentLinter
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
         {
-            return new LintReport(0, [new LintProblem(folder, 0, exception.Message)]);
+            return new LintReport(LintArea.Sheets, 0, [new LintProblem(folder, 0, exception.Message)]);
         }
 
         var problems = new List<LintProblem>();
@@ -149,7 +200,7 @@ public sealed class ContentLinter
             }
         }
 
-        return new LintReport(count, problems);
+        return new LintReport(LintArea.Sheets, count, problems);
     }
 
     /// <summary>Reads one document of a sheet and checks what it says about itself and about its image.</summary>
@@ -250,11 +301,11 @@ public sealed class ContentLinter
         catch (DirectoryNotFoundException)
         {
             // A game whose content says nothing yet has no folder of languages, which is what a game with no sheets looks like.
-            return new LintReport(0, []);
+            return new LintReport(LintArea.Locales, 0, []);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
         {
-            return new LintReport(0, [new LintProblem(folder, 0, exception.Message)]);
+            return new LintReport(LintArea.Locales, 0, [new LintProblem(folder, 0, exception.Message)]);
         }
 
         foreach (string file in files)
@@ -324,7 +375,7 @@ public sealed class ContentLinter
                 0,
                 $"the strings of a game hold the language '{LocaleService.Base}', which every other language falls back to, and this game holds {string.Join(", ", languages.Keys.Order(StringComparer.Ordinal))}"));
 
-            return new LintReport(count, problems);
+            return new LintReport(LintArea.Locales, count, problems);
         }
 
         // The rule of what a key holds is the one the service answers with, and the language it starts in does not matter to
@@ -372,7 +423,7 @@ public sealed class ContentLinter
             }
         }
 
-        return new LintReport(count, problems);
+        return new LintReport(LintArea.Locales, count, problems);
     }
 
     /// <summary>Returns the keys that the texts of a string refer to, which are what its language has to answer as well.</summary>

@@ -384,7 +384,7 @@ public sealed class ContentLinterTests
             LintReport content = linter.Lint("Prototypes");
             LintReport strings = linter.LintLocales("Locale");
 
-            return new LintReport(content.Count, [.. content.Problems, .. strings.Problems]);
+            return new LintReport(LintArea.Prototypes, content.Count, [.. content.Problems, .. strings.Problems]);
         }
         finally
         {
@@ -416,6 +416,41 @@ public sealed class ContentLinterTests
             var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
 
             return linter.Lint("Prototypes");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ContentLinter_EveryFolderOfABuild_IsReportedUnderThePassThatReadIt()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-lint-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Prototypes"));
+        Directory.CreateDirectory(Path.Combine(root, "Locale", "en"));
+
+        try
+        {
+            // A string that names the key of a missing image, and a document that names a missing one: the two are mistakes of
+            // different passes, so a person is told which part of the content to open rather than being handed one flat list.
+            File.WriteAllText(Path.Combine(root, "Prototypes", "thing.yml"), "- type: entity\n  id: Thing\n  components:\n    - type: Sprite\n      TexturePath: Textures/Nowhere/gone.png\n");
+            File.WriteAllText(Path.Combine(root, "Locale", "en", "strings.yml"), "ent-Thing: Thing\nbroken: \"{{ ent-Nothing }}\"\n");
+
+            using ServiceProvider provider = Create();
+            var assets = new NullAssetLoader();
+            assets.Initialize(root);
+            var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+            LintResult result = linter.Lint(new LintOptions { Root = root, Prototypes = "Prototypes", Locales = "Locale" });
+
+            result.IsClean.Should().BeFalse();
+            result.Reports.Should().HaveCount(2, "two folders were read, so there are two passes");
+            result.Reports[0].Area.Should().Be(LintArea.Prototypes, "the passes are made in the order the folders are named");
+            result.Reports[1].Area.Should().Be(LintArea.Locales);
+            result.Reports.Select(report => report.Area).Should().NotContain(LintArea.Sheets, "a folder that the options leave out is not read at all");
+            result.Problems.Should().HaveCount(2, "the mistakes of every pass are still there, in the order of the passes");
+            result.ProblemCount.Should().Be(2);
         }
         finally
         {
