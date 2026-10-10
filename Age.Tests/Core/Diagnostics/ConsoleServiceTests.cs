@@ -203,6 +203,45 @@ public sealed class ConsoleServiceTests
     }
 
     [Fact]
+    public void ConsoleService_Unregister_ANameThatOnlySharesItsFirstWords_RemovesNothing()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars", "Lists the settings.", _ => { });
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        // A name that walks to no level is not the command above it: 'cvars bogus' names no command, so removing it must not take
+        // 'cvars' away, which is what a walk that stopped at the last level it reached would do.
+        console.Unregister("cvars bogus").Should().BeFalse();
+        console.Execute("cvars").Should().BeTrue();
+
+        console.Commands.Should().Contain(command => command.Name == "cvars");
+    }
+
+    [Fact]
+    public void ConsoleService_Matches_APathThatNamesNoLevel_ListsNothing()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+
+        // The levels below a path that does not exist are not the levels of the part of it that matched: suggesting what follows
+        // 'cvars' for the line 'cvars bogus ' would offer a command the line cannot reach.
+        console.Matches("cvars bogus ").Should().BeEmpty();
+        console.Matches("cvars ").Select(command => command.Name).Should().Equal(new[] { "cvars set", "cvars get" });
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_AWordBehindAPathThatNamesNoLevel_LeavesTheLineAlone()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        console.SetInput("cvars bogus se");
+        console.Complete().Should().BeFalse("the path names no level, so there is nothing below it to complete to");
+        console.Input.Should().Be("cvars bogus se", "the word behind the mistake of the path is left as it was typed");
+    }
+
+    [Fact]
     public void ConsoleService_Toggle_OpensAndClosesTheConsole()
     {
         var console = new ConsoleService();

@@ -272,9 +272,14 @@ public sealed class ConsoleService : IConsoleService
             }
 
             // The path is normalized the way a registered name is, one space between its words, so a line that was typed with a tab
-            // or two spaces still walks the same nodes: the tree holds one word per level.
+            // or two spaces still walks the same nodes: the tree holds one word per level. A path that names no level has nothing
+            // below it to complete to, so a word behind a mistake of a path is left alone rather than completed to the top level.
             string[] pathWords = (end < 0 ? string.Empty : line[..end]).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            Node node = Resolve(pathWords);
+
+            if (Resolve(pathWords) is not Node node)
+            {
+                return false;
+            }
 
             string[] matches = [.. node.Children.Where(child => child.Word.StartsWith(word, StringComparison.OrdinalIgnoreCase)).Select(child => child.Word)];
 
@@ -339,14 +344,22 @@ public sealed class ConsoleService : IConsoleService
         string word = end < 0 ? line : line[(end + 1)..];
         string[] pathWords = (end < 0 ? string.Empty : line[..end]).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-        return [.. Resolve(pathWords).Children
-            .Where(child => child.Word.StartsWith(word, StringComparison.OrdinalIgnoreCase))
-            .Select(child => child.Command)];
+        // A path that names no level lists nothing rather than the levels of the part of it that matched: a line that says 'cvars
+        // bogus' has no level below it, and suggesting what follows 'cvars' would offer a command the line cannot reach.
+        return Resolve(pathWords) is Node node
+            ? [.. node.Children
+                .Where(child => child.Word.StartsWith(word, StringComparison.OrdinalIgnoreCase))
+                .Select(child => child.Command)]
+            : [];
     }
 
-    /// <summary>Returns the node the words walk to, which is the root when they walk nowhere.</summary>
-    /// <param name="words">The words of a path, in order.</param>
-    private Node Resolve(string[] words)
+    /// <summary>Returns the node the words walk to, or null when a word of the path names no level.</summary>
+    /// <param name="words">The words of a path, in order. An empty path is the root, which is always there.</param>
+    /// <remarks>
+    /// A path that names no level answers null rather than the last level it did reach: a caller that is told the walk stopped early
+    /// would suggest the levels of a path that does not exist, or remove a command that only shares its first words with the name.
+    /// </remarks>
+    private Node? Resolve(string[] words)
     {
         Node node = _root;
 
@@ -354,7 +367,7 @@ public sealed class ConsoleService : IConsoleService
         {
             if (!node.Lookup.TryGetValue(word, out Node? child))
             {
-                return node;
+                return null;
             }
 
             node = child;
@@ -423,9 +436,9 @@ public sealed class ConsoleService : IConsoleService
                 return false;
             }
 
-            Node node = Resolve(words);
-
-            if (node.Run is null)
+            // A name that walks to no level, or to a level that holds no command, is nothing to remove: the walk is not allowed to
+            // stop above the name and remove a command that only shares its first words with it.
+            if (Resolve(words) is not Node node || node.Run is null)
             {
                 return false;
             }

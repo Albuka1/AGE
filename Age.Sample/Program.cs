@@ -34,6 +34,10 @@ services.AddAgeUI();
 services.AddAgeRendering();
 services.AddAgeSilkInput();
 
+// This game says what it is called, so its settings and its saves live in a folder of its own under the roaming application data
+// of the account: `AddAgeCore` registers a name taken from the entry assembly, and the last registration is the one that answers.
+services.AddSingleton<IUserDataService>(_ => new UserDataService("AGE Sample"));
+
 using ServiceProvider provider = services.BuildServiceProvider();
 
 var world = new World();
@@ -102,12 +106,13 @@ DevConsoleOverlay consoleOverlay = provider.GetRequiredService<DevConsoleOverlay
 // plays: a setting that a settings file holds wins over the language the system is set to.
 IConsoleService console = provider.GetRequiredService<IConsoleService>();
 CVarService cvars = provider.GetRequiredService<CVarService>();
+IUserDataService userData = provider.GetRequiredService<IUserDataService>();
 Age.Content.Locale.ILocaleService locale = provider.GetRequiredService<Age.Content.Locale.ILocaleService>();
 
-// Where the choices of a person are kept: a file beside the executable, next to the scene this game saves, so a setting that
-// was written while the game ran is what the next run starts with. The language is one of those settings, which is what makes
-// a choice survive a restart.
-string settingsPath = Path.Combine(AppContext.BaseDirectory, "settings.json");
+// Where the choices of a person are kept: a file under the roaming application data of the account, in the folder of this game,
+// so a setting that was written while the game ran is what the next run starts with and the folder the game was installed into
+// stays untouched. The language is one of those settings, which is what makes a choice survive a restart.
+string settingsPath = userData.PathIn(UserDataFolder.Data, "settings.json");
 
 // The settings file is meant to be read and changed by a person, so it is written with the indentation of a document rather
 // than as one line, and the names of the settings are kept as they were registered.
@@ -139,8 +144,10 @@ void LoadSettings()
     {
         written = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(settingsPath), SettingsJson) ?? [];
     }
-    catch (JsonException)
+    catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
     {
+        // A file that is malformed, or that cannot be read because it is held by another program or the game has no right to it,
+        // is not a reason to stop the game: the settings start as they were registered and the reason is a line of the console.
         console.WriteWarning($"the settings file '{settingsPath}' does not read, so the settings start as they were registered");
         return;
     }
@@ -331,7 +338,10 @@ loading.Add(() =>
 });
 
 ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
-string scenePath = Path.Combine(AppContext.BaseDirectory, "scene.json");
+
+// The save of this game lives with the settings, under the roaming application data of the account: F writes it there and R reads
+// it back, and the folder it was installed into is never written to.
+string scenePath = userData.PathIn(UserDataFolder.Saves, "scene.json");
 
 // A scene on disk replaces the world this game built, which is why this is the last step: the content is loaded by then, so a
 // document that names a prototype of the game resolves, and the game starts with the scene rather than with the entities above.
@@ -429,6 +439,13 @@ console.Register("cvars set", "Writes a setting. Usage: cvars set spawnLifetime 
     // write went through, and a write that went through is kept: the choice survives the next run without anyone saving it.
     if (cvars.SetFromText(name, value))
     {
+        // The language is applied as a change of it as well as a setting, so `cvars set locale ru` turns the strings of the game
+        // over the way the `loc` command does rather than waiting for the next run to read the setting back.
+        if (name.Equals("locale", StringComparison.OrdinalIgnoreCase))
+        {
+            locale.Language = cvars.Get<string>("locale");
+        }
+
         console.Write($"{name} = {cvars.GetText(name)}");
         SaveSettings();
     }

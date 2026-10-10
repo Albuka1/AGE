@@ -63,8 +63,9 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 | `Age.Sample` | Console sample that wires everything together |
 | `Age.Tests` | Behavioural unit tests |
 
-Every project lives in a folder named after it at the repository root, and all build output is
-collected in a single `artifacts/` folder.
+Every project lives in a folder named after it at the repository root, and every build writes into one
+`bin/` and one `obj/` at the root вЂ” a folder per project inside each вЂ” rather than into a pair beside
+every project.
 
 Every asset the repository ships lives in one `Resources/` folder at the root, split by kind — `Audio/Effects`,
 `Audio/Samples`, `Fonts`, `Prototypes/Entities`, `Prototypes/Items`, `Textures/Icons`, `Textures/Logo`,

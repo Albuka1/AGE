@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `IUserDataService` is the folder of a game that belongs to the person playing it: a game is installed read-only, so its settings,
+  its saves and what it takes a picture of live under the roaming application data of the account rather than beside the executable.
+  The service answers `Root`, `Data`, `Saves` and `Screenshots`, makes a folder on the first ask so a game that writes nothing
+  leaves nothing behind, and turns a name of a file into a path below the folder it names, refusing a name that climbs out of it.
+  `AddAgeCore` registers one named after the entry assembly, and a game that replaces the registration names itself, as `Age.Sample`
+  does.
 - `Camera2D.ScreenToWorld` and `Camera2D.WorldToScreen` turn a point of the screen into a position of the world and back. The
   conversion is the inverse of the matrix the renderer draws with, so what a game reads is what a player sees: a click that
   became a position of the screen becomes the cell of the map that stands under it, and a name that is placed over a unit
@@ -17,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Every build writes into one `bin/` and one `obj/` at the repository root вЂ” a folder per project inside each вЂ” rather than
+  into a `bin`/`obj` pair beside every project, so the output of the whole solution is in one place and two projects that share
+  the name of an assembly cannot write over one another. `Directory.Build.props` sets `BaseOutputPath`,
+  `BaseIntermediateOutputPath` and `MSBuildProjectExtensionsPath` to those root folders; the shared `artifacts/` folder is gone.
 - A key and a mouse button are the names of the device that the window reports through, so `Age.Input.Key` and
   `Age.Input.MouseButton` are the types of the backend rather than two enumerations of the engine: `IInputService` answers about any
   key of a keyboard, a new key in a game is not a change in the engine, and the Silk.NET adapter lost its table of thirty-five pairs

@@ -25,10 +25,11 @@
          project that is a build tool rather than a part of a game turns the two names off instead. -->
     <AgeSilkInputAliases>true</AgeSilkInputAliases>
 
-    <!-- Projects sit in folders named after them at the repository root, so every build
-         writes to one shared artifacts/ folder instead of a bin/obj pair per project. -->
-    <BaseOutputPath>$(MSBuildThisFileDirectory)artifacts/bin/$(MSBuildProjectName)/</BaseOutputPath>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)artifacts/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <!-- Projects sit in folders named after them at the repository root, and every build writes into one bin/ and one obj/ at
+         the root rather than into a pair beside each project: a person finds the output of the whole solution in one place, and
+         a folder per project inside it keeps two projects that share a name of an assembly from writing over one another. -->
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin/$(MSBuildProjectName)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
     <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
 
     <!-- Every asset the repository ships sits in one Resources/ folder at the root, split by kind, so a
