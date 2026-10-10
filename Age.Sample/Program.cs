@@ -93,6 +93,7 @@ Entity panel = default;
 Entity corner = default;
 RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
 DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
+DevConsoleOverlay consoleOverlay = provider.GetRequiredService<DevConsoleOverlay>();
 
 // The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
 // content, so they are made before the loading starts. The last loading step reads the settings and the language, which is
@@ -268,9 +269,11 @@ loading.Add(() =>
     vignettePass = new VignettePass(renderer, vignette);
     renderPipeline.Add(vignettePass);
 
-    // The developer overlay draws over everything else: the numbers of the frame and the console of the engine. Its keys are
-    // Tab for the console, which pauses the simulation while it is open, and F1 for the numbers.
-    overlay.ConsoleKey = Key.Tab;
+    // The developer console takes the whole input while it is open, and the numbers of a frame are read while the game runs, so
+    // the two are passes of their own: the console opens with the grave accent, Tab completes or walks the suggestions, and F3
+    // shows and hides the numbers.
+    consoleOverlay.OpenKey = Key.GraveAccent;
+    renderPipeline.Add(consoleOverlay);
     renderPipeline.Add(overlay);
 });
 
@@ -477,9 +480,12 @@ gameLoop.Run(
             }
         }
 
-        // The logo owns the frame until the loading is done, so the game never draws a world that is only half built: the
-        // splash is kept on screen by its own duration as well, and a duration that runs out early does not start the game.
-        if (loadingStep < loading.Count || splash.Draw(renderer, time, input))
+        // The logo is drawn on every frame, including the frames of the loading, which is what makes the bar under it move: the
+        // result is kept rather than tested in the condition, because a call that is short-circuited away is a frame of the logo
+        // that was never drawn. The game starts once every step ran and the logo is done with the frame.
+        bool drawn = splash.Draw(renderer, time, input);
+
+        if (loadingStep < loading.Count || drawn)
         {
             return;
         }
@@ -490,56 +496,61 @@ gameLoop.Run(
         // the overlays of this game keep working while the clock is paused.
         world.UpdateFrame(time, pipeline);
 
-        // The overlay reads the keys of this frame before the passes draw, which is what opens the console and runs a line.
+        // The console reads the keys of this frame before the passes draw, and the numbers of a frame are read beside it. The
+        // console takes the whole input while it is visible, so the game below reads the keys only when it is not.
+        consoleOverlay.Update(time);
         overlay.Update(time);
 
         // The splash is over, so the clock runs: from here the tick of the HUD counts the steps of this game.
         timestep.Paused = false;
 
-        if (input.IsKeyPressed(Key.Q))
+        if (!consoleOverlay.IsVisible)
         {
-            timestep.Paused = !timestep.Paused;
-        }
+            if (input.IsKeyPressed(Key.Q))
+            {
+                timestep.Paused = !timestep.Paused;
+            }
 
-        // Held rather than pressed: the factor is a live state of the clock, so holding the key slows the world down and
-        // letting go brings it back to normal speed. Tab belongs to the console of the overlay.
-        timestep.TimeScale = input.IsKeyDown(Key.ControlLeft) ? 0.25d : 1d;
+            // Held rather than pressed: the factor is a live state of the clock, so holding the key slows the world down and
+            // letting go brings it back to normal speed.
+            timestep.TimeScale = input.IsKeyDown(Key.ControlLeft) ? 0.25d : 1d;
 
-        if (input.IsKeyPressed(Key.F))
-        {
-            File.WriteAllText(scenePath, scenes.Save(world));
-            Console.WriteLine($"Saved the scene to {scenePath}.");
-        }
+            if (input.IsKeyPressed(Key.F))
+            {
+                File.WriteAllText(scenePath, scenes.Save(world));
+                Console.WriteLine($"Saved the scene to {scenePath}.");
+            }
 
-        if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
-        {
-            world = LoadScene(scenes, scenePath);
-            first = FirstSprite(world);
-            SubscribeEvents(world);
-            Console.WriteLine("Loaded the scene again.");
-        }
+            if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
+            {
+                world = LoadScene(scenes, scenePath);
+                first = FirstSprite(world);
+                SubscribeEvents(world);
+                Console.WriteLine("Loaded the scene again.");
+            }
 
-        if (input.IsKeyPressed(Key.E))
-        {
-            lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
-        }
+            if (input.IsKeyPressed(Key.E))
+            {
+                lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
+            }
 
-        // The other way of drawing the world: the camera is built from the design area of this game rather than from the pixels
-        // of the window, so a window of any shape shows the same view of the world and crops what does not fit instead of
-        // stretching it. The line reports the area that is in view, which is what a person tuning a design wonders about.
-        if (input.IsKeyPressed(Key.G))
-        {
-            fitWorld = !fitWorld;
+            // The other way of drawing the world: the camera is built from the design area of this game rather than from the pixels
+            // of the window, so a window of any shape shows the same view of the world and crops what does not fit instead of
+            // stretching it. The line reports the area that is in view, which is what a person tuning a design wonders about.
+            if (input.IsKeyPressed(Key.G))
+            {
+                fitWorld = !fitWorld;
 
-            Camera2D fitted = Camera2D.Fit(design, renderer.ViewportSize, CameraFit.Cover);
-            Vector2 view = fitWorld ? fitted.VisibleWorld.Size : renderer.ViewportSize;
+                Camera2D fitted = Camera2D.Fit(design, renderer.ViewportSize, CameraFit.Cover);
+                Vector2 view = fitWorld ? fitted.VisibleWorld.Size : renderer.ViewportSize;
 
-            Console.WriteLine($"The world is {(fitWorld ? "fitted to the design area" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of it.");
-        }
+                Console.WriteLine($"The world is {(fitWorld ? "fitted to the design area" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of it.");
+            }
 
-        if (input.IsKeyPressed(Key.Escape))
-        {
-            gameLoop.Stop();
+            if (input.IsKeyPressed(Key.Escape))
+            {
+                gameLoop.Stop();
+            }
         }
 
         // The camera takes the size of the frame before the passes run, so culling and the projection of the renderer
@@ -576,22 +587,34 @@ gameLoop.Run(
         Entity canvasOf = world.Enumerate<CanvasComponent>().FirstOrDefault();
         CanvasComponent canvasState = world.Has<CanvasComponent>(canvasOf) ? world.Get<CanvasComponent>(canvasOf) : default;
 
-        // The HUD is stacked from the bottom of the window and every line is cut to its width, which is what keeps it inside a
-        // small window and clear of the developer overlay: the overlay owns the top of the frame, the HUD the bottom of it, and
-        // a line that is longer than the window stops at its edge rather than running off it.
+        // The HUD is stacked from the bottom of the window and every entry wraps into its width, which is what keeps it inside a
+        // small window and clear of the developer console: the console owns the top of the frame, the HUD the bottom of it, and a
+        // line that is longer than the window continues on the line above rather than running off the edge.
         var hud = new (string Text, Color Colour)[]
         {
-            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, Tab console, F1 numbers", Color.White),
+            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, ` console, F3 numbers", Color.White),
             (locale.Get("ui-entities", ("count", world.Enumerate().Count())), Color.White),
             ($"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Color(255, 220, 120)),
             ($"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Color(255, 220, 120)),
             ($"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", Color.White),
         };
 
-        for (int index = 0; index < hud.Length; index++)
+        // The lines of every entry are built first, because the whole block is drawn from its bottom line up: an entry that wraps
+        // into three lines pushes the entry above it up rather than over it.
+        var lines = new List<(string Text, Color Colour)>();
+
+        foreach ((string text, Color colour) in hud)
         {
-            float y = renderer.ViewportSize.Y - ((hud.Length - index) * HudLineHeight) - HudMargin;
-            DrawHud(fonts, font, hud[index].Text, y, hud[index].Colour, renderer.ViewportSize.X);
+            foreach (string line in Wrap(fonts, font, text, renderer.ViewportSize.X - (2f * HudMargin)))
+            {
+                lines.Add((line, colour));
+            }
+        }
+
+        for (int index = 0; index < lines.Count; index++)
+        {
+            float y = renderer.ViewportSize.Y - ((lines.Count - index) * HudLineHeight) - HudMargin;
+            fonts.Draw(font, lines[index].Text, new Vector2(HudMargin, y), lines[index].Colour);
         }
 
         renderer.EndFrame();
@@ -603,20 +626,33 @@ gameLoop.Run(
 // container disposes the services when it goes out of scope, and every one of those calls is a no-op by then.
 provider.GetRequiredService<GameShutdown>().Run();
 
-// Draws one line of the HUD, cut to the width of the window. A line of a developer is longer than a small window is wide, and a
-// draw of it would run off the edge of the frame and over whatever else the game puts there; the line is measured first and the
-// characters are dropped from its end until it fits, which is what a text that reports the state of a frame wants rather than an
-// error of the device.
-static void DrawHud(IFontService fonts, FontHandle font, string text, float y, Color colour, float width)
+// Wraps a line of the HUD into the width of the window, one line per run of words that fits. A line of a developer is longer than
+// a small window is wide, and a draw of it would run off the edge of the frame and over whatever else the game puts there; the
+// words are measured as they are added, and a word that would not fit starts the next line, which is what a text that reports the
+// state of a frame wants rather than an error of the device. A word that is wider than the window on its own is left on a line of
+// its own rather than being cut, because there is nowhere to break it.
+static IEnumerable<string> Wrap(IFontService fonts, FontHandle font, string text, float width)
 {
-    float available = width - (2f * HudMargin);
+    string line = string.Empty;
 
-    while (text.Length > 1 && fonts.Measure(font, text).X > available)
+    foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
     {
-        text = text[..^1];
+        string candidate = line.Length == 0 ? word : $"{line} {word}";
+
+        if (line.Length > 0 && fonts.Measure(font, candidate).X > width)
+        {
+            yield return line;
+            line = word;
+            continue;
+        }
+
+        line = candidate;
     }
 
-    fonts.Draw(font, text, new Vector2(HudMargin, y), colour);
+    if (line.Length > 0)
+    {
+        yield return line;
+    }
 }
 
 static void MoveFirstSprite(World world, Entity entity, IInputService input, GameTime time)
