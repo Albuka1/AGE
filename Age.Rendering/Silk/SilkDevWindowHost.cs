@@ -150,6 +150,13 @@ public sealed class SilkDevWindowHost : IDevWindowHost
     /// <inheritdoc />
     public void Dispose()
     {
+        // The objects of this window are deleted on the context that owns them, which is made current here: a window that the window
+        // manager asked to close is still there, with its context, until it is disposed, and its renderer has to delete its program,
+        // its buffers and its textures while that context is current. A delete that runs on the context of the game instead deletes
+        // the object of the game that holds the same number, because two contexts hand the same numbers out.
+        IWindow? window = _window;
+        window?.GLContext?.MakeCurrent();
+
         if (_mouse is not null)
         {
             _mouse.MouseDown -= OnMouseDown;
@@ -163,9 +170,14 @@ public sealed class SilkDevWindowHost : IDevWindowHost
         _renderer?.Dispose();
         _renderer = null;
 
-        _window?.Close();
-        _window?.Dispose();
+        window?.Close();
+        window?.Dispose();
         _window = null;
+
+        // The window of the game lends a context of its own while this one is open, and the deleting above made the context of this
+        // window the current one: the window of the game is made current again, or every draw of the game after this goes to a
+        // context that no longer exists and the game stands on a black frame.
+        _game?.Window.GLContext?.MakeCurrent();
     }
 
     /// <summary>Records that the left button of this window went down, which is what a click on a tab or a cross is.</summary>

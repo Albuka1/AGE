@@ -21,7 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a click on a line copies it to the clipboard, the whole line when it is wrapped over several rows. A page carries a cross only
   when it says it is `Closable`, and the console of the engine does not, so it stays while a page of a game comes and goes. A frame
   of the window makes its context current and hands the window of the game its own back afterwards, which is what keeps the game
-  drawing while the window is open.
+  drawing while the window is open. A frame of the game makes the context of its own window current rather than assuming it, and the
+  loop makes it current again before it swaps, so a frame that drew a page of the developer window does not leave the context of that
+  window behind; a window that is closed makes its own context current before its program, its buffers and its textures are deleted,
+  because a delete that runs on the context of the game instead deletes the object of the game that holds the same number and leaves
+  the game on a black frame.
 - `WindowPointer` is handed to the page that is shown, so a page reads the pointer of its own window and acts on a click inside the
   body; a click on the frame of the window is the window's own and never reaches the page.
 

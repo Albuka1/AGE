@@ -140,6 +140,12 @@ public sealed class SilkRenderer : IRenderer
     {
         GL gl = RequireContext();
 
+        // The frame is drawn on the context of the window this renderer is attached to, which is made current here rather than
+        // assumed: a second window of the operating system makes a context of its own current when it is drawn on the frame the game
+        // pumps it, and a window that was closed takes its context away with it, so what is current at the start of a frame of the
+        // game is not reliably the context of the game.
+        _windowService?.Window.GLContext?.MakeCurrent();
+
         // What a caller collected outside a frame of its own is drawn after the surface of this frame is cleared, because a
         // draw that is flushed into a clear is work that can never be seen. What a caller drew before this frame is drawn with
         // the state it was collected under, which is the projection of the camera that was set when it drew: a pass that sets
@@ -293,9 +299,14 @@ public sealed class SilkRenderer : IRenderer
     /// <inheritdoc />
     public void EndFrame()
     {
+        GL gl = RequireContext();
+
+        // The flush of the end of a frame runs on the context of this window as well, for the same reason the beginning of a frame
+        // makes it current: what is left of a window that the game pumped this frame is not the context of the game.
+        _windowService?.Window.GLContext?.MakeCurrent();
+
         Flush();
 
-        GL gl = RequireContext();
         gl.BindTexture(TextureTarget.Texture2D, 0);
         gl.BindVertexArray(0);
         gl.UseProgram(0);

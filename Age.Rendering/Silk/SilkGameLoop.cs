@@ -76,6 +76,10 @@ public sealed class SilkGameLoop : IGameLoop
             tick(new GameTime(elapsed - previous, elapsed));
             previous = elapsed;
 
+            // The context of the game window is made current again before the buffers are swapped, because a frame of the game may
+            // have drawn on a window of its own — a developer window is one — and left the context of that window current: the
+            // swap belongs to the window of the game, and what it shows is drawn through the context that is current here.
+            window.GLContext?.MakeCurrent();
             window.SwapBuffers();
         }
     }
