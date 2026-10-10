@@ -197,15 +197,34 @@ public sealed class SplashScreenTests
     }
 
     [Fact]
-    public void SplashScreen_Draw_AShareAboveOne_FillsTheWholeBar()
+    public void SplashScreen_Draw_AShareOfOneOrMore_HidesTheBar()
     {
         var renderer = new FakeRenderer();
-        var splash = new SplashScreen { Progress = 2f };
+        var splash = new SplashScreen { Progress = 1f };
 
         splash.Draw(renderer, new GameTime(0.016, 0));
 
-        renderer.Rectangles.Should().HaveCount(2);
-        renderer.Rectangles[1].Size.X.Should().BeApproximately(renderer.Rectangles[0].Size.X, 0.001f, "a share above one is clamped to a full bar");
+        renderer.Rectangles.Should().BeEmpty("a full bar is nothing left to load, so the logo stands alone");
+
+        var above = new FakeRenderer();
+        var splashAbove = new SplashScreen { Progress = 2f };
+
+        splashAbove.Draw(above, new GameTime(0.016, 0));
+
+        above.Rectangles.Should().BeEmpty("a share above one is a full bar as well");
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_AShortWindow_KeepsTheBarInsideTheViewport()
+    {
+        var renderer = new FakeRenderer { ViewportSize = new Vector2(320f, 200f) };
+        var splash = new SplashScreen { Progress = 0.5f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().HaveCount(2, "the bar is a track with the filled part over it");
+        renderer.Rectangles[0].Position.Y.Should().BeLessThan(renderer.ViewportSize.Y, "the bar hangs under the logo without falling off the bottom of a short window");
+        renderer.Rectangles[0].Position.Y.Should().BeGreaterThanOrEqualTo(0f);
     }
 
     [Fact]

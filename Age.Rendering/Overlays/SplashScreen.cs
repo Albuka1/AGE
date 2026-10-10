@@ -151,7 +151,7 @@ public sealed class SplashScreen : IDisposable
         Vector2 logoPosition = (renderer.ViewportSize - logoSize) * 0.5f;
         renderer.DrawSprite(logo, logoPosition, logoSize, Color.White);
 
-        if (ShowProgress)
+        if (ShowProgress && Progress < 1f)
         {
             DrawProgressBar(renderer, logoSize, logoPosition);
         }
@@ -193,15 +193,17 @@ public sealed class SplashScreen : IDisposable
     /// <remarks>
     /// The bar is the width of the logo and a few pixels tall, centered under it, and it is two rectangles: the track under
     /// the fill, so a bar of a share below one still reads as a bar rather than as a short line. A share of zero draws the
-    /// track alone, which is what a game that has not started loading yet shows.
+    /// track alone, which is what a game that has not started loading yet shows. The gap under the logo shrinks when the window
+    /// is too short for it, and the bar is kept inside the viewport, so a small window still shows the loading rather than a
+    /// bar that fell off the bottom of it.
     /// </remarks>
     private void DrawProgressBar(IRenderer renderer, Vector2 logoSize, Vector2 logoPosition)
     {
         float share = Math.Clamp(Progress, 0f, 1f);
         float width = logoSize.X * ProgressBarScale;
-        var track = new Rect(
-            new Vector2((renderer.ViewportSize.X - width) * 0.5f, logoPosition.Y + logoSize.Y + ProgressBarGap),
-            new Vector2(width, ProgressBarHeight));
+        float gap = MathF.Min(ProgressBarGap, MathF.Max(logoPosition.Y, 0f));
+        float y = MathF.Min(logoPosition.Y + logoSize.Y + gap, renderer.ViewportSize.Y - ProgressBarHeight);
+        var track = new Rect(new Vector2((renderer.ViewportSize.X - width) * 0.5f, y), new Vector2(width, ProgressBarHeight));
 
         renderer.DrawRectangle(track, ProgressTrackColour);
 
