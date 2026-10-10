@@ -219,7 +219,77 @@ public sealed partial class DevConsoleOverlay
         }
     }
 
-    /// <summary>One row of the panel: what a line could become and what it means.</summary>
+    /// <summary>Reads a drag of the pointer over the line that is being typed, which is what selects what it covers with the mouse.</summary>
+    /// <returns><see langword="true"/> when the pointer of this frame touched the line, so the rest of the keys are left alone.</returns>
+    /// <remarks>
+    /// A press inside the line puts the caret where it stands and starts a selection from there, and holding the button drags the other
+    /// end of it; letting go ends the drag. A press outside the line ends one that was going, which is what clicking away does.
+    /// </remarks>
+    private bool Drag()
+    {
+        Vector2 pointer = _input.MousePosition;
+        bool down = _input.IsMouseButtonDown(MouseButton.Left);
+        bool pressed = _input.IsMouseButtonPressed(MouseButton.Left);
+
+        if (pressed && !Contains(_inputRect, pointer))
+        {
+            // A click that is not on the line ends the selection a previous drag left, so a click elsewhere is not a selection that
+            // stays for the next copy.
+            _selecting = false;
+            return false;
+        }
+
+        if (pressed)
+        {
+            _selecting = true;
+
+            // The caret is moved to where the press landed without clearing the selection: the anchor is set to the same place, so the
+            // selection starts empty and grows as the pointer is dragged.
+            _console.Caret = IndexAt(pointer.X);
+            _console.SelectionAnchor = _console.Caret;
+            return true;
+        }
+
+        if (!_selecting || !down)
+        {
+            _selecting = false;
+            return false;
+        }
+
+        // The selection is extended by moving only the caret, so the anchor stays where the press landed and the two ends are the drag.
+        _console.MoveCaret(IndexAt(pointer.X) - _console.Caret);
+        return true;
+    }
+
+    /// <summary>Returns the position in a line that a horizontal position of the panel falls at, which is what a click is turned into.</summary>
+    /// <param name="x">The position of the pointer, in the pixels of the frame.</param>
+    /// <remarks>
+    /// A position past an end of the line is taken to that end, so a drag that runs off the panel still selects to the end of the line
+    /// rather than stopping short of it. A line that is measured one character at a time needs no more than the width of a character
+    /// per step, which is what the loop walks.
+    /// </remarks>
+    private int IndexAt(float x)
+    {
+        string typed = _console.Input;
+
+        for (var index = 1; index <= typed.Length; index++)
+        {
+            // The pointer is walked past one character at a time, and the first character whose right edge is past it says the position
+            // the pointer is at, which is the gap it stands in.
+            if (x < _inputRect.X + Measure(typed[..index]).X)
+            {
+                return index - 1;
+            }
+        }
+
+        return typed.Length;
+    }
+
+    /// <summary>Returns a value indicating whether a point is inside a rectangle, which is what a press on the line is tested with.</summary>
+    private static bool Contains(Rect rect, Vector2 point) =>
+        point.X >= rect.X && point.X < rect.X + Math.Max(1f, rect.Width) && point.Y >= rect.Y && point.Y < rect.Y + rect.Height;
+
+
     /// <param name="Text">The text the row completes to, which is what Tab writes into the line.</param>
     /// <param name="Description">What the row means, which is empty for a value.</param>
     private readonly record struct Suggestion(string Text, string Description);

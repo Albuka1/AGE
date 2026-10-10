@@ -82,6 +82,14 @@ public sealed partial class DevConsoleOverlay
             return;
         }
 
+        // A drag of the pointer over the line marks what it covers, which is what a person selects with the mouse rather than with the
+        // keys: it is read before the characters, so a drag that ends types nothing.
+        if (Drag())
+        {
+            _suggested = -1;
+            return;
+        }
+
         foreach (char character in _text.TypedCharacters)
         {
             _console.Type(character);

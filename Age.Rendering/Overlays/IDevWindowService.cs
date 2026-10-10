@@ -14,7 +14,7 @@ namespace Age.Rendering;
 /// and the service owns the window, its context and its renderer.
 /// </para>
 /// <para>
-/// The window takes the pages of <see cref="IDevWindowTab"/>, the same seam the in-frame <see cref="DevWindow"/> takes, so a page
+/// The window takes the pages of <see cref="IDevWindowTab"/>, which is the seam a page of the window is written against, so a page
 /// that was written for one works in the other. A game that registers a service of its own in place of <see cref="DevWindowService"/>
 /// answers this interface, which is what a headless run does with a service that opens nothing.
 /// </para>

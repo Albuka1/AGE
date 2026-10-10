@@ -9,17 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DevWindowService` is the developer window as a window of the operating system rather than a panel inside the frame: it stands
-  beside the game, is moved and closed by the window manager and holds the same `IDevWindowTab` pages the in-frame `DevWindow` holds,
-  so a page written for one works in the other. It is drawn over an `IDevWindowHost`, which `SilkDevWindowHost` answers with a second
-  Silk.NET window and a context of its own, and `NullDevWindowHost` answers with a window that is never there for a headless run. The
-  window is created the first time it is opened and its size is kept while it is closed. Both windows carry crosses: the cross of a
-  tab removes that page, and the cross of the title bar closes the window.
-- `DevWindow` is the developer window of a game: a panel that stands over the frame, with a title bar that is dragged and a row of
-  tabs, one of which is shown at a time. It holds a set of `IDevWindowTab`, so a game adds a page of its own without touching the
-  window, and it draws the page inside a clip of the body so a tab cannot draw over the game around it. It opens with F1, is closed
-  with Escape, walks its pages with Tab and is kept inside the frame while it is dragged. `ConsoleTab` shows the output of the
-  console as its first page, so the window is useful the moment it is added.
+- `DevWindowService` is the developer window: a window of the operating system that stands beside the game rather than a panel over
+  the frame, so it is drawn at the resolution of the display and is moved by the window manager. It holds a set of `IDevWindowTab`
+  pages and draws each into a `IDevWindowHost`, which `SilkDevWindowHost` answers with a second Silk.NET window and a context of its
+  own and `NullDevWindowHost` answers with a window that is never there for a headless run. The window is created the first time it is
+  opened and its size is kept while it is closed. The cross of a tab removes that page and the cross of the title bar closes the
+  window. `ConsoleTab` shows the output of the console, and a click on a line copies it to the clipboard.
+- `WindowPointer` is handed to the page that is shown, so a page reads the pointer of its own window and acts on a click inside the
+  body; a click on the frame of the window is the window's own and never reaches the page.
+
 - `IClipboardService` is the clipboard of the machine, which `SilkInputService` reads from the keyboard and `NullInputService` keeps
   in memory for a run with no window. The console uses it: Control and A, C, X and V select, copy, cut and paste, the caret is where
   the next character lands, and the left and right, home and end keys move it while Shift extends the selection.

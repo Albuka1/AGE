@@ -99,8 +99,7 @@ Entity corner = default;
 RenderPipeline renderPipeline = provider.GetRequiredService<RenderPipeline>();
 DevOverlay overlay = provider.GetRequiredService<DevOverlay>();
 DevConsoleOverlay consoleOverlay = provider.GetRequiredService<DevConsoleOverlay>();
-DevWindow devWindow = provider.GetRequiredService<DevWindow>();
-IDevWindowService devWindowOut = provider.GetRequiredService<IDevWindowService>();
+IDevWindowService devWindow = provider.GetRequiredService<IDevWindowService>();
 
 // The console of the engine, the settings of this game and the language its strings are read in: none of them needs the
 // content, so they are made before the loading starts. The settings and the language are read again in a loading step, once
@@ -337,11 +336,6 @@ loading.Add(() =>
     consoleOverlay.OpenKey = Key.GraveAccent;
     renderPipeline.Add(consoleOverlay);
     renderPipeline.Add(overlay);
-
-    // The developer window stands over everything else and holds its pages as tabs, the console output among them: it opens with
-    // F1, is dragged by its title bar and walks its pages with Tab while it is open.
-    devWindow.OpenKey = Key.F1;
-    renderPipeline.Add(devWindow);
 });
 
 ISceneSerializer scenes = provider.GetRequiredService<ISceneSerializer>();
@@ -591,6 +585,14 @@ console.Register("fit", "Reports how the camera of the world is built and switch
 // `quit` is not surprised by it: the loop stops once the frame that runs the command is drawn, which is what the shutdown waits for.
 console.Register("quit", "Closes the game.", _ => gameLoop.Stop());
 
+// The developer window stands beside the game as a window of the operating system rather than a panel over the frame, so it is opened
+// by a command rather than a key: what it holds is a place to look at the engine, and a key of a game is better spent on the game.
+console.Register("devwindow", "Shows or hides the developer window beside the game.", _ =>
+{
+    devWindow.Toggle();
+    console.Write($"developer window {(devWindow.IsOpen ? "open" : "closed")}");
+});
+
 // The simulation runs in fixed steps, so movement, collision and the UI advance by the same amount on every frame at any
 // frame rate. The loading, the splash, the keys and the drawing run once per frame, and the simulation stays paused until
 // the last loading step is done, so nothing moves behind the logo. `Q` pauses the clock, which stops the steps without
@@ -667,18 +669,9 @@ gameLoop.Run(
         overlay.TopMargin = consoleOverlay.PanelHeight;
         overlay.Update(time);
 
-        // The developer window is read after the console and the numbers, so a page of it takes the keys of a frame that the game
-        // below never sees while it is open: it opens with F1 and walks its pages with Tab.
-        devWindow.Update(time);
-
-        // The window of the operating system stands beside the game rather than over it, so it is opened with a key of its own and
-        // pumped every frame: pumping it draws its page, which is what keeps it in step with the game without a loop of its own.
-        if (input.IsKeyPressed(Key.F2))
-        {
-            devWindowOut.Toggle();
-        }
-
-        devWindowOut.Pump(time);
+        // The developer window stands beside the game rather than over it, so it is opened by the `devwindow` command of the console
+        // and pumped every frame: pumping it draws its page, which is what keeps it in step with the game without a loop of its own.
+        devWindow.Pump(time);
 
         if (!consoleOverlay.IsVisible && !devWindow.IsOpen)
         {
@@ -763,7 +756,7 @@ gameLoop.Run(
         // line that is longer than the window continues on the line above rather than running off the edge.
         var hud = new (string Text, Color Colour)[]
         {
-            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, ` console, F1 dev panel, F2 dev window, F3 numbers, quit to leave", Color.White),
+            ($"AGE {version} - WASD move, E spawn, click the panel for a sound, F save, R load, Q pause, Ctrl slow motion, G world fit, ` console, F3 numbers, devwindow beside the game, quit to leave", Color.White),
             (locale.Get("ui-entities", ("count", world.Enumerate().Count())), Color.White),
             ($"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Color(255, 220, 120)),
             ($"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Color(255, 220, 120)),
@@ -797,7 +790,7 @@ gameLoop.Run(
 // container disposes the services when it goes out of scope, and every one of those calls is a no-op by then.
 // The window of the operating system is closed before the rest of the shutdown, because it owns a context of its own: what it holds
 // goes with it while the window of the game is still open.
-devWindowOut.Dispose();
+devWindow.Dispose();
 
 provider.GetRequiredService<GameShutdown>().Run();
 

@@ -99,6 +99,11 @@ public sealed partial class DevConsoleOverlay
         // The caret is a small block where the next character lands, which is what a console of a terminal shows in place of a cursor.
         float caretX = lineStart + Measure(typed[..Math.Clamp(_console.Caret, 0, typed.Length)]).X;
         _renderer.DrawRectangle(new Rect(new Vector2(caretX, y + 2f), new Vector2(2f, _line - 6f)), TextColour);
+
+        // The line that is typed is remembered as a rectangle, because a drag of the pointer is turned into a position in the line by
+        // it: a frame reads the pointer before it draws, so the rectangle of the frame before is the best one it has, and a line of a
+        // console does not move between two frames while it is being dragged over.
+        _inputRect = new Rect(new Vector2(lineStart, y), new Vector2(Math.Max(1f, Measure(typed).X), _line));
         y += _line;
 
         for (int index = 0; index < suggestions.Count; index++)

@@ -293,6 +293,40 @@ public sealed class DevConsoleOverlayTests
         renderer.Drawn.Should().Contain("line 19", "the wheel moved the output back to its end");
     }
 
+    [Fact]
+    public void DevConsoleOverlay_Update_ADragOfThePointerSelectsPartOfTheLine()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        DevConsoleOverlay overlay = Create(console, input, text: text, renderer: new RecordingRenderer());
+        overlay.AnimationDuration = 0f;
+
+        Press(overlay, input, overlay.OpenKey);
+        text.Type("cvars set locale ru");
+        Frame(overlay, input);
+
+        // A frame is drawn first, because the line the pointer is dragged over is remembered by the draw that placed it.
+        overlay.Render(new World(), new Camera2D());
+
+        // The line starts after the prompt of two characters. The panel is ten pixels from the edge, the header is 26 pixels tall and
+        // the built-in font is eight pixels a character, so the line begins at 10 + 16 = 26, at a row 26 + 10 = 36 pixels down.
+        const float LineStart = 26f;
+        const float LineY = 36f;
+
+        // The press lands at the start of the line and the drag runs five characters in, which covers the word 'cvars'.
+        input.MovePointer(new Vector2(LineStart, LineY));
+        input.PressMouse(MouseButton.Left);
+        overlay.Update(new GameTime(0.016d, 0.016d));
+
+        input.MovePointer(new Vector2(LineStart + (5f * 8f), LineY));
+        input.BeginFrame();
+        input.HoldMouse(MouseButton.Left);
+        overlay.Update(new GameTime(0.016d, 0.032d));
+
+        console.Selection.Should().Be("cvars", "the drag selected from where the press landed to where it stopped");
+    }
+
 
 
     [Fact]
@@ -451,8 +485,24 @@ public sealed class DevConsoleOverlayTests
     {
         private readonly HashSet<Key> _pressed = [];
         private readonly HashSet<Key> _down = [];
+        private readonly HashSet<MouseButton> _mousePressed = [];
+        private readonly HashSet<MouseButton> _mouseDown = [];
+        private Vector2 _pointer;
 
-        public Vector2 MousePosition => Vector2.Zero;
+        public Vector2 MousePosition => _pointer;
+
+        /// <summary>Moves the pointer, which is what a drag of the mouse reports every frame.</summary>
+        public void MovePointer(Vector2 position) => _pointer = position;
+
+        /// <summary>Records the left button as pressed for the frame that is open, which is how a device reports a transition.</summary>
+        public void PressMouse(MouseButton button)
+        {
+            _mousePressed.Add(button);
+            _mouseDown.Add(button);
+        }
+
+        /// <summary>Records the left button as held without a transition, which is what a device reports while it stays down.</summary>
+        public void HoldMouse(MouseButton button) => _mouseDown.Add(button);
 
         /// <summary>Records a key as pressed for the frame that is open, which is how a device reports a transition.</summary>
         public void Press(Key key)
@@ -470,6 +520,7 @@ public sealed class DevConsoleOverlayTests
         public void BeginFrame()
         {
             _pressed.Clear();
+            _mousePressed.Clear();
 
             // The wheel is a measurement of one frame rather than a state that is held, so the frame boundary forgets it.
             MouseWheel = 0f;
@@ -479,9 +530,9 @@ public sealed class DevConsoleOverlayTests
 
         public bool IsKeyPressed(Key key) => _pressed.Contains(key);
 
-        public bool IsMouseButtonDown(MouseButton button) => false;
+        public bool IsMouseButtonDown(MouseButton button) => _mouseDown.Contains(button);
 
-        public bool IsMouseButtonPressed(MouseButton button) => false;
+        public bool IsMouseButtonPressed(MouseButton button) => _mousePressed.Contains(button);
 
         /// <summary>Gets or sets how far the wheel was turned for the frame that is open, which a test sets to scroll the output.</summary>
         public float MouseWheel { get; set; }

@@ -92,7 +92,7 @@ public sealed class DevWindowServiceTests
 
         public bool Updated { get; private set; }
 
-        public void Update(in GameTime frame, Rect body) => Updated = true;
+        public void Update(in GameTime frame, Rect body, in WindowPointer pointer) => Updated = true;
 
         public void Render(IRenderer renderer, Rect body)
         {

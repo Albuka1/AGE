@@ -29,6 +29,7 @@ public sealed class SilkDevWindowHost : IDevWindowHost
     private Vector2? _clicked;
     private bool _clickReported;
     private Vector2 _pointer;
+    private bool _down;
 
     /// <inheritdoc />
     public bool IsOpen => _window is { IsClosing: false };
@@ -40,6 +41,9 @@ public sealed class SilkDevWindowHost : IDevWindowHost
 
     /// <inheritdoc />
     public Vector2 Pointer => _pointer;
+
+    /// <inheritdoc />
+    public bool PointerDown => _down;
 
     /// <inheritdoc />
     public void Create(int width, int height, string title)
@@ -54,8 +58,12 @@ public sealed class SilkDevWindowHost : IDevWindowHost
             Size = new Vector2D<int>(width, height),
             Title = title,
             API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3)),
-            // The window stands beside the game rather than taking its place, and it is drawn on every frame the game pumps it
-            // rather than on a loop of its own, so its updates are driven rather than continuous.
+
+            // The window stands beside the game rather than taking its place, and it is drawn on the frame the game pumps it rather
+            // than on a loop of its own. A window that is driven rather than event-driven is what keeps it from waiting for events of
+            // its own: an event-driven window blocks in DoEvents until one arrives, and two of them on one thread is what hangs the
+            // game, because the events of every window arrive through the one platform of the process.
+            IsEventDriven = false,
             IsVisible = true,
             VSync = false,
         };
@@ -72,6 +80,7 @@ public sealed class SilkDevWindowHost : IDevWindowHost
         if (_mouse is not null)
         {
             _mouse.MouseDown += OnMouseDown;
+            _mouse.MouseUp += OnMouseUp;
         }
     }
 
@@ -130,6 +139,7 @@ public sealed class SilkDevWindowHost : IDevWindowHost
         if (_mouse is not null)
         {
             _mouse.MouseDown -= OnMouseDown;
+            _mouse.MouseUp -= OnMouseUp;
         }
 
         _input?.Dispose();
@@ -151,6 +161,16 @@ public sealed class SilkDevWindowHost : IDevWindowHost
         {
             _clicked = new Vector2(mouse.Position.X, mouse.Position.Y);
             _clickReported = true;
+            _down = true;
+        }
+    }
+
+    /// <summary>Records that the left button of this window came up, which is what the end of a drag of a selection is.</summary>
+    private void OnMouseUp(IMouse mouse, MouseButton button)
+    {
+        if (button == MouseButton.Left)
+        {
+            _down = false;
         }
     }
 

@@ -8,8 +8,8 @@ namespace Age.Rendering;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The page of a tab is drawn by the tab itself and the frame of the window — the title bar, the row of tabs, the crosses and the
-/// clip of the body — is drawn here, which is the same split <see cref="DevWindow"/> makes for a panel inside the game. A page that
+/// The page of a tab is drawn by the tab itself and the frame of the window вЂ” the title bar, the row of tabs, the crosses and the
+/// clip of the body вЂ” is drawn here, which is what the window owns and what a page leaves to it.
 /// was written for one works in the other, because the seam is <see cref="IDevWindowTab"/> either way.
 /// </para>
 /// <para>
@@ -142,7 +142,7 @@ public sealed class DevWindowService : IDevWindowService
     /// <inheritdoc />
     public void Close()
     {
-        // The window of the operating system is closed rather than kept hidden, so what it owns — a context and its surface — goes
+        // The window of the operating system is closed rather than kept hidden, so what it owns вЂ” a context and its surface вЂ” goes
         // with it, and a game that opens it again creates a window of its own rather than holding one for the whole run.
         _host.Dispose();
         _open = false;
@@ -182,14 +182,19 @@ public sealed class DevWindowService : IDevWindowService
             return;
         }
 
-        if (clicked is Vector2 point)
+        // A click on the frame of the window is the window's own вЂ” a cross or a tab вЂ” and a click inside the body is the page's. The
+        // window reads its own first, so a click that closed a tab never reaches the page below it.
+        bool insideBody = clicked is Vector2 where && Body(_host.Size) is Rect body && Contains(body, where);
+
+        if (clicked is Vector2 point && !insideBody)
         {
             Clicked(point);
         }
 
         if (_tabs.Count > 0)
         {
-            _tabs[_active].Update(frame, Body(_host.Size));
+            var pointer = new WindowPointer(_host.Pointer, insideBody, _host.PointerDown);
+            _tabs[_active].Update(frame, Body(_host.Size), pointer);
         }
 
         _host.EndFrame();

@@ -43,17 +43,14 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<DevOverlay>();
         services.AddSingleton(provider => new ConsoleTab(
             provider.GetRequiredService<IConsoleService>(),
+            provider.GetService<IClipboardService>(),
             provider.GetService<TextRenderer>()));
-        services.AddSingleton(provider => new DevWindow(
-            provider.GetRequiredService<IInputService>(),
-            provider.GetRequiredService<IRenderer>(),
-            provider.GetService<TextRenderer>(),
-            provider.GetService<ITextSource>())
-            .Add(provider.GetRequiredService<ConsoleTab>()));
 
-        // The developer window that stands beside the game is a window of the operating system: its host creates the window and the
-        // service draws the tabs into it. Register a host of your own — a null host leaves it with its pages and nothing drawn — to
-        // change where it is drawn, and the service is what a game pumps each frame.
+        // The developer window stands beside the game as a window of the operating system rather than as a panel over the frame: its
+        // host creates the window and the service draws the pages into it. Register a host of your own — a null host leaves it with its
+        // pages and nothing drawn — to change where it is drawn, and the service is what a game pumps each frame. A game that cannot
+        // open a second window is better off with no developer window than with one that hangs it, which is why nothing is drawn when
+        // no host is given.
         services.AddSingleton<IDevWindowHost, SilkDevWindowHost>();
         services.AddSingleton<IDevWindowService>(provider => new DevWindowService(
             provider.GetRequiredService<IDevWindowHost>(),

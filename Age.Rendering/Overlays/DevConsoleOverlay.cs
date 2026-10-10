@@ -91,6 +91,12 @@ public sealed partial class DevConsoleOverlay : IRenderPass
     /// <summary>The rows the output is scrolled up by, where zero keeps the newest row in view.</summary>
     private int _scrolled;
 
+    /// <summary>The rectangle of the line that is being typed, as it was drawn last, which is what turns a drag into a position in the line.</summary>
+    private Rect _inputRect;
+
+    /// <summary>Whether the pointer is dragging a selection over the line that is being typed.</summary>
+    private bool _selecting;
+
     /// <summary>The provider of the values a game offers for the word that is being typed, or null when it offers none.</summary>
     private Func<string, IEnumerable<string>>? _values;
 

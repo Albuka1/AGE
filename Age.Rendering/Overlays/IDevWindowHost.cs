@@ -22,6 +22,9 @@ public interface IDevWindowHost
     /// <summary>Gets the pointer position in the window, in pixels, with the origin at its top-left corner.</summary>
     Vector2 Pointer { get; }
 
+    /// <summary>Gets a value indicating whether the left button of the pointer is held down.</summary>
+    bool PointerDown { get; }
+
     /// <summary>Creates the window the first time it is opened, which is what makes a window that is never opened cost nothing.</summary>
     /// <param name="width">The width of the window, in pixels.</param>
     /// <param name="height">The height of the window, in pixels.</param>

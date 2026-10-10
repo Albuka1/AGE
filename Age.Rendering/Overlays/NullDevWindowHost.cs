@@ -19,7 +19,11 @@ public sealed class NullDevWindowHost : IDevWindowHost
     public Vector2 Size { get; private set; }
 
     /// <inheritdoc />
+    /// <remarks>The pointer of a window that is never there does not exist, so it is nowhere and not held.</remarks>
     public Vector2 Pointer => Vector2.Zero;
+
+    /// <inheritdoc />
+    public bool PointerDown => false;
 
     /// <inheritdoc />
     public void Create(int width, int height, string title)
