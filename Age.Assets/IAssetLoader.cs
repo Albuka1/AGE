@@ -26,6 +26,12 @@ public interface IAssetLoader
     /// <exception cref="ArgumentException">The root is null, empty or whitespace.</exception>
     void Initialize(string gameRoot);
 
+    /// <summary>Gets the folder that the loader was initialized with, or null when it was not initialized yet.</summary>
+    /// <remarks>
+    /// A tool that is handed the folders of a game wants to know where the loader reads them from, so that a root of its own and a root of the loader are not two different games: <c>Age.Content.Lint</c> answers with this before it reads anything.
+    /// </remarks>
+    string? Root { get; }
+
     /// <summary>Determines whether a file exists at the given path relative to the game root.</summary>
     /// <param name="relativePath">The path of the file, relative to the game root.</param>
     /// <returns><see langword="true"/> when a file exists at that path.</returns>

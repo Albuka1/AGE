@@ -64,7 +64,30 @@ public sealed class EntityPrototype : IPrototype
     /// <summary>Reads the data of an entity, which is what a game registers as the kind <see cref="Kind"/>.</summary>
     /// <param name="data">The prototype that a document declared.</param>
     /// <returns>The data of the entity.</returns>
-    public static EntityPrototype Read(Prototype data) => new(data);
+    /// <exception cref="ArgumentNullException">The data is null.</exception>
+    /// <exception cref="PrototypeException">A field of the document is not one an entity carries.</exception>
+    /// <remarks>
+    /// An entity carries components and nothing else, so a field a document writes beside them is a mistake of the content: the
+    /// manager carries such a field for a kind that declares it, and a kind that does not is what refuses it here. Without this a
+    /// document that wrote <c>position: 3</c> where it meant a component would be read and dropped, which is the one thing the
+    /// content of the engine never does.
+    /// </remarks>
+    public static EntityPrototype Read(Prototype data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        if (data.Fields.Count > 0)
+        {
+            PrototypeComponent field = data.Fields[0];
+
+            throw new PrototypeException(
+                $"{field.File}: the entity '{data.Id}' writes the field '{field.Name}', and an entity carries components rather than fields of its own: what it holds is a list of components under 'components'",
+                field.File,
+                field.Line);
+        }
+
+        return new EntityPrototype(data);
+    }
 
     /// <inheritdoc />
     public override string ToString() => $"entity '{Id}'";

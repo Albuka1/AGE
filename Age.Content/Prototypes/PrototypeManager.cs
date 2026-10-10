@@ -172,6 +172,7 @@ public sealed class PrototypeManager : IPrototypeManager
         string? nameKey = null;
         string? descKey = null;
         var components = new List<PrototypeComponent>();
+        var fields = new List<PrototypeComponent>();
 
         foreach (YamlEntry entry in mapping.Entries)
         {
@@ -204,8 +205,13 @@ public sealed class PrototypeManager : IPrototypeManager
                     ReadComponents(name, entry, components);
                     break;
 
+                // What is left is data of the kind rather than of the components of a thing: the stage, the values and the
+                // uniforms of a material are fields of the document, and the kind that reads it is what says which of them it
+                // knows. The manager carries them the way it carries a component, so a kind reads the document with the same
+                // names, the file and the line.
                 default:
-                    throw new PrototypeException($"{name}: '{entry.Name}' is not a field of a prototype, and a prototype holds id, type, name, desc, parent and components", name, entry.Line);
+                    fields.Add(new PrototypeComponent(entry.Name, YamlJson.Write(entry.Value), name, entry.Line));
+                    break;
             }
         }
 
@@ -219,7 +225,7 @@ public sealed class PrototypeManager : IPrototypeManager
             throw new PrototypeException($"{name}: the identifier '{id}' was already declared in {declared.File}", name, mapping.Line);
         }
 
-        var prototype = new Prototype(id, kind ?? "prototype", parent, nameKey, descKey, name, mapping.Line, components);
+        var prototype = new Prototype(id, kind ?? "prototype", parent, nameKey, descKey, name, mapping.Line, components, fields);
         _declared[id] = prototype;
         _order.Add(prototype);
     }
@@ -328,6 +334,7 @@ public sealed class PrototypeManager : IPrototypeManager
         }
 
         IReadOnlyList<PrototypeComponent> components = declared.Components;
+        IReadOnlyList<PrototypeComponent> fields = declared.Fields;
         string? nameKey = declared.NameKey;
         string? descKey = declared.DescKey;
 
@@ -340,6 +347,7 @@ public sealed class PrototypeManager : IPrototypeManager
 
             Prototype inherited = Resolve(parent, chain);
             components = Merge(inherited.Components, declared.Components);
+            fields = Merge(inherited.Fields, declared.Fields);
 
             // What names a thing is inherited the way a component is: a document that writes none takes the word of the kind
             // it inherits, so a name is written once where the kind is declared rather than once per thing.
@@ -349,7 +357,7 @@ public sealed class PrototypeManager : IPrototypeManager
 
         Validate(declared, components);
 
-        var prototype = new Prototype(declared.Id, declared.Kind, declared.Parent, nameKey, descKey, declared.File, declared.Line, components);
+        var prototype = new Prototype(declared.Id, declared.Kind, declared.Parent, nameKey, descKey, declared.File, declared.Line, components, fields);
         _resolved[declared.Id] = prototype;
         return prototype;
     }

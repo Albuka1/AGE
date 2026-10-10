@@ -21,8 +21,13 @@ public interface IInputService
     void BeginFrame();
 
     /// <summary>Determines whether the key is currently held down.</summary>
-    /// <param name="key">The key to inspect.</param>
+    /// <param name="key">The key to inspect, which is a <see cref="Key"/> of the device that the window reports through.</param>
     /// <returns><see langword="true"/> while the key is held, including the frame it was pressed on.</returns>
+    /// <remarks>
+    /// A game asks about any key of a keyboard rather than about a list the engine keeps, because the names of the keys are the
+    /// names of the device: <c>IsKeyDown(Key.W)</c>, <c>IsKeyDown(Key.Escape)</c>, and a key that no keyboard has is simply never
+    /// down. That is what keeps a new key in a game from being a change in the engine.
+    /// </remarks>
     bool IsKeyDown(Key key);
 
     /// <summary>Determines whether the key transitioned to the down state during the current frame.</summary>

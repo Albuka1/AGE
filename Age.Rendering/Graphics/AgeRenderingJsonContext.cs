@@ -12,6 +12,7 @@ namespace Age.Rendering;
 [JsonSourceGenerationOptions(WriteIndented = true, IncludeFields = true, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(SpriteComponent))]
 [JsonSerializable(typeof(SpriteLayer))]
+[JsonSerializable(typeof(Material))]
 [JsonSerializable(typeof(TextComponent))]
 [JsonSerializable(typeof(SpriteAnimationComponent))]
 internal sealed partial class AgeRenderingJsonContext : JsonSerializerContext

@@ -14,20 +14,21 @@ An interface is authored against a resolution of its own: a canvas scales it to 
 it where it belongs at any size or shape of a window, and a camera that fits a design area to a window does the same for the
 world. A shader of a game draws with the frame it is drawn into — the world, the text and the interface as they stand — and a
 render target is what holds a layer of a frame that is processed more than once. A sprite is drawn from layers of its own, each
-of them naming an image and the stage that draws it.
+of them naming an image and the material that draws it, and a material is content of its own: a document holds the stages of a
+program and the values its uniforms start with, so a hundred sprites that shine the same way are a hundred names of one material.
+A build reads its content in passes, and a mistake is grouped under the pass that found it, so a person who is told to fix a sheet
+is not sent looking at a string of a language.
 
 What remains are the content features the engine does not have yet, and then the platform work.
 
 ## Features
 
-- Sprite sheets and animation: slicing an atlas into frames and named regions, and a system that advances them.
 - UI widgets beyond a button and a label — slider, drop-down, check box, text field, scrollable panel — which the anchors, the
-  scaler of a canvas and the pointer test of the interface are already in place for.
+  scaler of a canvas and the pointer test of the interface are already in place for. The widgets are components rather than kinds
+  of entity: a slider is a component a game attaches to whatever it wants to slide, and the same holds for the rest of them, so
+  a game lays its settings out with them instead of writing each one again.
 - Positional audio: voices whose position can change, a listener that follows the camera, and the falloff between them.
 - Hierarchy.
-- Materials: the values of the uniforms of a stage as content of their own. A layer of a sprite names the image and the stage it
-  is drawn with, so what is left is what a stage reads besides them: a document that holds the uniforms of a shader, and a draw
-  that sets them from it rather than from the code of a game.
 - OBB collision and multiple contacts.
 - A splash screen that works: the resources and the systems of the engine and of a game load while the logo is on screen, with
   a bar under it, instead of a window that stands empty until everything is ready.
@@ -39,6 +40,8 @@ What remains are the content features the engine does not have yet, and then the
   tooltip, and the strings of both of them read from the content like every other string of a game.
 - Text beyond fitting a line into a box: the kerning of a font is not read, one text carries one style, and a script that is
   written right to left or a font whose glyphs are colored pictures needs more than the layout has today.
+- A material is shared by name and not by value: what is left of it is the values a frame computes, a uniform that a pass sets
+  while it runs, and two stages of one sprite that read one set of uniforms rather than two documents that declare the same one.
 
 ## Platform
 

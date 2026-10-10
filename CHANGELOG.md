@@ -9,13 +9,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A sprite is drawn from layers, each of them with an image and a shader of its own: `SpriteComponent.Layers` holds them in the
+- `Camera2D.ScreenToWorld` and `Camera2D.WorldToScreen` turn a point of the screen into a position of the world and back. The
+  conversion is the inverse of the matrix the renderer draws with, so what a game reads is what a player sees: a click that
+  became a position of the screen becomes the cell of the map that stands under it, and a name that is placed over a unit
+  becomes the pixel it is drawn at. Neither direction remembers anything, so a camera that moved or zoomed between the frame the
+  pointer was read in and the call answers for where it stands now.
+
+### Changed
+
+- A key and a mouse button are the names of the device that the window reports through, so `Age.Input.Key` and
+  `Age.Input.MouseButton` are the types of the backend rather than two enumerations of the engine: `IInputService` answers about any
+  key of a keyboard, a new key in a game is not a change in the engine, and the Silk.NET adapter lost its table of thirty-five pairs
+  and the bookkeeping that merged the two Shift, Control and Alt keys. The names are the same everywhere: `Key.W`, `Key.Escape`,
+  `Key.ControlLeft`, `MouseButton.Left`.
+- A lint reports its mistakes grouped by the pass that found them: `LintReport` carries the `LintArea` it belongs to, `LintResult`
+  holds the report of every pass, and `ContentLinter.Lint(LintOptions)` is the one call a build makes, which reads the folders the
+  options name and answers in the order of the passes. The command line tool writes each mistake under the pass that found it, and
+  the passes themselves — `Lint`, `LintSheets` and `LintLocales` — answer exactly what they did.
+
+### Fixed
+
+- A value that a layer wrote itself and that its kind cannot hold no longer takes the rest of the frame with it: the value is
+  refused and reported, and the values around it are still sent. A frame reads the values of a layer on every draw and has
+  nowhere to report a mistake of the content to but the log, so a mistake in one value used to stop the whole draw of that layer
+  and leave every uniform written after it unset, on that frame and on every frame after it.
+- A value a layer wrote itself was read by nothing: `Material.Uniforms` was documented, written to a scene, and then ignored when
+  the layer was drawn, so two sprites that shared a material could not differ by one number. The values of a layer are sent after
+  the ones of the material it names now, so a name the material declares is overridden and one it does not is added, which is what
+  keeps a beacon that pulses faster than another from declaring a second material with everything written twice. The values are read
+  exactly where the values of a material are, so a value that its kind cannot hold is refused with the name of the layer and of the
+  uniform. The examples of the content, the quickstart and the reference write a value as a block, because the flow style is not
+  part of the subset of YAML that the content of the engine is read with.
+
+### Added
+
+- A sprite is drawn from layers, each of them with an image and a material of its own: `SpriteComponent.Layers` holds them in the
   order they are drawn, every layer is drawn over the one before it at the position, the size and the colour of the sprite, and a
-  layer that names no shader is drawn with the program of the engine, which is what an unshaded layer is. The stage of a layer is
-  compiled on the first frame that draws it and kept while the renderer stays attached to the window that compiled it, so a layer
-  costs one lookup per frame rather than one file read; a stage that cannot be loaded is reported once in the log and the layer is
-  drawn without it. A document writes a layer where it writes the sprite, so `Age.Content.Lint` checks the image and the stage of
-  every layer against the files of a build the way it checks the image of a sprite.
+  layer that names no material is drawn with the program of the engine, which is what an unshaded layer is. A layer names a
+  material of the content — `Material: { Id: Pulse }` — rather than the path of a stage, so one document of a program and its
+  values draws every sprite that names it, and a layer that writes `Fragment` and `Vertex` itself is drawn by those stages
+  instead. The program of a material is compiled on the first frame that draws it and kept while the renderer stays attached to
+  the window that compiled it, so a layer costs one lookup per frame rather than one file read; a stage or a material that cannot
+  be read is reported once in the log and the layer is drawn without it.
+- A material is content of its own: a document of the kind `material` declares the stage of a shader and the values its uniforms
+  start with, and `IMaterialService` reads, registers and draws them. A value is written the way GLSL names its type — `float`,
+  `int`, `vec2`, `vec3`, `vec4` and `color`, the last one in bytes like every other colour of the content — so a stage that reads
+  one number as a float and one it reads as an int are told apart, and a value that its kind cannot hold is refused where the
+  content is read rather than in a frame. `MaterialPrototype.Read<T>` reads the values of a material into the struct of a game, so
+  a document and a pass of a game describe the same uniforms once. The kinds of the content are registered per assembly, which is
+  what lets a document carry the data of a kind rather than only the components of a thing.
 - A game draws with a shader of its own: `IShaderService` reads the stages of a shader from the content, compiles them with the
   renderer and keeps one program per pair of paths, and `IRenderer.UseShader`, `SetUniform` and `SetSampler` draw the quads
   that follow with it — the quads that were collected before a shader or a uniform changes are drawn first, because one draw

@@ -23,7 +23,7 @@ namespace Age.Rendering;
 /// A part of a character is either a layer of one sprite or an entity of its own. The engine draws in <see cref="ZOrder"/>, so
 /// a body, its clothes and the effect over them are three entities at the same position with three orders, each of them with
 /// its own sheet and its own animation, which is what a part that moves on its own needs. They are the layers of one sprite
-/// when they are one picture drawn in one place: a layer brings an image and a shader of its own and is drawn at the box of the
+/// when they are one picture drawn in one place: a layer brings an image and a material of its own and is drawn at the box of the
 /// sprite, and nothing of it can be placed or turned apart from the rest.
 /// </para>
 /// </remarks>
@@ -56,7 +56,7 @@ public struct SpriteComponent : IComponent
     /// <remarks>
     /// A sprite that names layers is drawn from them instead of from the one image that <see cref="SheetPath"/> or
     /// <see cref="TexturePath"/> names: every layer is drawn over the one before it, at the position, the size and the colour
-    /// of the sprite, with the image and the shader of its own. A sprite that leaves this null is what it was, so content
+    /// of the sprite, with the image and the material of its own. A sprite that leaves this null is what it was, so content
     /// written without layers keeps drawing. The size of the layers is the size of the sprite, which is why a sprite that
     /// names layers sets <see cref="Size"/>: the engine does not ask the device how large an image it uploaded is.
     /// </remarks>

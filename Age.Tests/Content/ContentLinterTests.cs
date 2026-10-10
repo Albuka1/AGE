@@ -27,7 +27,7 @@ public sealed class ContentLinterTests
         LintReport report = linter.Lint("Prototypes");
 
         report.IsClean.Should().BeTrue("the content of the engine is what a build ships");
-        report.Count.Should().Be(5);
+        report.Count.Should().Be(6, "the content of the engine holds the entities, the items and the material of the beacon");
     }
 
     [Fact]
@@ -121,9 +121,10 @@ public sealed class ContentLinterTests
     {
         // A layer names what a build has to ship twice: the image it draws and the stage that draws it. Both are read out of
         // the list of layers rather than out of the fields of the component, so a path written inside a layer is checked the
-        // same way as one written at the top of a sprite.
+        // same way as one written at the top of a sprite, and a layer that names a material of the content instead names a
+        // document rather than a file.
         LintReport report = LintWith(
-            "- type: entity\n  id: Fine\n  components:\n    - type: Sprite\n      Layers:\n        - Name: base\n          Image: Textures/Entities/thing.bmp\n        - Name: pulse\n          Image: Textures/Entities/thing.bmp\n          Shader: Shaders/pulse.frag\n",
+            "- type: entity\n  id: Fine\n  components:\n    - type: Sprite\n      Layers:\n        - Name: base\n          Image: Textures/Entities/thing.bmp\n        - Name: pulse\n          Image: Textures/Entities/thing.bmp\n          Material:\n            Fragment: Shaders/pulse.frag\n",
             ("Textures/Entities/thing.bmp", string.Empty),
             ("Shaders/pulse.frag", "void main() { COLOR = sampleTexture(UV); }"));
 
@@ -383,7 +384,7 @@ public sealed class ContentLinterTests
             LintReport content = linter.Lint("Prototypes");
             LintReport strings = linter.LintLocales("Locale");
 
-            return new LintReport(content.Count, [.. content.Problems, .. strings.Problems]);
+            return new LintReport(LintArea.Prototypes, content.Count, [.. content.Problems, .. strings.Problems]);
         }
         finally
         {
@@ -422,6 +423,77 @@ public sealed class ContentLinterTests
         }
     }
 
+    [Fact]
+    public void ContentLinter_EveryFolderOfABuild_IsReportedUnderThePassThatReadIt()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-lint-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Prototypes"));
+        Directory.CreateDirectory(Path.Combine(root, "Locale", "en", "Entities"));
+
+        try
+        {
+            // A document that names an image the build does not ship, and a string that names a key its language does not hold: two
+            // mistakes of two passes, so a person is told which part of the content to open rather than being handed one flat list.
+            // A document of a language lives in the folder of that language, under the folder of the languages.
+            File.WriteAllText(Path.Combine(root, "Prototypes", "thing.yml"), "- type: entity\n  id: Thing\n  components:\n    - type: Sprite\n      TexturePath: Textures/Nowhere/gone.png\n");
+            File.WriteAllText(Path.Combine(root, "Locale", "en", "Entities", "things.yml"), "ent-Thing: Thing\nent-Thing.desc: A thing\nbroken: \"{ ent-Nothing }\"\n");
+
+            using ServiceProvider provider = Create();
+            var assets = new NullAssetLoader();
+            assets.Initialize(root);
+            var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+            LintResult result = linter.Lint(new LintOptions { Root = root, Prototypes = "Prototypes", Locales = "Locale" });
+
+            result.IsClean.Should().BeFalse();
+            result.Reports.Should().HaveCount(2, "two folders were read, so there are two passes");
+            result.Reports[0].Area.Should().Be(LintArea.Prototypes, "the passes are made in the order the folders are named");
+            result.Reports[1].Area.Should().Be(LintArea.Locales);
+            result.Reports.Select(report => report.Area).Should().NotContain(LintArea.Sheets, "a folder that the options leave out is not read at all");
+
+            // A document that names an image the build does not ship, and a string that names a key its language does not hold: the
+            // mistake of the prototype pass and the one of the locale pass, and both of them are in the answer of the whole build.
+            result.Problems.Should().HaveCount(2, "the mistake of the prototype pass and the one of the locale pass are both reported");
+            result.Reports[0].Problems.Should().ContainSingle().Which.Message.Should().Contain("Textures/Nowhere/gone.png");
+            result.Reports[1].Problems.Should().ContainSingle().Which.Message.Should().Contain("ent-Nothing");
+            result.ProblemCount.Should().Be(2);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ContentLinter_ARootThatTheLoaderDoesNotRead_IsRefusedBeforeAnythingIsRead()
+    {
+        // The folders of a lint are resolved by the loader it was made with, so a root that names another game is a lint over
+        // content that nothing asked about: the call refuses it rather than passing over folders that were never opened.
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+        var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+        Action lint = () => linter.Lint(new LintOptions { Root = "Nowhere", Prototypes = "Prototypes" });
+
+        lint.Should().Throw<InvalidOperationException>().WithMessage("*Nowhere*").And.Message.Should().Contain("Resources");
+    }
+
+    [Fact]
+    public void ContentLinter_TheRootTheLoaderReads_IsAccepted()
+    {
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        string root = Path.Combine(AppContext.BaseDirectory, "Resources");
+        assets.Initialize(root);
+        var linter = new ContentLinter(ReadContent(provider), provider.GetRequiredService<ComponentRegistry>(), assets, new StbImageLoader(assets));
+
+        LintResult result = linter.Lint(new LintOptions { Root = root, Prototypes = "Prototypes" });
+
+        result.IsClean.Should().BeTrue("the root of the options is the one the loader reads");
+        result.Reports.Should().ContainSingle();
+    }
+
     /// <summary>Lints the sheet of a folder that holds one document and the image it names.</summary>
     private static LintReport LintSheet(string document)
     {
@@ -455,6 +527,7 @@ public sealed class ContentLinterTests
     {
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
         return prototypes;
     }
 

@@ -1,8 +1,17 @@
-# A beacon is a sprite of two layers: one image drawn over another, the second of them with a shader of its own, which is what
-# layers are for. The layers are drawn in the order they are written, so 'base' is at the bottom. The size is written here rather
-# than taken from an image, because the engine does not ask the device how large an image it uploaded is: a sprite that names
-# layers sets the box its layers are drawn at. The colour is written for the reason every sprite of the content writes one:
-# every layer is drawn with the tint of the sprite, and a sprite that names no colour draws its layers in no colour at all.
+# A beacon is a sprite of two layers: one image drawn over another, the second of them drawn by a material of the content, which is
+# what layers are for. The layers are drawn in the order they are written, so 'base' is at the bottom, and the layer that shines
+# names the material 'Pulse' rather than the path of a stage: the stage and the speed of the pulse live in
+# Prototypes/Materials/pulse.yml, so another sprite that pulses the same way names the same material.
+#
+# This layer writes the speed of its own pulse, which is what a value of a layer is for: the material says how a pulse works, and a
+# layer that wants it faster says so rather than declaring a second material with everything written twice. A layer that names no
+# value reads exactly the ones of its material, and a layer may name the stages it is drawn by itself instead, with a Material of
+# Id, Fragment and Vertex, and the values of its uniforms.
+#
+# The size is written here rather than taken from an image, because the engine does not ask the device how large an image it
+# uploaded is: a sprite that names layers sets the box its layers are drawn at. The colour is written for the reason every sprite
+# of the content writes one: every layer is drawn with the tint of the sprite, and a sprite that names no colour draws its layers
+# in no colour at all.
 - type: entity
   id: Beacon
   name: ent-Beacon
@@ -29,4 +38,8 @@
           Image: Textures/Tiles/tiles.bmp
         - Name: pulse
           Image: Textures/Tiles/tiles.bmp
-          Shader: Shaders/pulse.frag
+          Material:
+            Id: Pulse
+            Uniforms:
+              Speed:
+                float: 6.0

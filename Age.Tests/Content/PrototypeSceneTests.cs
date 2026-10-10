@@ -99,7 +99,7 @@ public sealed class PrototypeSceneTests
             Layers =
             [
                 new SpriteLayer { Name = "base", Image = "Textures/Entities/thing.bmp" },
-                new SpriteLayer { Name = "pulse", Image = "Textures/Entities/thing.bmp", Shader = "Shaders/pulse.frag" },
+                new SpriteLayer { Name = "pulse", Image = "Textures/Entities/thing.bmp", Material = new Material { Id = "Pulse" } },
             ],
         });
 
@@ -114,7 +114,7 @@ public sealed class PrototypeSceneTests
         SpriteLayer[] layers = sprite.Layers!;
         layers.Select(layer => layer.Name).Should().Equal(new[] { "base", "pulse" }, "the order the document writes is what the layers are drawn in");
         layers[0].Image.Should().Be("Textures/Entities/thing.bmp");
-        layers[1].Shader.Should().Be("Shaders/pulse.frag");
+        layers[1].Material.Id.Should().Be("Pulse");
     }
 
     [Fact]
@@ -408,6 +408,7 @@ public sealed class PrototypeSceneTests
 
         PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
         prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 
         var assets = new NullAssetLoader();
         assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));

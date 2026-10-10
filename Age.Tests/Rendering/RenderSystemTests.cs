@@ -1,7 +1,16 @@
+using System.Text.Json;
 using Age.Assets;
+using Age.Audio;
+using Age.Content;
+using Age.Content.Prototypes;
 using Age.Core;
+using Age.Input;
+using Age.Physics;
 using Age.Rendering;
+using Age.UI;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Age.Tests;
@@ -220,12 +229,13 @@ public sealed class RenderSystemTests
         var world = new World();
         var renderer = new RecordingRenderer();
         var shaders = new RecordingShaderService();
-        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
         Entity entity = CreateSprite(world, new Vector2(100f, 100f));
         world.GetRef<SpriteComponent>(entity).Layers =
         [
             new SpriteLayer { Name = "base" },
-            new SpriteLayer { Name = "pulse", Shader = "Shaders/pulse.frag" },
+            new SpriteLayer { Name = "pulse", Material = new Material { Fragment = "Shaders/pulse.frag" } },
             new SpriteLayer { Name = "over" },
         ];
 
@@ -250,9 +260,10 @@ public sealed class RenderSystemTests
         var world = new World();
         var renderer = new RecordingRenderer();
         var shaders = new RecordingShaderService { Fail = true };
-        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
         Entity entity = CreateSprite(world, new Vector2(100f, 100f));
-        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Shader = "Shaders/Nowhere/gone.frag" }];
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Material = new Material { Fragment = "Shaders/Nowhere/gone.frag" } }];
 
         system.Render(world, Camera(1280f, 720f));
         system.Render(world, Camera(1280f, 720f));
@@ -268,9 +279,143 @@ public sealed class RenderSystemTests
         var world = new World();
         var renderer = new RecordingRenderer();
         var shaders = new RecordingShaderService();
-        var system = new RenderSystem(renderer, new SpriteSorter(), shaders: shaders);
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
         Entity entity = CreateSprite(world, new Vector2(100f, 100f));
-        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Shader = "Shaders/pulse.frag" }];
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "pulse", Material = new Material { Fragment = "Shaders/pulse.frag" } }];
+
+        system.Render(world, Camera(1280f, 720f));
+        renderer.AttachToAnotherWindow();
+        materials.Build();
+        system.Render(world, Camera(1280f, 720f));
+
+        shaders.Loaded.Should().Equal(
+            new[] { "Shaders/pulse.frag", "Shaders/pulse.frag" },
+            "a program of the window before is gone with the device of it, so the stage is compiled again for the device that is there now");
+    }
+
+    [Fact]
+    public void MaterialService_AMaterialOfTheContent_DrawsItsLayerWithItsStageAndSendsItsValues()
+    {
+        // The whole path of a material: a document says the stage and the values of the uniforms, the service reads them where the
+        // content is read, and a frame sends them before it draws the layer. This is the path the sample runs, with a renderer that
+        // records what it was handed rather than a device.
+        using ServiceProvider provider = Create();
+        var assets = new NullAssetLoader();
+        assets.Initialize(Path.Combine(AppContext.BaseDirectory, "Resources"));
+
+        PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
+        prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
+        prototypes.Load(assets, "Prototypes");
+
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        materials.Register(prototypes);
+        materials.Build();
+
+        materials.IsRegistered("Pulse").Should().BeTrue("the content of the engine declares the material of the beacon");
+
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        Entity beacon = provider.GetRequiredService<SpawnService>().Spawn(world, "Beacon");
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
+
+        Camera2D camera = Camera(1280f, 720f);
+        system.Render(world, in camera);
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/pulse.frag" }, "the stage of the material is the one the document named");
+        renderer.Programs.Should().HaveCount(2, "the beacon is a sprite of two layers");
+        renderer.Programs[0].Should().BeNull("the layer that names no material draws with the program of the engine");
+        renderer.Programs[1].Should().NotBeNull("the layer that names the material draws with its stage");
+        renderer.Uniforms.Should().ContainKey("Speed", "the values of the material reach the renderer before the layer is drawn");
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 6f }, "the layer of the beacon writes the speed of its own pulse, which overrides the one of the material");
+        materials.Missing.Should().BeEmpty("the content of the engine names a material that a document declares");
+    }
+
+    [Fact]
+    public void MaterialService_AnIntUniform_IsSentAsAWholeNumber()
+    {
+        // A document that says int means a whole number, and the renderer is handed one: a stage that declares an int is given an
+        // int rather than a float that the device would have converted, which is what the kind of a value is for.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Steps", "int", "8");
+        ShaderHandle shader = ((IMaterialService)materials).Shader(new Material { Id = "Pulse" });
+
+        ((IMaterialService)materials).SetShader(renderer, shader, new Material { Id = "Pulse" });
+
+        renderer.Integers.Should().ContainKey("Steps", "a value of the kind int is set with the overload of a whole number");
+        renderer.Integers["Steps"].Should().Be(8);
+        renderer.Uniforms.Should().NotContainKey("Steps", "a whole number is not a number that a stage reads as a float");
+    }
+
+    [Fact]
+    public void MaterialService_AFloatUniform_IsSentAsANumber()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+        ShaderHandle shader = ((IMaterialService)materials).Shader(new Material { Id = "Pulse" });
+
+        ((IMaterialService)materials).SetShader(renderer, shader, new Material { Id = "Pulse" });
+
+        renderer.Uniforms["Speed"].Should().Equal(4f);
+        renderer.Integers.Should().BeEmpty("a float is not sent as a whole number");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAStage_DrawsWithThatStageEvenWhenItNamesAMaterial()
+    {
+        // The stage is the frame of a program and the identifier is where its values come from, so a layer that writes a stage is
+        // drawn by it: the values of the material it names still reach the shader, because the layer did not replace them.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new() { Id = "Pulse", Fragment = "Shaders/own.frag" };
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/own.frag" }, "the stage the layer writes is the one it is drawn by");
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 4f }, "the values of the material the layer names are still sent");
+    }
+
+    [Fact]
+    public void MaterialService_TwoVertexStagesOfOneFragment_AreNotOneProgram()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+
+        ShaderHandle first = ((IMaterialService)materials).Shader(new Material { Fragment = "Shaders/pulse.frag", Vertex = "Shaders/one.vert" });
+        ShaderHandle second = ((IMaterialService)materials).Shader(new Material { Fragment = "Shaders/pulse.frag", Vertex = "Shaders/two.vert" });
+
+        second.Should().NotBe(first, "two vertices of one fragment are two programs, so the cache of the inline stages is keyed by both paths");
+        shaders.Loaded.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void RenderSystem_AnotherAttachment_ResetsTheCompiledMaterialsWithoutAGameAskingForIt()
+    {
+        // A renderer that was attached to another window lets go of the device that compiled the programs, so the pass reads the
+        // attachment as a frame opens and tells the materials to let go of what they compiled: nothing of a game has to remember
+        // the call, which is what keeps a handle of a window that is gone from being drawn with.
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var system = new RenderSystem(renderer, new SpriteSorter(), materials: materials);
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Entity entity = CreateSprite(world, new Vector2(100f, 100f));
+        world.GetRef<SpriteComponent>(entity).Layers = [new SpriteLayer { Name = "glow", Material = new Material { Id = "Pulse" } }];
 
         system.Render(world, Camera(1280f, 720f));
         renderer.AttachToAnotherWindow();
@@ -278,8 +423,196 @@ public sealed class RenderSystemTests
 
         shaders.Loaded.Should().Equal(
             new[] { "Shaders/pulse.frag", "Shaders/pulse.frag" },
-            "a program of the window before is gone with the device of it, so the stage is compiled again for the device that is there now");
+            "the program of the window before went away with the device of it, so the pass compiled the stage again for the one that is there now");
+        materials.IsRegistered("Pulse").Should().BeTrue("the declared materials of the content are not forgotten, only what they compiled");
     }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValue_OverridesTheOneOfItsMaterial()
+    {
+        // The material says how a pulse works and the layer says how fast its own is, which is what keeps two sprites that differ
+        // by one number from declaring the same material twice.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Speed"] = new(StringComparer.Ordinal) { ["float"] = JsonDocument.Parse("8.0").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 8f }, "the value of the layer is sent after the one of the material, so it is the one that stands");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValueOfItsOwn_KeepsTheRestOfTheMaterial()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Steps"] = new(StringComparer.Ordinal) { ["int"] = JsonDocument.Parse("8").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 4f }, "a value the layer does not write is the one the material declares");
+        renderer.Integers["Steps"].Should().Be(8, "a value the material does not declare is added, which is how one layer reads a uniform no other does");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatNamesNoMaterial_SendsItsOwnValues()
+    {
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders);
+        var renderer = new RecordingRenderer();
+
+        Material layer = new()
+        {
+            Fragment = "Shaders/own.frag",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Speed"] = new(StringComparer.Ordinal) { ["float"] = JsonDocument.Parse("2.0").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        shaders.Loaded.Should().Equal(new[] { "Shaders/own.frag" });
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 2f }, "a layer that names no material is drawn by its own stage with its own values");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValueItsKindCannotHold_LosesThatValueAndKeepsTheRest()
+    {
+        // A frame reads the values of a layer on every draw, and it has nowhere to report a mistake to but the log: a value that
+        // cannot be read is left out and the ones around it are still sent, rather than a mistake of the content quietly removing
+        // every uniform that happens to be written after it from every frame that follows.
+        var shaders = new RecordingShaderService();
+        var logger = new RecordingLogger<MaterialService>();
+        var materials = new MaterialService(shaders, logger);
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Bad"] = new(StringComparer.Ordinal) { ["vec2"] = JsonDocument.Parse("[255, 220, 120, 255]").RootElement.Clone() },
+                ["After"] = new(StringComparer.Ordinal) { ["float"] = JsonDocument.Parse("9.0").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+
+        Action send = () => ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        send.Should().NotThrow("a mistake of the content is a spent frame, not a game that stops");
+        renderer.Uniforms.Should().NotContainKey("Bad", "the value its kind cannot hold is left out");
+        renderer.Uniforms["After"].Should().Equal(new[] { 9f }, "the value written after the refused one is still sent");
+        logger.Errors.Should().ContainSingle().Which.Should().Contain("Bad").And.Contain("Pulse");
+    }
+
+    [Fact]
+    public void MaterialService_ALayerThatWritesAValueItsKindCannotHold_SendsTheMaterialEitherWay()
+    {
+        // The values of the material are sent before the ones of the layer, so a layer that writes one value badly is still drawn
+        // with everything its material declares.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders, new RecordingLogger<MaterialService>());
+        var renderer = new RecordingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new()
+        {
+            Id = "Pulse",
+            Uniforms = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal)
+            {
+                ["Bad"] = new(StringComparer.Ordinal) { ["color"] = JsonDocument.Parse("[1, 2]").RootElement.Clone() },
+            },
+        };
+
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+        ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        renderer.Uniforms["Speed"].Should().Equal(new[] { 4f }, "the value of the material is sent before the one of the layer that cannot be read");
+    }
+
+    [Fact]
+    public void MaterialService_AValueThatCannotBeSentToTheRenderer_IsNotSwallowed()
+    {
+        // The refusal is for the reading of a value alone: a renderer that cannot be handed a value is a failure of the frame, and
+        // it still reaches the game rather than being logged as a mistake of the content.
+        var shaders = new RecordingShaderService();
+        var materials = new MaterialService(shaders, new RecordingLogger<MaterialService>());
+        var renderer = new ThrowingRenderer();
+
+        Register(materials, "Pulse", "Shaders/pulse.frag", "Speed", "float", "4.0");
+
+        Material layer = new() { Id = "Pulse" };
+        ShaderHandle shader = ((IMaterialService)materials).Shader(layer);
+
+        Action send = () => ((IMaterialService)materials).SetShader(renderer, shader, layer);
+
+        send.Should().Throw<ObjectDisposedException>("a renderer that refuses a value is not a value of the content that cannot be read");
+    }
+
+    /// <summary>Registers a material of one uniform with a service, which is what a content does when it is read.</summary>
+    private static MaterialPrototype Register(MaterialService materials, string id, string fragment, string uniform, string kind, string value)
+    {
+        MaterialPrototype prototype = MaterialPrototype.Read(new Prototype(
+            id,
+            MaterialPrototype.Kind,
+            parent: null,
+            nameKey: null,
+            descKey: null,
+            file: $"{id}.yml",
+            line: 1,
+            components: [],
+            fields:
+            [
+                new PrototypeComponent("fragment", JsonDocument.Parse($"\"{fragment}\"").RootElement.Clone(), $"{id}.yml", 2),
+                new PrototypeComponent("uniforms", JsonDocument.Parse($"{{\"{uniform}\":{{\"{kind}\":{value}}}}}").RootElement.Clone(), $"{id}.yml", 3),
+            ]));
+
+        materials.Register(id, prototype);
+        materials.Build();
+        return prototype;
+    }
+
+    /// <summary>Builds a container that holds the components and the content of every assembly of the engine.</summary>
+    private static ServiceProvider Create() => new ServiceCollection()
+        .AddAgeCore()
+        .AddAgeContent()
+        .AddAgeAssets()
+        .AddAgeInput()
+        .AddAgeAudio()
+        .AddAgePhysics()
+        .AddAgeUI()
+        .AddAgeRendering()
+        .BuildServiceProvider();
 
     private static Camera2D Camera(float width, float height, float zoom = 1f) => new()
     {
@@ -333,8 +666,8 @@ public sealed class RenderSystemTests
     private sealed class RecordingShaderService : IShaderService
     {
         private readonly List<string> _loaded = [];
-        private readonly Dictionary<string, ShaderHandle> _shaders = new(StringComparer.Ordinal);
-        private readonly ResourcePool<string, uint> _slots = new();
+        private readonly Dictionary<(string Fragment, string Vertex), ShaderHandle> _shaders = new();
+        private readonly ResourcePool<(string Fragment, string Vertex), uint> _slots = new();
 
         public List<string> Loaded => _loaded;
 
@@ -351,11 +684,15 @@ public sealed class RenderSystemTests
                 throw new FileNotFoundException($"There is no stage at '{fragmentPath}'.");
             }
 
-            if (!_shaders.TryGetValue(fragmentPath, out ShaderHandle shader))
+            // The pair of stages is what a program is, which is what the real service keeps: two vertices of one fragment are two
+            // programs, and a double that keyed by the fragment alone would hand out one handle for both of them.
+            var pair = (Fragment: fragmentPath, Vertex: vertexPath ?? string.Empty);
+
+            if (!_shaders.TryGetValue(pair, out ShaderHandle shader))
             {
-                ResourceHandle slot = _slots.Add((uint)(_shaders.Count + 1), fragmentPath);
+                ResourceHandle slot = _slots.Add((uint)(_shaders.Count + 1), pair);
                 shader = new ShaderHandle(slot, (uint)(_shaders.Count + 1), 0);
-                _shaders[fragmentPath] = shader;
+                _shaders[pair] = shader;
             }
 
             return shader;
@@ -366,11 +703,11 @@ public sealed class RenderSystemTests
 
         public bool Unload(ShaderHandle shader)
         {
-            foreach ((string path, ShaderHandle held) in _shaders)
+            foreach (((string Fragment, string Vertex) pair, ShaderHandle held) in _shaders)
             {
                 if (held == shader)
                 {
-                    _shaders.Remove(path);
+                    _shaders.Remove(pair);
                     return true;
                 }
             }
@@ -389,6 +726,12 @@ public sealed class RenderSystemTests
 
         /// <summary>Gets the shader that every drawn quad was drawn with, in the order the quads were drawn, where null is the program of the engine.</summary>
         public List<ShaderHandle?> Programs { get; } = [];
+
+        /// <summary>Gets the values that were sent for a shader, by the name of the uniform, which is what a material sends before it draws.</summary>
+        public Dictionary<string, float[]> Uniforms { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Gets the whole numbers that were sent for a shader, by the name of the uniform, which is what a value of the kind int is.</summary>
+        public Dictionary<string, int> Integers { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Gets the shader that was used when the frame ended, which is what the passes after the world draw with.</summary>
         public ShaderHandle? ProgramAtEndOfFrame { get; private set; }
@@ -420,6 +763,16 @@ public sealed class RenderSystemTests
 
         public void ResetShader() => _currentShader = null;
 
+        public void SetUniform(string name, float value) => Uniforms[name] = [value];
+
+        public void SetUniform(string name, int value)
+        {
+            Integers[name] = value;
+            Uniforms.Remove(name);
+        }
+
+        public void SetUniform(string name, ReadOnlySpan<float> values) => Uniforms[name] = values.ToArray();
+
         public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
         {
             Starts.Add(position);
@@ -443,6 +796,75 @@ public sealed class RenderSystemTests
         public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => new(++_created);
 
         public void ReleaseTexture(TextureHandle texture)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>Keeps what was logged, which is how a test reads the report of a value that cannot be read.</summary>
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Records { get; } = [];
+
+        public IEnumerable<string> Errors => Records.Where(record => record.Level == LogLevel.Error).Select(record => record.Message);
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Records.Add((logLevel, formatter(state, exception)));
+    }
+
+    /// <summary>A renderer that refuses every value, which is a failure of a frame rather than of the content that is being read.</summary>
+    private sealed class ThrowingRenderer : IRenderer
+    {
+        public Vector2 ViewportSize => new(1280f, 720f);
+
+        public void SetUniform(string name, float value) => throw new ObjectDisposedException(nameof(ThrowingRenderer));
+
+        public void SetUniform(string name, ReadOnlySpan<float> values) => throw new ObjectDisposedException(nameof(ThrowingRenderer));
+
+        public void SetUniform(string name, int value) => throw new ObjectDisposedException(nameof(ThrowingRenderer));
+
+        public void BeginFrame(bool clear = true)
+        {
+        }
+
+        public void EndFrame()
+        {
+        }
+
+        public void SetCamera(Camera2D camera)
+        {
+        }
+
+        public void Attach(IWindowService window)
+        {
+        }
+
+        public void DrawSprite(TextureHandle texture, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+        }
+
+        public void DrawTextureRegion(TextureHandle texture, Rect source, Vector2 position, Vector2 size, Color color, float rotation = 0f)
+        {
+        }
+
+        public TextureHandle CreateTexture(ReadOnlySpan<byte> pixels, int width, int height) => default;
+
+        public void ReleaseTexture(TextureHandle texture)
+        {
+        }
+
+        public void DrawRectangle(Rect rect, Color color)
+        {
+        }
+
+        public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color)
         {
         }
 

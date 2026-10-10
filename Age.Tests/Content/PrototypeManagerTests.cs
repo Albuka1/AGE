@@ -70,15 +70,48 @@ public sealed class PrototypeManagerTests
     }
 
     [Fact]
-    public void PrototypeManager_Build_RefusesAFieldThatIsNotAPrototypeField()
+    public void PrototypeManager_AnEntityThatWritesAFieldOfItsOwn_IsRefused()
     {
+        // An entity carries components and nothing else, so a field beside them is a mistake of a document rather than data that
+        // is read and dropped: the kind that reads an entity is what refuses it, with the name of the field and the line.
+        PrototypeManager prototypes = Create();
+        prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
+        prototypes.Add("goblin.yml", """
+            - type: entity
+              id: Goblin
+              components:
+                - type: Transform
+                  Position:
+                    X: 1
+                    Y: 2
+              speed: 4
+            """);
+
+        Action build = () => prototypes.Build();
+
+        PrototypeException error = build.Should().Throw<PrototypeException>().Subject.Single();
+        error.Message.Should().Contain("speed").And.Contain("components");
+        error.File.Should().Be("goblin.yml");
+    }
+
+    [Fact]
+    public void PrototypeManager_Build_KeepsAFieldOfAKindThatIsNotAComponent()
+    {
+        // A document of a kind that is not a thing — a material, a recipe, a faction — writes the data of that kind rather than
+        // the components of an entity, and the manager carries it so the kind reads one name, one file and one line wherever it
+        // looks. What a document of an entity writes is checked by the registry of the components, which refuses a name nothing
+        // reads.
         PrototypeManager prototypes = Create();
 
-        Action add = () => prototypes.Add("sword.yml", "- id: Sword\n  type: thing\n  damage: 5");
+        prototypes.Add("sword.yml", "- id: Sword\n  type: thing\n  damage: 5");
+        prototypes.Build();
 
-        PrototypeException error = add.Should().Throw<PrototypeException>().Subject.Single();
-        error.Line.Should().Be(3);
-        error.Message.Should().Contain("'damage'").And.Contain("components");
+        Prototype sword = prototypes.Get<Prototype>("Sword");
+        sword.Fields.Should().ContainSingle();
+        sword.Fields[0].Name.Should().Be("damage", "a field of the kind travels with the identifier");
+        sword.Fields[0].Values.GetInt32().Should().Be(5);
+        sword.Fields[0].File.Should().Be("sword.yml");
+        sword.Fields[0].Line.Should().Be(3);
     }
 
     [Fact]
