@@ -17,8 +17,9 @@ jobs:
   # whole list again and hoping the same thing fails: "Re-run failed jobs" re-runs exactly the jobs that are red.
   #
   # The price is a restore and a build per job, which is a few seconds each. Get it back by keeping a job to one question:
-  # the build job answers "does everything compile", the test job runs the tests, the lint job reads the content, and the
-  # format job checks the style.
+  # the build job answers "does everything compile", the test job runs the tests, one lint job reads each pass of the content
+  # — the prototypes, the sheets and the locales — and the format job checks the style. A pass of the content that is wrong
+  # is a red job of its own, so a person reads which part of the content to look at without opening the log.
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -48,8 +49,8 @@ jobs:
       - run: dotnet build Age.Tests/Age.Tests.csproj --no-restore -c Release
       - run: dotnet test --project Age.Tests/Age.Tests.csproj --no-build -c Release
 
-  lint:
-    name: Content lint
+  lint-prototypes:
+    name: Content lint (prototypes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -60,7 +61,37 @@ jobs:
           dotnet-version: 10.0.100
       - run: dotnet restore Age.Content.Lint/Age.Content.Lint.csproj
       - run: dotnet build Age.Content.Lint/Age.Content.Lint.csproj --no-restore -c Release
-      - run: dotnet run --project Age.Content.Lint/Age.Content.Lint.csproj -c Release --no-build -- Resources Prototypes
+      # The linter reads the pass it is named and reports under it, so each pass is a job of its own: a failure names the part of the
+      # content that is wrong, and only that job restarts from the Actions page.
+      - run: dotnet run --project Age.Content.Lint/Age.Content.Lint.csproj -c Release --no-build -- Resources Prototypes Textures Prototypes
+
+  lint-sheets:
+    name: Content lint (sheets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.100
+      - run: dotnet restore Age.Content.Lint/Age.Content.Lint.csproj
+      - run: dotnet build Age.Content.Lint/Age.Content.Lint.csproj --no-restore -c Release
+      - run: dotnet run --project Age.Content.Lint/Age.Content.Lint.csproj -c Release --no-build -- Resources Prototypes Textures Sheets
+
+  lint-locales:
+    name: Content lint (locales)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.100
+      - run: dotnet restore Age.Content.Lint/Age.Content.Lint.csproj
+      - run: dotnet build Age.Content.Lint/Age.Content.Lint.csproj --no-restore -c Release
+      - run: dotnet run --project Age.Content.Lint/Age.Content.Lint.csproj -c Release --no-build -- Resources Prototypes Textures Locales
 
   format:
     name: Formatting
