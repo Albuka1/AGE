@@ -53,10 +53,15 @@ public interface IConsoleService
     /// <summary>Gets the commands that are registered, in the order they were registered.</summary>
     IEnumerable<ConsoleCommand> Commands { get; }
 
-    /// <summary>Returns the commands whose name starts with a prefix, which is what a console lists under the line being typed.</summary>
-    /// <param name="prefix">The start of a name to match. An empty prefix matches every command.</param>
-    /// <returns>The matching commands, in the order they were registered.</returns>
+    /// <summary>Returns the levels one below the line that is being typed, which is what a console lists under it.</summary>
+    /// <param name="prefix">The line so far, which may hold several words. An empty prefix lists the top level.</param>
+    /// <returns>The commands, in the order they were registered, each named by its whole path.</returns>
     /// <exception cref="ArgumentNullException">The prefix is null.</exception>
+    /// <remarks>
+    /// A command of several levels is a tree: the words before the last one are the path that was walked, and the commands one level
+    /// below it whose word starts with the last word are what a panel lists. So <c>cvars</c> lists <c>cvars set</c> and
+    /// <c>cvars set </c> lists what follows that level.
+    /// </remarks>
     IEnumerable<ConsoleCommand> Matches(string prefix);
 
     /// <summary>Gets the command that the line being typed names, or null when the line names none.</summary>
@@ -117,12 +122,12 @@ public interface IConsoleService
     /// <summary>Replaces the line that is being typed with the line after the one the history points at, which is an empty line at the end of the history.</summary>
     void RecallNext();
 
-    /// <summary>Completes the word that is being typed to the name of a command, which is what Tab does in a console of its own.</summary>
-    /// <returns><see langword="true"/> when the word was completed, <see langword="false"/> when nothing matches it or it is already a whole name.</returns>
+    /// <summary>Completes the word that is being typed to a level of the command it walks to, which is what Tab does in a console of its own.</summary>
+    /// <returns><see langword="true"/> when the word was completed, <see langword="false"/> when nothing matches it or it is already a whole word.</returns>
     /// <remarks>
-    /// A word that matches exactly one command is completed to it. A word that matches several is completed to the part they share,
-    /// so pressing Tab twice narrows the word down rather than cycling through the names. Only the first word of the line is a
-    /// command name, so a line whose first word is complete is left alone: the arguments of a command are the business of the game.
+    /// A word that matches exactly one level below the path is completed to it. A word that matches several is completed to the part
+    /// they share, so pressing Tab twice narrows the word down rather than cycling through the levels. The words before the last one
+    /// are the path that is already walked, so each word of a command of several levels is completed in turn.
     /// </remarks>
     bool Complete();
 
@@ -133,14 +138,15 @@ public interface IConsoleService
     /// <summary>Removes every line of the output.</summary>
     void Clear();
 
-    /// <summary>Registers a command, which is how a game adds one of its own.</summary>
-    /// <param name="name">The words that run the command, joined by single spaces. It has to be unique.</param>
+    /// <summary>Registers a command at a path of words, which is how a game adds one of its own.</summary>
+    /// <param name="name">The words that run the command, joined by single spaces. The whole path has to be unique.</param>
     /// <param name="description">A single line that describes what the command does.</param>
-    /// <param name="run">Runs the command with the arguments behind its name.</param>
+    /// <param name="run">Runs the command with the arguments behind its path.</param>
     /// <remarks>
-    /// A name holds one or more words, so a command has levels: <c>cvars</c> lists the settings and <c>cvars set locale ru</c>
-    /// runs the command named <c>cvars set</c> with the arguments <c>locale</c> and <c>ru</c>. A line is matched from its start
-    /// and the name of the most words wins, so a command of one word and one of two that starts the same way both work.
+    /// A name holds one or more words, so a command has levels: <c>cvars</c> lists the settings, <c>cvars set</c> writes one, and
+    /// <c>cvars set locale ru</c> runs the command named <c>cvars set</c> with the arguments <c>locale</c> and <c>ru</c>. Each word
+    /// before the last is a group that a line walks through, and a group may hold a command of its own, which is what makes
+    /// <c>cvars</c> and <c>cvars set</c> both work. The words of a path are the levels a console completes one at a time.
     /// </remarks>
     /// <exception cref="ArgumentException">The name is null, empty or already registered.</exception>
     /// <exception cref="ArgumentNullException">The description or the code to run is null.</exception>

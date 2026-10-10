@@ -21,7 +21,7 @@ namespace Age.Rendering;
 /// and taken with Tab.
 /// </para>
 /// <para>
-/// The title of the panel is read from the content through <see cref="ITextSource"/>: the key is <c>console-title</c>, and a game
+/// The title of the panel is read from the content through <see cref="ITextSource"/>: the key is <c>ui-console-title</c>, and a game
 /// that ships none reads the key itself, which is readable English.
 /// </para>
 /// </remarks>
@@ -87,6 +87,12 @@ public sealed partial class DevConsoleOverlay : IRenderPass
     private int _visibleLines = 14;
     private int _visibleSuggestions = 8;
 
+    /// <summary>The rows the output is scrolled up by, where zero keeps the newest row in view.</summary>
+    private int _scrolled;
+
+    /// <summary>The provider of the values a game offers for the word that is being typed, or null when it offers none.</summary>
+    private Func<string, IEnumerable<string>>? _values;
+
     /// <summary>The time each held key acts next, which is what makes a key that is held repeat rather than act once.</summary>
     private readonly Dictionary<Key, double> _repeating = [];
 
@@ -119,4 +125,20 @@ public sealed partial class DevConsoleOverlay : IRenderPass
         _textSource = textSource;
         _line = (textRenderer?.LineHeight ?? BitmapFontMetrics.GlyphHeight) + LineGap;
     }
+
+    /// <summary>Sets the provider of the values a game offers for the word that is being typed.</summary>
+    /// <param name="values">The provider, which is handed the line being typed and returns what its last word could be, or null to offer none.</param>
+    /// <remarks>
+    /// The commands of the engine say what a line is, and the game alone knows what an argument of one of its commands takes. A
+    /// game that registers <c>cvars set</c> hands this a provider that lists the names of its settings after <c>cvars set</c> and
+    /// the values of a named setting after it, so the panel suggests a value at every level of the command.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// console.SetValues(line => line.StartsWith("cvars set ", StringComparison.Ordinal)
+    ///     ? cvars.ValueHints(line)
+    ///     : []);
+    /// </code>
+    /// </example>
+    public void SetValues(Func<string, IEnumerable<string>>? values) => _values = values;
 }

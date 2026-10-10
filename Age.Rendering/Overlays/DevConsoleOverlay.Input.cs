@@ -113,6 +113,17 @@ public sealed partial class DevConsoleOverlay
             }
         }
 
+        // The page keys walk the output, which is what reads a log that is longer than the panel. The scroll is measured in rows
+        // and the panel clamps it to what there is, so holding a page key settles on an end rather than running away from it.
+        if (Repeats(Key.PageUp))
+        {
+            _scrolled += Math.Max(1, _visibleLines - 1);
+        }
+        else if (Repeats(Key.PageDown))
+        {
+            _scrolled -= Math.Max(1, _visibleLines - 1);
+        }
+
         // Tab takes the chosen suggestion, and completes the word when there is nothing to take: the rows are drawn under the
         // line, which is where a person reads the choice, so the list is answered before the completion.
         if (_input.IsKeyPressed(Key.Tab) && !TakeSuggestion())
@@ -125,6 +136,9 @@ public sealed partial class DevConsoleOverlay
         {
             _console.Submit();
             _suggested = -1;
+
+            // A line that was run scrolls the output back to its end, which is where the answer to it is written.
+            _scrolled = 0;
         }
     }
 

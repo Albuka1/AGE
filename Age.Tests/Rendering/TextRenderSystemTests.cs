@@ -54,6 +54,20 @@ public sealed class TextRenderSystemTests
     }
 
     [Fact]
+    public void TextRenderer_Measure_ReportsTheSizeADrawWouldTakeWithoutDrawing()
+    {
+        var renderer = new RecordingRenderer();
+        var text = new TextRenderer(renderer);
+
+        // A text that says nothing takes no room, and a text that says something is measured with the font that would draw it.
+        text.Measure(string.Empty, new TextStyle()).Should().Be(Vector2.Zero);
+        text.Measure(null, new TextStyle()).Should().Be(Vector2.Zero);
+        text.Measure("Hello", new TextStyle()).Should().Be(new Vector2(8f * 5f, 8f), "the built-in font measures one cell per character");
+
+        renderer.BuiltIn.Should().BeEmpty("measuring a text does not draw it");
+    }
+
+    [Fact]
     public void TextRenderSystem_TextThatSaysNothing_IsNotDrawn()
     {
         var world = new World();

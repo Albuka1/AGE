@@ -11,7 +11,8 @@ public sealed partial class DevConsoleOverlay
     /// <remarks>
     /// Every line of the output wraps into the width of the window, so a long line of a log continues on the next row rather than
     /// running off the edge: what the panel shows is the text, not the first characters of it. The rows are counted after the
-    /// wrap, which is what gives the panel its height and keeps the newest lines in view.
+    /// wrap, which is what gives the panel its height and keeps the newest lines in view. The output scrolls with the page up and
+    /// page down keys, which is what lets a developer read a log that is longer than the panel.
     /// </remarks>
     public void Render(World world, in Camera2D camera)
     {
@@ -27,33 +28,33 @@ public sealed partial class DevConsoleOverlay
 
         Vector2 viewport = _renderer.ViewportSize;
         float width = viewport.X - (2f * Padding);
-        IReadOnlyList<ConsoleCommand> suggestions = Suggestions();
+        IReadOnlyList<Suggestion> suggestions = Suggestions();
 
-        // The output is wrapped first, because the height of the panel is what places its top edge: a panel that grew by a row
-        // has to move up rather than draw over the game below it.
+        // The output is wrapped first, because the height of the panel is what places its top edge: a panel that grew by a row has
+        // to move up rather than draw over the game below it.
         var rows = new List<(string Text, Color Colour)>();
 
-        int shown = 0;
-
-        for (int index = _console.Lines.Count - 1; index >= 0 && shown < _visibleLines; index--)
+        foreach (ConsoleLine entry in _console.Lines)
         {
-            ConsoleLine entry = _console.Lines[index];
-
-            // The lines are read from the newest backwards, so a panel that is too short shows the end of the output rather than
-            // the start of it, which is where the answer to what was just typed is.
-            List<string> wrapped = Wrap(entry.Text, width).ToList();
-
-            shown += wrapped.Count;
-
-            for (int part = wrapped.Count - 1; part >= 0; part--)
+            foreach (string part in Break(entry.Text, width))
             {
-                rows.Insert(0, (wrapped[part], ColourOf(entry.Level)));
+                rows.Add((part, ColourOf(entry.Level)));
             }
         }
 
+        // The output is read from its end, so the panel shows the answer to what was just typed rather than the start of the log,
+        // and the scroll walks back through it. The offset is clamped to what there is, so scrolling past an end settles on it.
+        int capacity = Math.Max(1, _visibleLines - suggestions.Count - 1);
+        int maximum = Math.Max(0, rows.Count - capacity);
+        _scrolled = Math.Clamp(_scrolled, 0, maximum);
+
+        int end = rows.Count - _scrolled;
+        int start = Math.Max(0, end - capacity);
+
         _renderer.BeginFrame(false);
 
-        float height = HeaderHeight + Padding + ((rows.Count + 1 + suggestions.Count) * _line) + Padding;
+        int count = end - start;
+        float height = HeaderHeight + Padding + ((count + 1 + suggestions.Count) * _line) + Padding;
         float top = (slide * height) - height;
 
         // The height that is on screen is what a game offsets its own overlay by: while the panel slides the offset follows the
@@ -67,8 +68,9 @@ public sealed partial class DevConsoleOverlay
 
         float y = top + HeaderHeight + Padding;
 
-        foreach ((string text, Color colour) in rows)
+        for (int index = start; index < end; index++)
         {
+            (string text, Color colour) = rows[index];
             Write(text, new Vector2(Padding, y), colour);
             y += _line;
         }
@@ -82,15 +84,20 @@ public sealed partial class DevConsoleOverlay
 
         for (int index = 0; index < suggestions.Count; index++)
         {
-            ConsoleCommand command = suggestions[index];
+            Suggestion suggestion = suggestions[index];
 
             if (index == _suggested)
             {
                 _renderer.DrawRectangle(new Rect(new Vector2(0f, y), new Vector2(viewport.X, _line)), SelectedColour);
             }
 
-            Vector2 nameSize = Write(command.Name, new Vector2(Padding, y), TextColour);
-            Write(command.Description, new Vector2(Padding + nameSize.X + SuggestionGap, y), HintColour);
+            Vector2 nameSize = Write(suggestion.Text, new Vector2(Padding, y), TextColour);
+
+            if (suggestion.Description.Length > 0)
+            {
+                Write(suggestion.Description, new Vector2(Padding + nameSize.X + SuggestionGap, y), HintColour);
+            }
+
             y += _line;
         }
 

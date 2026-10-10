@@ -346,9 +346,9 @@ cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen liv
 cvars.Register("locale", locale.Language, "The language the strings of the game are read in, such as en or ru.");
 locale.Language = cvars.Get<string>("locale");
 
-// A command of several levels: `cvars` lists the settings (registered by the service itself), `cvars get <name>` answers one, and
-// `cvars set <name> <value>` writes it. The two are separate names rather than one command that reads its first argument, which
-// is what makes each of them complete on its own and what a person reads in the list of suggestions.
+// The levels of the command after the name: `cvars` lists the settings (registered by the service itself), `cvars get <name>`
+// answers one, and `cvars set <name> <value>` writes it. The words are levels of a tree rather than parts of one name, so each of
+// them is completed and suggested on its own, and nothing is typed until the level that needs it is reached.
 console.Register("cvars get", "Answers what a setting holds. Usage: cvars get spawnLifetime.", arguments =>
 {
     if (arguments.Count == 0)
@@ -359,7 +359,7 @@ console.Register("cvars get", "Answers what a setting holds. Usage: cvars get sp
 
     console.Write($"{arguments[0]} = {cvars.GetText(arguments[0])}");
 });
-console.Register("cvars set", "Writes a setting. Usage: cvars set lifetime 4, cvars set locale ru.", arguments =>
+console.Register("cvars set", "Writes a setting. Usage: cvars set spawnLifetime 4, cvars set locale ru.", arguments =>
 {
     if (arguments.Count < 2)
     {
@@ -377,6 +377,35 @@ console.Register("cvars set", "Writes a setting. Usage: cvars set lifetime 4, cv
         console.Write($"{name} = {cvars.GetText(name)}");
     }
 });
+
+// The values the panel offers while a line of the console is being typed: a line that has reached `cvars set` or `cvars get` lists
+// the settings, and a line that has named one lists the values that setting takes. This is what a developer reads at every level of
+// a command, which is the reason the levels are words of the tree rather than one name with spaces in it.
+consoleOverlay.SetValues(line =>
+{
+    string[] words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    // Nothing but the path is typed at the level that names a setting, so the names of the settings are what a developer reads.
+    if (words.Length == 2 && line[^1] == ' ' && words[0].Equals("cvars", StringComparison.OrdinalIgnoreCase) && words[1].ToLowerInvariant() is "get" or "set")
+    {
+        return cvars.Values.Select(cvar => cvar.Name);
+    }
+
+    // A setting that was named takes a value, and the value of the language is chosen from the languages the game ships.
+    if (words.Length == 3 && line[^1] == ' ' && words[0].Equals("cvars", StringComparison.OrdinalIgnoreCase) && words[1].Equals("set", StringComparison.OrdinalIgnoreCase))
+    {
+        return ValuesOf(words[2]);
+    }
+
+    return [];
+});
+
+IEnumerable<string> ValuesOf(string name) => name.ToLowerInvariant() switch
+{
+    "locale" => ["en", "ru"],
+    "spawnlifetime" => ["0.5", "1", "2", "4"],
+    _ => [],
+};
 
 // The camera that the last frame was drawn through, which a console command reads: the camera of a frame is built in the
 // callback that draws it, and a command runs at the boundary of a step, so the last one that was drawn is what the game is

@@ -146,6 +146,18 @@ public sealed class TextRenderer
         return cached.Layout.Size;
     }
 
+    /// <summary>Measures a text that no entity carries, without drawing it.</summary>
+    /// <param name="text">The text to measure. A null or an empty text measures zero.</param>
+    /// <param name="style">How the text is written, which says which fonts draw it and whether it wraps.</param>
+    /// <param name="box">The width and the height of the box, where a side of zero means as large as the text.</param>
+    /// <returns>The size the text takes, which is what <see cref="Draw(string?, Vector2, in TextStyle, Vector2)"/> draws.</returns>
+    /// <remarks>
+    /// A caller that has to lay a block out before it draws it, such as a console that gives its panel a height and a scroll,
+    /// measures with this and then draws the same text: the layout is remembered, so the second call costs nothing.
+    /// </remarks>
+    public Vector2 Measure(string? text, in TextStyle style, Vector2 box = default) =>
+        string.IsNullOrEmpty(text) ? Vector2.Zero : Laid(text, box, style).Layout.Size;
+
     /// <summary>Returns the layout of the text of an entity, laying it out when something about it changed.</summary>
     /// <param name="entity">The entity that carries the text.</param>
     /// <param name="box">The box the text is laid out into.</param>

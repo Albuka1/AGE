@@ -89,6 +89,56 @@ public sealed class DevConsoleOverlayTests
     }
 
     [Fact]
+    public void DevConsoleOverlay_Update_AnEmptyLineListsNothingUntilACharacterIsTyped()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        DevConsoleOverlay overlay = Create(console, input, text: text);
+
+        console.Register("cvars", "Lists the settings.", _ => { });
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        Press(overlay, input, overlay.OpenKey);
+
+        // An empty line lists nothing, so the down key is the history of the console rather than a list of every command: the list
+        // is what the line could become, and an empty line could become anything.
+        Press(overlay, input, Key.Down);
+        console.Input.Should().BeEmpty("an empty line has no suggestions to walk");
+
+        // The first character that is typed is what narrows the list down, and the down key then walks it.
+        text.Type("cv");
+        Frame(overlay, input);
+        Press(overlay, input, Key.Down);
+        Press(overlay, input, Key.Tab);
+
+        console.Input.Should().Be("cvars", "the list appeared with the characters that were typed");
+    }
+
+    [Fact]
+    public void DevConsoleOverlay_Update_CompletesTheLevelsOfACommandOneAtATime()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        DevConsoleOverlay overlay = Create(console, input, text: text);
+
+        // A command of several levels is a tree, so the levels are suggested one at a time: 'cvars ' lists 'set' and 'get', and Tab
+        // takes the level rather than the whole name at once.
+        console.Register("cvars", "Lists the settings.", _ => { });
+        console.Register("cvars set", "Writes a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+
+        Press(overlay, input, overlay.OpenKey);
+
+        text.Type("cvars s");
+        Frame(overlay, input);
+        Press(overlay, input, Key.Tab);
+
+        console.Input.Should().Be("cvars set", "the level behind the word that is typed is what Tab takes");
+    }
+
+    [Fact]
     public void DevConsoleOverlay_Update_TabTakesTheSuggestionThatMatches()
     {
         var console = new ConsoleService();
@@ -133,6 +183,85 @@ public sealed class DevConsoleOverlayTests
 
         console.Input.Should().Be("stats", "Tab takes the row the down keys stopped on");
     }
+    [Fact]
+    public void DevConsoleOverlay_Update_TabTakesAValueTheGameOffersBehindACommandOfSeveralWords()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        DevConsoleOverlay overlay = Create(console, input, text: text);
+
+        console.Register("cvars set", "Writes a setting.", _ => { });
+        overlay.SetValues(line => line == "cvars set locale "
+            ? ["en", "ru"]
+            : []);
+
+        Press(overlay, input, overlay.OpenKey);
+        text.Type("cvars set locale ");
+        Frame(overlay, input);
+
+        // The line names the setting, and the values of it are what the panel lists: the first row is taken by Tab, which writes
+        // the value behind the path rather than in place of the command.
+        Press(overlay, input, Key.Tab);
+
+        console.Input.Should().Be("cvars set locale en", "the value is added behind the path that is already typed");
+    }
+
+    [Fact]
+    public void DevConsoleOverlay_Update_TheUpAndDownKeysWalkTheValuesOfAnArgument()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        DevConsoleOverlay overlay = Create(console, input, text: text);
+
+        console.Register("cvars set", "Writes a setting.", _ => { });
+        overlay.SetValues(line => line == "cvars set locale " ? ["en", "ru"] : []);
+
+        Press(overlay, input, overlay.OpenKey);
+        text.Type("cvars set locale ");
+        Frame(overlay, input);
+
+        Press(overlay, input, Key.Down);
+        Press(overlay, input, Key.Down);
+        Press(overlay, input, Key.Tab);
+
+        console.Input.Should().Be("cvars set locale ru", "the down key walked the list of values to the second one");
+    }
+
+    [Fact]
+    public void DevConsoleOverlay_Update_ThePageKeysScrollTheOutput()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        DevConsoleOverlay overlay = Create(console, input);
+
+        overlay.VisibleLines = 4;
+
+        for (var index = 0; index < 20; index++)
+        {
+            console.Write($"line {index}");
+        }
+
+        Press(overlay, input, overlay.OpenKey);
+
+        // A page up walks back through the output, which is what reads a log that is longer than the panel. The keys walk the
+        // output rather than the history or the line, so the console stays open and the line that is being typed is left alone.
+        Press(overlay, input, Key.PageUp);
+        Press(overlay, input, Key.PageUp);
+
+        console.IsOpen.Should().BeTrue("the page keys scroll the output rather than close the console");
+        console.Input.Should().BeEmpty("scrolling does not type into the line");
+
+        // The page down walks forward again, and a scroll that runs past the end settles there rather than going negative.
+        Press(overlay, input, Key.PageDown);
+        Press(overlay, input, Key.PageDown);
+        Press(overlay, input, Key.PageDown);
+
+        console.IsOpen.Should().BeTrue("the page keys do not disturb the state of the console");
+    }
+
+
 
     [Fact]
     public void DevConsoleOverlay_Update_EscapeClosesTheConsole()

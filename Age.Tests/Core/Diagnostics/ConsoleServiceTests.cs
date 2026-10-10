@@ -341,15 +341,111 @@ public sealed class ConsoleServiceTests
     }
 
     [Fact]
-    public void ConsoleService_Matches_ListTheCommandsThatCouldStillBeTyped()
+    public void ConsoleService_Matches_ListTheLevelsThatCouldStillBeTyped()
     {
         var console = new ConsoleService();
         console.Register("cvars", "Lists the settings.", _ => { });
         console.Register("cvars set", "Sets a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
         console.Register("spawn", "Puts sprites on screen.", _ => { });
 
-        console.Matches("cvars").Select(command => command.Name).Should().Equal("cvars", "cvars set");
-        console.Matches("cvars ").Select(command => command.Name).Should().Equal("cvars set");
+        // A line that is being named lists the levels one below it: 'cvars' names the group, and what could be typed at it is the
+        // levels that follow, which is what a console of several levels lists at every stage.
+        console.Matches("cvars").Select(command => command.Name).Should().Equal("cvars");
+        console.Matches("cvars ").Select(command => command.Name).Should().Equal("cvars set", "cvars get");
+        console.Matches("cvars s").Select(command => command.Name).Should().Equal("cvars set");
+    }
+
+    [Fact]
+    public void ConsoleService_Matches_ALineThatWalkedIntoAGroup_ListsTheLevelsBelowIt()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Sets a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+
+        // The path before the last word is walked into the tree, and the levels below it are the rows, so each word of a command is
+        // suggested in turn rather than the whole name at once.
+        console.Matches("cv").Select(command => command.Name).Should().Equal("cvars");
+        console.Matches("cvars ").Select(command => command.Name).Should().Equal("cvars set", "cvars get");
+        console.Matches("cvars set").Select(command => command.Name).Should().Equal(new[] { "cvars set" });
+    }
+
+    [Fact]
+    public void ConsoleService_Execute_WalksTheGroupsOfACommandOfSeveralLevels()
+    {
+        var console = new ConsoleService();
+        var seen = new List<string>();
+
+        // 'set' is a level that is never registered on its own: registering 'cvars set' makes 'cvars' and 'set' groups that a line
+        // walks through, which is what makes a command of several levels a tree rather than a name with spaces in it.
+        console.Register("cvars", "Lists the settings.", _ => seen.Add("list"));
+        console.Register("cvars set", "Writes a setting.", arguments => seen.Add(string.Join(' ', arguments)));
+
+        console.Execute("cvars").Should().BeTrue();
+        console.Execute("cvars set locale ru").Should().BeTrue();
+
+        seen.Should().Equal("list", "locale ru");
+    }
+
+    [Fact]
+    public void ConsoleService_Execute_ALineThatStopsAboveALeaf_RunsTheGroupThatHoldsACommand()
+    {
+        var console = new ConsoleService();
+        var ran = string.Empty;
+
+        console.Register("cvars", "Lists the settings.", _ => ran = "cvars");
+        console.Register("cvars set", "Writes a setting.", _ => ran = "set");
+
+        // 'cvars set locale' reaches the leaf 'cvars set' with the argument 'locale', and a word below a leaf is an argument of it
+        // rather than a level: the leaf that ran is the deepest one the words walked to.
+        console.Execute("cvars set locale").Should().BeTrue();
+
+        ran.Should().Be("set");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesALevelBehindAPathOneWordAtATime()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+
+        // A word that is already a whole level is left alone, so 'cvars' is not shortened to itself and the space that descends the
+        // tree is typed. The word behind the path is completed to the level the path leads to.
+        console.SetInput("cvars");
+        console.Complete().Should().BeFalse("the first level is already the whole word it could be");
+
+        console.SetInput("cvars se");
+        console.Complete().Should().BeTrue();
+        console.Input.Should().Be("cvars set", "the level behind the path is completed and the path is left in place");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_OfAWholeLeaf_LeavesTheLineAlone()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        foreach (char character in "cvars set")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeFalse("a word that is already the level it matches is nothing to complete");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_ReplacesOnlyTheLastWordAndKeepsThePath()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        // A setting that was named is an argument of the level above it, and the word that is completed is the level, so the words
+        // that are already typed stay exactly as they were and only the last one changes.
+        console.SetInput("cvars se");
+        console.Complete().Should().BeTrue();
+
+        console.Input.Should().Be("cvars set", "the path that was typed is kept and only the last word is completed");
     }
 
     [Fact]
@@ -405,6 +501,21 @@ public sealed class ConsoleServiceTests
 
         console.Complete().Should().BeTrue("the last word is completed and the path that is already typed stays");
         console.Input.Should().Be("cvars set");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesBehindAPathTypedWithExtraWhitespace()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Sets a setting.", _ => { });
+
+        foreach (char character in "cvars\t se")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeTrue("a path typed with a tab still names the command it completes");
+        console.Input.Should().Be("cvars set", "the path is written back with the single spaces a name holds");
     }
 
     [Fact]

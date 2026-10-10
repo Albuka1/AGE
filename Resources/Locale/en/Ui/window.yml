@@ -4,4 +4,4 @@
 # a count has no text of its own, because there would be two answers to the same question.
 ui-entities.one: "{count} entity"
 ui-entities.other: "{count} entities"
-console-title: "console - type help, Tab completes, arrows walk the suggestions"
+ui-console-title: "console - type help, Tab completes, arrows walk the suggestions"
