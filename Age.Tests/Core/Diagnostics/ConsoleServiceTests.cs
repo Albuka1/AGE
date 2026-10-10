@@ -179,6 +179,35 @@ public sealed class ConsoleServiceTests
 
 
     [Fact]
+    public void ConsoleService_Delete_RemovesTheSelectionAndLeavesTheCharacterAfterIt()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abcdef");
+        console.Caret = 2;
+        console.SelectionAnchor = 5;
+
+        console.Delete();
+
+        // The selection goes and the character after it stays: a delete that removed the selection and then the character at the
+        // caret would answer "ab" here, losing the "f" that stood outside the mark.
+        console.Input.Should().Be("abf");
+        console.Caret.Should().Be(2);
+    }
+
+    [Fact]
+    public void ConsoleService_Delete_WithNoSelection_RemovesTheCharacterAtTheCaret()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abc");
+        console.Caret = 1;
+
+        console.Delete();
+
+        console.Input.Should().Be("ac", "a delete with nothing marked removes the character the caret stands on");
+        console.Caret.Should().Be(1);
+    }
+
+    [Fact]
     public void ConsoleService_Recall_WalksTheHistoryAndEndsOnAnEmptyLine()
     {
         var console = new ConsoleService();

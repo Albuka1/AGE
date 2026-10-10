@@ -244,7 +244,21 @@ public sealed class DevWindowService : IDevWindowService
 
         if (_tabs.Count > 0)
         {
-            _tabs[_active].Render(new HostRenderer(_host), Body(size));
+            // The page is kept inside the body of the window, so a page that draws past the room it was given — a line that is
+            // wider than the body, or a tab that drew without measuring itself — is cut off at the edge of the window rather than
+            // drawn over the frame of it. The pop runs whether the page drew or threw, so a page that fails does not leave the clip
+            // of the last frame in force for the frame of the window that follows it.
+            Rect body = Body(size);
+            _host.PushClip(body);
+
+            try
+            {
+                _tabs[_active].Render(new HostRenderer(_host), body);
+            }
+            finally
+            {
+                _host.PopClip();
+            }
         }
     }
 

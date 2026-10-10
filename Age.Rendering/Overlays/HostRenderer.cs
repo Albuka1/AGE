@@ -48,6 +48,13 @@ internal sealed class HostRenderer(IDevWindowHost host) : IRenderer
     public void ReleaseTexture(TextureHandle texture) => throw new NotSupportedException("A window beside the game owns no textures of the world.");
 
     /// <inheritdoc />
+    /// <remarks>A page is clipped to the body of the window it draws into, which is the rectangle the host keeps its draws inside.</remarks>
+    public void PushClip(Rect rect) => host.PushClip(rect);
+
+    /// <inheritdoc />
+    public void PopClip() => host.PopClip();
+
+    /// <inheritdoc />
     public void Dispose()
     {
     }

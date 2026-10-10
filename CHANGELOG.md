@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pages and draws each into a `IDevWindowHost`, which `SilkDevWindowHost` answers with a second Silk.NET window and a context of its
   own and `NullDevWindowHost` answers with a window that is never there for a headless run. The window is created the first time it is
   opened and its size is kept while it is closed. The cross of a tab removes that page and the cross of the title bar closes the
-  window. The page draws through the renderer of its own window, which is what puts the output of the console on the screen of the
+  window. A page is drawn inside the body of the window and clipped to it by `IDevWindowHost.PushClip` and `PopClip`, so a page that
+  draws past the room it was given is cut off at the frame of the window rather than drawn over it. The page draws through the
+  renderer of its own window, which is what puts the output of the console on the screen of the
   window rather than in the context of the game, and a line that is wider than the page is wrapped onto the rows below it rather than
   running off the side of the window. The window is titled `devwindow`, and a close that the window manager sends — the cross of the
   title bar — closes and disposes it, so the next `devwindow` opens a window of its own. `ConsoleTab` shows the output of the console,
@@ -46,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Every build writes into one `bin/` and one `obj/` at the repository root вЂ” a folder per project inside each вЂ” rather than
+- Every build writes into one `bin/` and one `obj/` at the repository root — a folder per project inside each — rather than
   into a `bin`/`obj` pair beside every project, so the output of the whole solution is in one place and two projects that share
   the name of an assembly cannot write over one another. `Directory.Build.props` sets `BaseOutputPath`,
   `BaseIntermediateOutputPath` and `MSBuildProjectExtensionsPath` to those root folders; the shared `artifacts/` folder is gone.
@@ -62,6 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The delete key of the console removed the selected text **and** the character after it, because it fell through to the single
+  character removal once a selection had already gone: a selection is now the whole of what a delete removes, the way a console of a
+  terminal removes the marked text and leaves the character behind it.
+- A folder that a game gave as a relative path was compared with the absolute path of a name, so the containment check of
+  `IUserDataService.PathIn` refused a name it should have accepted, or accepted one on a folder with a trailing separator: the folder
+  is normalized to a full path before the check, in the same form the name is joined in, while a name that climbs out is still
+  refused.
 - A value that a layer wrote itself and that its kind cannot hold no longer takes the rest of the frame with it: the value is
   refused and reported, and the values around it are still sent. A frame reads the values of a layer on every draw and has
   nowhere to report a mistake of the content to but the log, so a mistake in one value used to stop the whole draw of that layer

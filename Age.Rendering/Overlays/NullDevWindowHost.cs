@@ -65,5 +65,16 @@ public sealed class NullDevWindowHost : IDevWindowHost
     public Vector2 Measure(string text) => new(text.Length * BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight);
 
     /// <inheritdoc />
+    /// <remarks>A window that draws nothing has nothing to keep inside a rectangle, so a push is ignored.</remarks>
+    public void PushClip(Rect rect)
+    {
+    }
+
+    /// <inheritdoc />
+    public void PopClip()
+    {
+    }
+
+    /// <inheritdoc />
     public void Dispose() => IsOpen = false;
 }

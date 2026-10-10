@@ -212,13 +212,17 @@ public sealed class ConsoleService : IConsoleService
     {
         lock (_gate)
         {
-            if (RemoveSelectionCore() || _caret < _input.Length)
+            // A selection is what a delete removes first, and only the selection: the character after it stays, which is what a
+            // console of a terminal does when the whole of the marked text goes rather than the mark and the character behind it.
+            if (RemoveSelectionCore())
             {
-                if (_caret < _input.Length)
-                {
-                    _input.Remove(_caret, 1);
-                }
+                _recall = -1;
+                return;
+            }
 
+            if (_caret < _input.Length)
+            {
+                _input.Remove(_caret, 1);
                 _recall = -1;
             }
         }

@@ -64,6 +64,36 @@ public sealed class UserDataServiceTests : IDisposable
     }
 
     [Fact]
+    public void UserDataService_ARelativeFolder_StillHoldsTheNamesOfTheGameAndRefusesOneThatClimbsOut()
+    {
+        // A folder that was given as a relative path is compared in the same absolute form as the name that is joined to it. The
+        // folder of the test is under the one the process runs in, so the relative path is a real one whatever drive the temporary
+        // folder is on: a name below the game folder is accepted rather than refused, and one that climbs out is still refused.
+        string game = "age-userdata-" + Guid.NewGuid().ToString("N");
+        string under = Path.Combine(Directory.GetCurrentDirectory(), game);
+        string roaming = Path.GetRelativePath(Directory.GetCurrentDirectory(), under);
+
+        try
+        {
+            var data = new UserDataService("AGE Sample", roaming);
+            string save = data.PathIn(UserDataFolder.Saves, "campaign.json");
+
+            save.Should().StartWith(Path.GetFullPath(under), "a name below the folder of the game is accepted");
+
+            Action climbing = () => data.PathIn(UserDataFolder.Saves, "../settings.json");
+
+            climbing.Should().Throw<ArgumentException>("a name that climbs out of the folder is refused whatever form the folder was given in");
+        }
+        finally
+        {
+            if (Directory.Exists(under))
+            {
+                Directory.Delete(under, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void UserDataService_ANameOfTheGameThatIsAFolderName_IsTheOnlyThingAccepted()
     {
         Action empty = () => new UserDataService("  ", _roaming);

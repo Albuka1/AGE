@@ -72,7 +72,10 @@ public sealed class UserDataService : IUserDataService
         ArgumentNullException.ThrowIfNull(name);
 
         string path = Path.GetFullPath(Path.Combine(Ensure(folder), name));
-        string folderPath = Folder(folder);
+
+        // The folder is normalized the same way the name is, so the two are compared in the one absolute form: a folder that was
+        // given as a relative path, or one with a trailing separator, would otherwise never match a path that was joined to it.
+        string folderPath = Path.GetFullPath(Folder(folder));
 
         // The name is a path below the folder of this game and nowhere else: a name that climbs out of it is refused rather than
         // followed, which is what keeps a name of a file a name rather than a way to write anywhere on the disk.

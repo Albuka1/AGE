@@ -148,6 +148,13 @@ public sealed class SilkDevWindowHost : IDevWindowHost
     public Vector2 Measure(string text) => new(text.Length * BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight);
 
     /// <inheritdoc />
+    /// <remarks>The renderer of this window clips through the device, so a page that is longer than its body is held in by it.</remarks>
+    public void PushClip(Rect rect) => _renderer?.PushClip(rect);
+
+    /// <inheritdoc />
+    public void PopClip() => _renderer?.PopClip();
+
+    /// <inheritdoc />
     public void Dispose()
     {
         // The objects of this window are deleted on the context that owns them, which is made current here: a window that the window

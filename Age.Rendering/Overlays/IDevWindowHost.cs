@@ -58,6 +58,17 @@ public interface IDevWindowHost
     /// <param name="text">The line to measure.</param>
     Vector2 Measure(string text);
 
+    /// <summary>Keeps the draws that follow inside a rectangle of the window, which is what a page that is longer than its body is held in by.</summary>
+    /// <param name="rect">The rectangle to keep the draws inside, in the pixels of the window.</param>
+    /// <remarks>
+    /// A push nests, and what was pushed is undone by <see cref="PopClip"/>. A host that draws without clipping ignores both calls,
+    /// so a page that clips is drawn whole rather than refused.
+    /// </remarks>
+    void PushClip(Rect rect);
+
+    /// <summary>Undoes the most recent <see cref="PushClip"/>.</summary>
+    void PopClip();
+
     /// <summary>Closes the window and releases what it owns.</summary>
     void Dispose();
 }

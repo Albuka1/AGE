@@ -131,6 +131,26 @@ public sealed class DevWindowServiceTests
         host.Created.Should().Be(2, "the window that went is replaced by one of its own");
     }
 
+    [Fact]
+    public void DevWindowService_ThePageOfATab_IsHeldInsideTheBodyOfTheWindow()
+    {
+        var host = new FakeHost();
+        var tab = new FakeTab("one");
+        var service = new DevWindowService(host);
+        service.Add(tab);
+        service.Open();
+
+        service.Pump(new GameTime(0.016d, 0.016d));
+
+        // The page draws in the body rather than the whole window. The body begins below the title bar and the row of tabs and is
+        // inset by the padding, so a page that draws past the room it was given is cut off at the frame of the window.
+        tab.RenderedBody.Y.Should().BeGreaterThan(0f, "the page stands below the title bar and the tabs");
+
+        // The clip is pushed around the page and popped after it, so the frame that follows draws unclipped.
+        host.Clip.Should().BeNull("the clip of the page does not outlive the frame of the window");
+        host.Pushed.Should().BeEquivalentTo([tab.RenderedBody], "the page is drawn inside the body of the window");
+    }
+
     /// <summary>A page that remembers whether it was read, which is how a test reads which page is on top.</summary>
     private sealed class FakeTab(string title) : IDevWindowTab
     {
@@ -140,11 +160,12 @@ public sealed class DevWindowServiceTests
 
         public bool Closable { get; init; }
 
+        /// <summary>Gets the body the page was drawn in, which is what says the page was given the room inside the frame of the window.</summary>
+        public Rect RenderedBody { get; private set; }
+
         public void Update(in GameTime frame, Rect body, in WindowPointer pointer) => Updated = true;
 
-        public void Render(IRenderer renderer, Rect body)
-        {
-        }
+        public void Render(IRenderer renderer, Rect body) => RenderedBody = body;
     }
 
     /// <summary>A host that reports the size and a click a test sets, which is how the frame of the window is driven without a window.</summary>
@@ -199,6 +220,20 @@ public sealed class DevWindowServiceTests
         }
 
         public Vector2 Measure(string text) => new(text.Length * BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight);
+
+        /// <summary>Gets the clip that was pushed and not popped yet, which is what says a page was held inside the body.</summary>
+        public Rect? Clip { get; private set; }
+
+        /// <summary>Gets every clip that was pushed, in the order it was pushed, which is what says the page was clipped at all.</summary>
+        public List<Rect> Pushed { get; } = [];
+
+        public void PushClip(Rect rect)
+        {
+            Clip = rect;
+            Pushed.Add(rect);
+        }
+
+        public void PopClip() => Clip = null;
 
         public void Dispose()
         {
