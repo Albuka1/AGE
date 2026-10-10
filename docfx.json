@@ -23,7 +23,7 @@
       { "src": "docs", "files": ["**/*.md"] },
       { "files": ["toc.yml"] },
       { "files": ["api/**/*.yml"] },
-      { "files": ["README.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "SECURITY.md", "AGE-PLAN-STATUS.md"] }
+      { "files": ["README.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "SECURITY.md"] }
     ],
     "resource": [
       { "files": ["LICENSE"] },

@@ -297,6 +297,11 @@ world.Set(second, TweenComponent.Between(0f, MathF.Tau, 3f, looping: true));
 // handed out again for the next one and this game keeps no book of its own. The string of the HUD remembers which entity
 // was spawned last, with its generation.
 Entity lastSpawned = default;
+
+// The camera that the last frame was drawn through, which a console command reads: the camera of a frame is built in the
+// callback that draws it, and a command runs at the boundary of a step, so the last one that was drawn is what the game is
+// looking through when the command runs.
+Camera2D drawnThrough = new() { Zoom = 1f };
 string version = typeof(World).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
 // One sprite is already on its way when the game starts, so the HUD has something to report and the slot logic runs
@@ -369,6 +374,18 @@ console.Register("ui", "Reports the scaler of the interface and the rectangle of
 // The world of this game is drawn one unit per pixel by default, so a larger window shows more of it. `G` is the other way
 // round: the camera is built from the area this game is authored against, so a window of any shape shows the same view of the
 // world, cropped rather than stretched where the shapes differ. The HUD reports which of the two is in use.
+console.Register("point", "Reports where the pointer is on the screen and in the world, and where that world position is drawn.", _ =>
+{
+    // The camera of the frame that was last drawn, which is the one the player is looking through now. The conversion is what a
+    // click asks before it decides what stands where: the pointer is a point of the screen and a cell of a map is a box of the
+    // world, and the two meet here.
+    Vector2 screen = input.MousePosition;
+    Vector2 world = drawnThrough.ScreenToWorld(screen);
+    Vector2 back = drawnThrough.WorldToScreen(world);
+
+    console.Write($"pointer {screen.X:0}x{screen.Y:0} on screen is {world.X:0}x{world.Y:0} in the world, and that is drawn back at {back.X:0}x{back.Y:0}");
+});
+
 console.Register("fit", "Reports how the camera of the world is built and switches it to the other of the two ways.", _ =>
 {
     fitWorld = !fitWorld;
@@ -472,6 +489,8 @@ gameLoop.Run(
         Camera2D camera = fitWorld
             ? Camera2D.Fit(design, renderer.ViewportSize, CameraFit.Cover)
             : new Camera2D { Position = Vector2.Zero, Zoom = 1f, ViewportSize = renderer.ViewportSize };
+
+        drawnThrough = camera;
 
         renderPipeline.Render(world, camera);
 

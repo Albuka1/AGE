@@ -38,12 +38,82 @@ public struct Camera2D
     /// </remarks>
     public readonly Matrix4x4 GetViewMatrix()
     {
+        EnsureZoom();
+
+        return Matrix4x4.CreateTranslation(-Position.X, -Position.Y, 0f) * Matrix4x4.CreateScale(1f / Zoom, 1f / Zoom, 1f);
+    }
+
+    /// <summary>Returns the world position that a point of the screen shows.</summary>
+    /// <param name="screen">A point of the screen, in pixels, with the origin at the top-left corner of the viewport.</param>
+    /// <returns>The position in the world that this point of the screen shows.</returns>
+    /// <exception cref="InvalidOperationException">Zoom is NaN, zero or negative.</exception>
+    /// <remarks>
+    /// <para>
+    /// This is the inverse of <see cref="WorldToScreen"/> and it is what a click becomes before a game asks what stands where:
+    /// the pointer of <c>IInputService</c> is a point of the screen, a cell of a map is a box of the world, and the two meet in
+    /// this call. A camera that moved or zoomed between the frame the pointer was read in and this call answers for where it
+    /// stands now, because nothing of the conversion is remembered.
+    /// </para>
+    /// <para>
+    /// The conversion is the inverse of the matrix the renderer draws with — the view of this camera followed by the
+    /// orthographic projection of the viewport — so what a game reads here is what a player sees, down to the rounding: a point
+    /// that a pass drew at a world position comes back as that position, and a point of the screen that no draw covered comes
+    /// back as a position of the world that is outside everything the camera looked at.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// if (input.IsMouseButtonPressed(MouseButton.Left))
+    /// {
+    ///     Vector2 world = camera.ScreenToWorld(input.MousePosition);
+    ///     Entity? clicked = OccupantOf(world);
+    /// }
+    /// </code>
+    /// </example>
+    public readonly Vector2 ScreenToWorld(Vector2 screen)
+    {
+        EnsureZoom();
+
+        // The projection maps the view of the camera onto the viewport, so the way back is the position of the point in the
+        // viewport, scaled by the zoom, moved by where the camera stands. Nothing of it depends on the size of the viewport,
+        // which is why a viewport size that a game never set still converts: see VisibleWorld.
+        return Position + (screen * Zoom);
+    }
+
+    /// <summary>Returns the point of the screen that a world position is drawn at.</summary>
+    /// <param name="world">A position in the world.</param>
+    /// <returns>The point of the screen, in pixels, with the origin at the top-left corner of the viewport.</returns>
+    /// <exception cref="InvalidOperationException">Zoom is NaN, zero or negative.</exception>
+    /// <remarks>
+    /// This is the inverse of <see cref="ScreenToWorld"/>, and it is what a game places an interface of the world with: a name
+    /// over a unit, a health bar under it, an arrow at the edge of the screen that points at something off it. A point outside
+    /// the viewport is answered with the point it would be drawn at rather than refused, so a game that clamps an element to the
+    /// edge reads the position and clamps it itself.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// Vector2 corner = camera.WorldToScreen(unit.Position);
+    ///
+    /// renderer.DrawText(name, corner - new Vector2(0f, 18f), Color.White);
+    /// </code>
+    /// </example>
+    public readonly Vector2 WorldToScreen(Vector2 world)
+    {
+        EnsureZoom();
+
+        // The view matrix scales the world by one over the zoom, and Vector2 has no division by a number: the same reciprocal
+        // that GetViewMatrix hands to Matrix4x4.CreateScale is what this multiplies by, so the two cannot disagree.
+        return (world - Position) * (1f / Zoom);
+    }
+
+    /// <summary>Refuses a zoom that a conversion cannot be computed with.</summary>
+    /// <exception cref="InvalidOperationException">Zoom is NaN, zero or negative.</exception>
+    private readonly void EnsureZoom()
+    {
         if (float.IsNaN(Zoom) || Zoom <= 0f)
         {
             throw new InvalidOperationException("Camera2D.Zoom must be greater than zero.");
         }
-
-        return Matrix4x4.CreateTranslation(-Position.X, -Position.Y, 0f) * Matrix4x4.CreateScale(1f / Zoom, 1f / Zoom, 1f);
     }
 
     /// <summary>Returns a camera that shows a design area of the world in a window of the given size.</summary>

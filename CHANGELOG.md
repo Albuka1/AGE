@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Camera2D.ScreenToWorld` and `Camera2D.WorldToScreen` turn a point of the screen into a position of the world and back. The
+  conversion is the inverse of the matrix the renderer draws with, so what a game reads is what a player sees: a click that
+  became a position of the screen becomes the cell of the map that stands under it, and a name that is placed over a unit
+  becomes the pixel it is drawn at. Neither direction remembers anything, so a camera that moved or zoomed between the frame the
+  pointer was read in and the call answers for where it stands now.
+
 ### Changed
 
 - A key and a mouse button are the names of the device that the window reports through, so `Age.Input.Key` and
