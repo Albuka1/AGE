@@ -75,11 +75,30 @@ public sealed partial class DevConsoleOverlay
             y += _line;
         }
 
-        string input = $"> {_console.Input}";
-        Vector2 inputSize = Write(input, new Vector2(Padding, y), TextColour);
+        // The line that is being typed is drawn in three parts, because a selection is drawn behind the text it covers and the caret
+        // stands where the next character lands: the prompt, the text before what is selected, the selection, the text after it. The
+        // width of each part is measured with the font the panel draws with, which is what places the two.
+        const string prompt = "> ";
+        float lineStart = Padding + Measure(prompt).X;
+        int selectionStart = _console.SelectionStart;
+        int selectionLength = _console.SelectionLength;
+        string typed = _console.Input;
 
-        // The caret is a small block after the line, which is what a console of a terminal shows in place of a cursor.
-        _renderer.DrawRectangle(new Rect(new Vector2(Padding + inputSize.X, y + 2f), new Vector2(2f, _line - 6f)), TextColour);
+        Write(prompt, new Vector2(Padding, y), TextColour);
+
+        // A selection is a band behind the text it covers, drawn before the text so the glyphs stand on top of it.
+        if (selectionLength > 0)
+        {
+            float before = Measure(typed[..selectionStart]).X;
+            float selected = Measure(typed.Substring(selectionStart, selectionLength)).X;
+            _renderer.DrawRectangle(new Rect(new Vector2(lineStart + before, y), new Vector2(selected, _line)), SelectedColour);
+        }
+
+        Write(typed, new Vector2(lineStart, y), TextColour);
+
+        // The caret is a small block where the next character lands, which is what a console of a terminal shows in place of a cursor.
+        float caretX = lineStart + Measure(typed[..Math.Clamp(_console.Caret, 0, typed.Length)]).X;
+        _renderer.DrawRectangle(new Rect(new Vector2(caretX, y + 2f), new Vector2(2f, _line - 6f)), TextColour);
         y += _line;
 
         for (int index = 0; index < suggestions.Count; index++)

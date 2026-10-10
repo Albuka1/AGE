@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- On Windows the sample is built as a window rather than a console application, so the operating system opens the game window
+         and not the console window that a console application brings with it. The lines it writes go to the console of the developer
+         overlay, which is where the engine already sends what it has to say, and `dotnet run` still attaches a console when the
+         sample is started from a terminal. -->
+    <OutputType Condition="$([MSBuild]::IsOSPlatform('Windows'))">WinExe</OutputType>
     <RootNamespace>Age.Sample</RootNamespace>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>

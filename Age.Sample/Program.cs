@@ -177,7 +177,7 @@ loading.Add(() =>
 {
     prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
     prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
-    Console.WriteLine($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
+    console.Write($"Loaded {prototypes.Load(assets, "Prototypes")} prototypes.");
 });
 
 // A material is the stage of a shader and the values its uniforms start with, read from the content: a layer of a sprite names
@@ -351,7 +351,7 @@ loading.Add(() =>
     {
         world = LoadScene(scenes, scenePath);
         first = FirstSprite(world);
-        Console.WriteLine($"Loaded the scene from {scenePath}.");
+        console.Write($"Loaded the scene from {scenePath}.");
     }
 
     // A bus belongs to a world rather than to the game, so the subscriptions are made for the world that is there once every
@@ -594,7 +594,13 @@ gameLoop.Run(
             return;
         }
 
-        MoveFirstSprite(world, first, input, step);
+        // The console takes the whole input while it is open, so the keys that move the sprite belong to it rather than to the
+        // game: the sprite stands still while a line is being typed, whatever was held when the console opened.
+        if (!consoleOverlay.IsVisible)
+        {
+            MoveFirstSprite(world, first, input, step);
+        }
+
         world.Update(step, pipeline);
 
         // A contact is announced by `CollisionEvent`, but a pair that came apart raises nothing: the collision component
@@ -663,7 +669,7 @@ gameLoop.Run(
             if (input.IsKeyPressed(Key.F))
             {
                 File.WriteAllText(scenePath, scenes.Save(world));
-                Console.WriteLine($"Saved the scene to {scenePath}.");
+                console.Write($"Saved the scene to {scenePath}.");
             }
 
             if (input.IsKeyPressed(Key.R) && File.Exists(scenePath))
@@ -671,7 +677,7 @@ gameLoop.Run(
                 world = LoadScene(scenes, scenePath);
                 first = FirstSprite(world);
                 SubscribeEvents(world);
-                Console.WriteLine("Loaded the scene again.");
+                console.Write("Loaded the scene again.");
             }
 
             if (input.IsKeyPressed(Key.E))
@@ -689,7 +695,7 @@ gameLoop.Run(
                 Camera2D fitted = Camera2D.Fit(design, renderer.ViewportSize, CameraFit.Cover);
                 Vector2 view = fitWorld ? fitted.VisibleWorld.Size : renderer.ViewportSize;
 
-                Console.WriteLine($"The world is {(fitWorld ? "fitted to the design area" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of it.");
+                console.Write($"The world is {(fitWorld ? "fitted to the design area" : "one unit per pixel")}: window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0} shows {view.X:0}x{view.Y:0} units of it.");
             }
 
             if (input.IsKeyPressed(Key.Escape))

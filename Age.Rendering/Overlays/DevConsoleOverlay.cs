@@ -72,6 +72,7 @@ public sealed partial class DevConsoleOverlay : IRenderPass
     private readonly IConsoleService _console;
     private readonly IInputService _input;
     private readonly ITextInputService _text;
+    private readonly IClipboardService? _clipboard;
     private readonly FixedTimestep _timestep;
     private readonly IRenderer _renderer;
     private readonly TextRenderer? _textRenderer;
@@ -107,8 +108,9 @@ public sealed partial class DevConsoleOverlay : IRenderPass
     /// <param name="renderer">The renderer that the overlay draws with.</param>
     /// <param name="textRenderer">The renderer of the text of the console, which draws it with the fonts of the engine, or null to draw it with the built-in font.</param>
     /// <param name="textSource">The source of the strings of the panel, or null to draw the keys themselves, which is readable English for the one key this panel uses.</param>
+    /// <param name="clipboard">The clipboard that a copy and a paste read and write, or null to leave the keys that need one doing nothing.</param>
     /// <exception cref="ArgumentNullException">One of the arguments that is not optional is null.</exception>
-    public DevConsoleOverlay(IConsoleService console, IInputService input, ITextInputService text, FixedTimestep timestep, IRenderer renderer, TextRenderer? textRenderer = null, ITextSource? textSource = null)
+    public DevConsoleOverlay(IConsoleService console, IInputService input, ITextInputService text, FixedTimestep timestep, IRenderer renderer, TextRenderer? textRenderer = null, ITextSource? textSource = null, IClipboardService? clipboard = null)
     {
         ArgumentNullException.ThrowIfNull(console);
         ArgumentNullException.ThrowIfNull(input);
@@ -119,6 +121,7 @@ public sealed partial class DevConsoleOverlay : IRenderPass
         _console = console;
         _input = input;
         _text = text;
+        _clipboard = clipboard;
         _timestep = timestep;
         _renderer = renderer;
         _textRenderer = textRenderer;

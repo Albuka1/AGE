@@ -123,6 +123,102 @@ public sealed partial class DevConsoleOverlay
         return true;
     }
 
+    /// <summary>Reads the control keys that edit the line of the console, which is what a copy, a cut, a paste and a select all do.</summary>
+    /// <returns><see langword="true"/> when a key of this frame edited the line, so the rest of the keys are left alone.</returns>
+    /// <remarks>
+    /// A paste reads the clipboard before the line, so what a person copied in another window is a line of the console: nothing
+    /// reaches the game and the text is written where the caret stands, over the selection when there is one.
+    /// </remarks>
+    private bool Edit()
+    {
+        // Select all marks the whole line, which is what a person does before copying it out or replacing it in one paste.
+        if (_input.IsKeyPressed(Key.A))
+        {
+            _console.SelectAll();
+            _suggested = -1;
+            return true;
+        }
+
+        // Copy leaves the line as it was and puts what is selected on the clipboard: it never changes the line, so it is read before
+        // the keys that do, and a copy of nothing does nothing.
+        if (_input.IsKeyPressed(Key.C))
+        {
+            if (_console.SelectionLength > 0)
+            {
+                _clipboard?.SetText(_console.Selection);
+            }
+
+            return false;
+        }
+
+        // Cut is a copy that also takes the selection out of the line.
+        if (_input.IsKeyPressed(Key.X))
+        {
+            if (_console.SelectionLength > 0)
+            {
+                _clipboard?.SetText(_console.Selection);
+                _console.RemoveSelection();
+            }
+
+            return true;
+        }
+
+        // Paste writes the clipboard where the caret stands, which is what pasting over a selection replaces.
+        if (_input.IsKeyPressed(Key.V))
+        {
+            if (_clipboard is not null)
+            {
+                _console.ReplaceSelection(_clipboard.Text);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Reads the keys that move the caret and, with Shift held, extend the selection rather than clearing it.</summary>
+    /// <remarks>
+    /// The caret is the place the next character lands and the selection is what a copy takes: holding Shift while an arrow key is
+    /// pressed extends the selection from the anchor, and an arrow key pressed once without it clears the selection.
+    /// </remarks>
+    private void CaretKeys()
+    {
+        bool shift = _input.IsKeyDown(Key.ShiftLeft) || _input.IsKeyDown(Key.ShiftRight);
+        bool moved = false;
+
+        if (Repeats(Key.Left))
+        {
+            _console.MoveCaret(-1);
+            moved = true;
+        }
+        else if (Repeats(Key.Right))
+        {
+            _console.MoveCaret(1);
+            moved = true;
+        }
+        else if (_input.IsKeyPressed(Key.Home))
+        {
+            // Home and End take the caret to an end of the line and leave the anchor where it was, so Shift extends the selection to
+            // that end; the setter of the caret is not used, because it would collapse the selection that Shift is holding.
+            _console.MoveCaret(-_console.Caret);
+            moved = true;
+        }
+        else if (_input.IsKeyPressed(Key.End))
+        {
+            _console.MoveCaret(_console.Input.Length - _console.Caret);
+            moved = true;
+        }
+
+        // A move that is not extending the selection collapses it, which is what an arrow key without Shift does: the anchor follows
+        // the caret to where it stopped. A move that is extending it leaves the anchor where the selection began.
+        if (moved && !shift)
+        {
+            _console.SelectionAnchor = _console.Caret;
+            _suggested = -1;
+        }
+    }
+
     /// <summary>One row of the panel: what a line could become and what it means.</summary>
     /// <param name="Text">The text the row completes to, which is what Tab writes into the line.</param>
     /// <param name="Description">What the row means, which is empty for a value.</param>

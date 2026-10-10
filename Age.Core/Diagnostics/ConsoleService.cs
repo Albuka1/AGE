@@ -23,6 +23,8 @@ public sealed class ConsoleService : IConsoleService
     private readonly Node _root = new(string.Empty, string.Empty);
     private readonly StringBuilder _input = new();
     private int _recall = -1;
+    private int _caret;
+    private int _anchor;
     private int _outputCapacity = DefaultOutputCapacity;
 
     /// <summary>Initializes the service with the two commands that are always there, <c>help</c> and <c>clear</c>.</summary>
@@ -172,7 +174,13 @@ public sealed class ConsoleService : IConsoleService
 
         lock (_gate)
         {
-            _input.Append(character);
+            RemoveSelectionCore();
+            _input.Insert(_caret, character);
+            _caret++;
+
+            // Typing ends the selection: the anchor follows the caret, so the next character does not read what was typed as a
+            // selection that has to go.
+            _anchor = _caret;
             _recall = -1;
         }
     }
@@ -182,12 +190,233 @@ public sealed class ConsoleService : IConsoleService
     {
         lock (_gate)
         {
-            if (_input.Length > 0)
+            // A selection is what a backspace removes first, which is what a console of a terminal does: the whole of the marked text
+            // goes rather than the one character before the caret.
+            if (RemoveSelectionCore())
             {
-                _input.Length--;
+                _recall = -1;
+                return;
+            }
+
+            if (_caret > 0)
+            {
+                _input.Remove(_caret - 1, 1);
+                _caret--;
                 _recall = -1;
             }
         }
+    }
+
+    /// <inheritdoc />
+    public void Delete()
+    {
+        lock (_gate)
+        {
+            if (RemoveSelectionCore() || _caret < _input.Length)
+            {
+                if (_caret < _input.Length)
+                {
+                    _input.Remove(_caret, 1);
+                }
+
+                _recall = -1;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public int Caret
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _caret;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                _caret = Math.Clamp(value, 0, _input.Length);
+
+                // A caret that is moved rather than extended is a selection that ends, which is what a plain move of a caret does.
+                _anchor = _caret;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public int SelectionAnchor
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _anchor;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                _anchor = Math.Clamp(value, 0, _input.Length);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public int SelectionStart
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return SelectionRange().Start;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public int SelectionLength
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return SelectionRange().Length;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public string Selection
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Selected();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public void MoveCaret(int by)
+    {
+        lock (_gate)
+        {
+            // Only the caret moves: the anchor stays where a selection began, which is what extends a selection while Shift is held.
+            // A caller that moves the caret without a selection collapses it afterwards through the setter of the caret.
+            _caret = Math.Clamp(_caret + by, 0, _input.Length);
+        }
+    }
+
+    /// <inheritdoc />
+    public void SelectAll()
+    {
+        lock (_gate)
+        {
+            _anchor = 0;
+            _caret = _input.Length;
+        }
+    }
+
+    /// <inheritdoc />
+    public bool RemoveSelection()
+    {
+        lock (_gate)
+        {
+            bool removed = RemoveSelectionCore();
+
+            if (removed)
+            {
+                _recall = -1;
+            }
+
+            return removed;
+        }
+    }
+
+    /// <inheritdoc />
+    public void ReplaceSelection(string? text)
+    {
+        lock (_gate)
+        {
+            RemoveSelectionCore();
+
+            if (string.IsNullOrEmpty(text))
+            {
+                _recall = -1;
+                return;
+            }
+
+            // A control character is dropped the way Type drops one, so a line that was pasted from a document keeps its words and
+            // loses the line breaks rather than running in the middle of a paste.
+            var written = new StringBuilder(text.Length);
+
+            foreach (char character in text)
+            {
+                if (!char.IsControl(character))
+                {
+                    written.Append(character);
+                }
+            }
+
+            _input.Insert(_caret, written.ToString());
+            _caret += written.Length;
+            _anchor = _caret;
+            _recall = -1;
+        }
+    }
+
+    /// <summary>Returns the text the caret and the anchor select, in the order the line holds it.</summary>
+    /// <remarks>
+    /// Called with the lock held, which is what the public members that read the selection do through their own lock. The range is
+    /// taken inside the line, so a caret or an anchor that a shorter line left behind reads the text that is there rather than
+    /// reaching past its end.
+    /// </remarks>
+    private string Selected()
+    {
+        (int start, int length) = SelectionRange();
+
+        return length == 0 ? string.Empty : _input.ToString(start, length);
+    }
+
+    /// <summary>Removes the selected text, leaving the caret where the selection began, and reports whether there was one.</summary>
+    /// <remarks>Called with the lock held, so a caller that already holds it does not take it again.</remarks>
+    private bool RemoveSelectionCore()
+    {
+        (int start, int length) = SelectionRange();
+
+        if (length == 0)
+        {
+            // A caret and an anchor that a shorter line left outside it are brought back to its end, so the line answers the range
+            // that is there rather than holding a selection of nothing that a later insert would act on.
+            _caret = Math.Clamp(_caret, 0, _input.Length);
+            _anchor = _caret;
+            return false;
+        }
+
+        _input.Remove(start, length);
+        _caret = start;
+        _anchor = start;
+        return true;
+    }
+
+    /// <summary>Returns the start and the length of the selected text, both taken inside the line that is being typed.</summary>
+    /// <remarks>
+    /// This is the one place the two indices are turned into a range, so a caret or an anchor that stands outside the line is kept
+    /// inside it in one place rather than in every member that reads the selection.
+    /// </remarks>
+    private (int Start, int Length) SelectionRange()
+    {
+        int caret = Math.Clamp(_caret, 0, _input.Length);
+        int anchor = Math.Clamp(_anchor, 0, _input.Length);
+
+        return (Math.Min(anchor, caret), Math.Abs(caret - anchor));
     }
 
     /// <inheritdoc />
@@ -198,7 +427,7 @@ public sealed class ConsoleService : IConsoleService
         lock (_gate)
         {
             line = _input.ToString();
-            _input.Clear();
+            SetLineCore(string.Empty);
             _recall = -1;
         }
 
@@ -226,7 +455,7 @@ public sealed class ConsoleService : IConsoleService
             }
 
             _recall = _recall < 0 ? _history.Count - 1 : Math.Max(0, _recall - 1);
-            _input.Clear().Append(_history[_recall]);
+            SetLineCore(_history[_recall]);
         }
     }
 
@@ -246,11 +475,11 @@ public sealed class ConsoleService : IConsoleService
             {
                 // Walking past the last line leaves an empty line, which is what the developer had before the recall.
                 _recall = -1;
-                _input.Clear();
+                SetLineCore(string.Empty);
                 return;
             }
 
-            _input.Clear().Append(_history[_recall]);
+            SetLineCore(_history[_recall]);
         }
     }
 
@@ -299,7 +528,7 @@ public sealed class ConsoleService : IConsoleService
             }
 
             string path = string.Join(' ', pathWords);
-            _input.Clear().Append(path.Length == 0 ? completion : $"{path} {completion}");
+            SetLineCore(path.Length == 0 ? completion : $"{path} {completion}");
             _recall = -1;
             return true;
         }
@@ -310,9 +539,22 @@ public sealed class ConsoleService : IConsoleService
     {
         lock (_gate)
         {
-            _input.Clear().Append(line ?? string.Empty);
+            SetLineCore(line ?? string.Empty);
             _recall = -1;
         }
+    }
+
+    /// <summary>Replaces the line that is being typed and puts the caret at its end with nothing selected.</summary>
+    /// <param name="line">The line to hold.</param>
+    /// <remarks>
+    /// Called with the lock held, which is what a member that replaces a whole line uses: a history recall and a completion both say
+    /// where the caret stands afterwards, and both leave the line at its end with nothing marked.
+    /// </remarks>
+    private void SetLineCore(string line)
+    {
+        _input.Clear().Append(line);
+        _caret = _input.Length;
+        _anchor = _caret;
     }
 
     /// <summary>Returns the rows a console lists under a line, which are the levels that could still be typed at the one the line reached.</summary>

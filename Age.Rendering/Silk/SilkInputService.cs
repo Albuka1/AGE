@@ -19,7 +19,7 @@ namespace Age.Rendering;
 /// typed are collected from the same device, and the frame boundary is what separates the characters of one frame from
 /// the next.
 /// </remarks>
-public sealed class SilkInputService : IInputService, ITextInputService, IDisposable
+public sealed class SilkInputService : IInputService, ITextInputService, IClipboardService, IDisposable
 {
     private readonly IWindowService _windowService;
     private readonly InputStateTracker _tracker = new();
@@ -46,6 +46,22 @@ public sealed class SilkInputService : IInputService, ITextInputService, IDispos
 
     /// <inheritdoc />
     public float MouseWheel => _tracker.MouseWheel;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The clipboard belongs to the keyboard, which is opened with the window on the first frame, so a read before that answers an
+    /// empty text rather than reaching a device that is not there yet.
+    /// </remarks>
+    public string Text => _keyboard?.ClipboardText ?? string.Empty;
+
+    /// <inheritdoc />
+    public void SetText(string? text)
+    {
+        if (_keyboard is not null)
+        {
+            _keyboard.ClipboardText = text ?? string.Empty;
+        }
+    }
 
     /// <inheritdoc />
     public string TypedCharacters => _typed.ToString();

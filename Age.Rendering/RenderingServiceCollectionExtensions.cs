@@ -48,7 +48,8 @@ public static class RenderingServiceCollectionExtensions
             provider.GetRequiredService<FixedTimestep>(),
             provider.GetRequiredService<IRenderer>(),
             provider.GetService<TextRenderer>(),
-            provider.GetService<ITextSource>()));
+            provider.GetService<ITextSource>(),
+            provider.GetService<IClipboardService>()));
         services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();
         services.AddSingleton<IGameShutdownStep, WindowShutdownStep>();
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
@@ -75,6 +76,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<SilkInputService>();
         services.AddSingleton<IInputService>(provider => provider.GetRequiredService<SilkInputService>());
         services.AddSingleton<ITextInputService>(provider => provider.GetRequiredService<SilkInputService>());
+        services.AddSingleton<IClipboardService>(provider => provider.GetRequiredService<SilkInputService>());
         return services;
     }
 }

@@ -307,6 +307,67 @@ public sealed class DevConsoleOverlayTests
 
         console.IsOpen.Should().BeFalse();
     }
+    [Fact]
+    public void DevConsoleOverlay_Update_SelectAllCopyAndPaste_EditTheLineThroughTheClipboard()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        var clipboard = new NullClipboardService();
+        DevConsoleOverlay overlay = Create(console, input, text: text, clipboard: clipboard);
+
+        Press(overlay, input, overlay.OpenKey);
+
+        text.Type("cvars set locale ru");
+        Frame(overlay, input);
+
+        // Control and A mark the whole line, which is what a person selects before copying it out or replacing it in one paste.
+        Chord(overlay, input, Key.A);
+        console.Selection.Should().Be("cvars set locale ru");
+
+        Chord(overlay, input, Key.C);
+        clipboard.Text.Should().Be("cvars set locale ru", "the selection is what a copy puts on the clipboard");
+
+        // A paste replaces what is selected, so the whole line becomes the clipboard rather than the clipboard joining it.
+        clipboard.SetText("loc ru");
+        Chord(overlay, input, Key.V);
+
+        console.Input.Should().Be("loc ru");
+    }
+
+    [Fact]
+    public void DevConsoleOverlay_Update_TheBackspaceAndTheArrows_WorkOnTheSelectionAndTheCaret()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        DevConsoleOverlay overlay = Create(console, input, text: text);
+
+        Press(overlay, input, overlay.OpenKey);
+
+        text.Type("abc");
+        Frame(overlay, input);
+
+        // A left arrow walks the caret back, and a character that is typed then lands where the caret stands rather than at the end.
+        Press(overlay, input, Key.Left);
+        text.Type("X");
+        Frame(overlay, input);
+
+        console.Input.Should().Be("abXc", "the caret is where the next character lands");
+
+        // Shift and a left arrow extend the selection rather than clearing it, and a backspace removes the whole of it.
+        input.BeginFrame();
+        input.Hold(Key.ShiftLeft);
+        input.Press(Key.Left);
+        overlay.Update(new GameTime(0.016d, 0.016d));
+
+        console.Selection.Should().Be("X");
+        Press(overlay, input, Key.Backspace);
+
+        console.Input.Should().Be("abc", "a backspace removes the selection rather than one character");
+    }
+
+
 
     [Fact]
     public void DevConsoleOverlay_Update_AHeldBackspace_ErasesMoreThanOneCharacter()
@@ -358,6 +419,15 @@ public sealed class DevConsoleOverlayTests
         overlay.Update(new GameTime(delta, 0d));
     }
 
+    /// <summary>Presses a key while Control is held for one frame, which is how a copy, a paste and a select all are read.</summary>
+    private static void Chord(DevConsoleOverlay overlay, FakeInputService input, Key key, double delta = 0.016d)
+    {
+        input.BeginFrame();
+        input.Hold(Key.ControlLeft);
+        input.Press(key);
+        overlay.Update(new GameTime(delta, 0d));
+    }
+
     /// <summary>Turns the wheel for one frame: the frame opens, the device reports the wheel, and the console reads it.</summary>
     private static void Turn(DevConsoleOverlay overlay, FakeInputService input, float notches, double delta = 0.016d)
     {
@@ -372,8 +442,9 @@ public sealed class DevConsoleOverlayTests
         FakeInputService input,
         FixedTimestep? timestep = null,
         FakeTextInputService? text = null,
-        IRenderer? renderer = null) =>
-        new(console, input, text ?? new FakeTextInputService(), timestep ?? new FixedTimestep(FixedTimestep.DefaultStep), renderer ?? new FakeRenderer());
+        IRenderer? renderer = null,
+        IClipboardService? clipboard = null) =>
+        new(console, input, text ?? new FakeTextInputService(), timestep ?? new FixedTimestep(FixedTimestep.DefaultStep), renderer ?? new FakeRenderer(), null, null, clipboard ?? new NullClipboardService());
 
     /// <summary>Reports a pointer at the origin and the key that a test pressed or held for one frame.</summary>
     private sealed class FakeInputService : IInputService

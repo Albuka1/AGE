@@ -36,6 +36,46 @@ public interface IConsoleService
     /// <summary>Gets the line that is being typed, which is empty when nothing was typed yet.</summary>
     string Input { get; }
 
+    /// <summary>Gets or sets the index in <see cref="Input"/> where the next character is inserted, which is where a caret is drawn.</summary>
+    /// <remarks>
+    /// The caret is kept inside the line, so a game that draws it does not test the bounds: a value below zero or beyond the length
+    /// of the line is clamped. Moving it clears the selection, which is what a key that only moves a caret does.
+    /// </remarks>
+    int Caret { get; set; }
+
+    /// <summary>Gets or sets the index in <see cref="Input"/> where the selection is anchored, which is where it began.</summary>
+    /// <remarks>
+    /// The selection runs between <see cref="SelectionAnchor"/> and <see cref="Caret"/> in whichever order they are in, so a person
+    /// that selected to the left and one that selected to the right hold the same text. Setting it does not move the caret: the two
+    /// together say which text is selected.
+    /// </remarks>
+    int SelectionAnchor { get; set; }
+
+    /// <summary>Gets the index in <see cref="Input"/> where the selected text begins, which is the lesser of the anchor and the caret.</summary>
+    int SelectionStart { get; }
+
+    /// <summary>Gets the number of characters that are selected, which is zero when nothing is selected.</summary>
+    int SelectionLength { get; }
+
+    /// <summary>Gets the text that is selected, which is empty when nothing is selected.</summary>
+    string Selection { get; }
+
+    /// <summary>Moves the caret by a number of characters, keeping it inside the line and clearing the selection.</summary>
+    /// <param name="by">The number of characters to move by, where a negative number moves toward the start of the line.</param>
+    void MoveCaret(int by);
+
+    /// <summary>Selects the whole line that is being typed, which is what a select all key does.</summary>
+    void SelectAll();
+
+    /// <summary>Removes the selected text from the line, leaving the caret where the selection began.</summary>
+    /// <returns><see langword="true"/> when something was selected and has been removed.</returns>
+    bool RemoveSelection();
+
+    /// <summary>Replaces the selected text with a text, which is what pasting over a selection does.</summary>
+    /// <param name="text">The text to write in place of the selection. A null text writes nothing and only removes the selection.</param>
+    /// <remarks>A control character of the text is dropped, the way <see cref="Type"/> drops one, so a line that is pasted from a document does not carry a line break into the console.</remarks>
+    void ReplaceSelection(string? text);
+
     /// <summary>Gets the lines that were written, oldest first, which is a snapshot that later writes do not change.</summary>
     IReadOnlyList<string> Output { get; }
 
@@ -105,12 +145,16 @@ public interface IConsoleService
     /// <exception cref="ArgumentNullException">The lines are null.</exception>
     void WriteLines(IEnumerable<string> lines);
 
-    /// <summary>Appends a character to the line that is being typed.</summary>
-    /// <param name="character">The character to append. A control character, including the line feed that ends a line, is ignored: a line is run by <see cref="Submit"/>.</param>
+    /// <summary>Inserts a character at the caret of the line that is being typed, replacing the selection when there is one.</summary>
+    /// <param name="character">The character to insert. A control character, including the line feed that ends a line, is ignored: a line is run by <see cref="Submit"/>.</param>
+    /// <remarks>The caret moves past the character that was inserted, so typing a word writes it where the caret stands and leaves the caret at its end.</remarks>
     void Type(char character);
 
-    /// <summary>Removes the last character of the line that is being typed, if there is one.</summary>
+    /// <summary>Removes the selection, or the character before the caret when nothing is selected.</summary>
     void Backspace();
+
+    /// <summary>Removes the selection, or the character after the caret when nothing is selected.</summary>
+    void Delete();
 
     /// <summary>Runs the line that is being typed, remembers it in the history and clears it.</summary>
     /// <returns><see langword="true"/> when the line named a command that ran, <see langword="false"/> for an empty line, an unknown command or one that failed.</returns>

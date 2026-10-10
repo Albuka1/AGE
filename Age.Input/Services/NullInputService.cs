@@ -15,10 +15,11 @@ namespace Age.Input;
 /// the update that should see a press. Typed characters come from <see cref="Typed"/>, which a test sets to drive
 /// something that reads words.
 /// </remarks>
-public sealed class NullInputService : IInputService, ITextInputService
+public sealed class NullInputService : IInputService, ITextInputService, IClipboardService
 {
     private bool _mouseDownLastFrame;
     private bool _mouseDownThisFrame;
+    private string _clipboard = string.Empty;
 
     /// <summary>Gets or sets the simulated pointer state. The default reports the pointer at the origin with no button held.</summary>
     public UIInputState State { get; set; }
@@ -55,4 +56,11 @@ public sealed class NullInputService : IInputService, ITextInputService
     /// <inheritdoc />
     /// <remarks>No wheel exists without a window, so this reports that the wheel did not move.</remarks>
     public float MouseWheel => 0f;
+
+    /// <inheritdoc />
+    /// <remarks>The text is held in memory rather than on the machine, so a test that copies reads back what it wrote.</remarks>
+    public string Text => _clipboard;
+
+    /// <inheritdoc />
+    public void SetText(string? text) => _clipboard = text ?? string.Empty;
 }

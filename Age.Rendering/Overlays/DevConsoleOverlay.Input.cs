@@ -88,11 +88,31 @@ public sealed partial class DevConsoleOverlay
             _suggested = -1;
         }
 
+        // A control key that edits the line is read before the plain keys, because Control is held while it is pressed: a person
+        // that presses Control and C copies rather than typing a C, and the console of a terminal does the same.
+        bool control = _input.IsKeyDown(Key.ControlLeft) || _input.IsKeyDown(Key.ControlRight);
+
+        if (control && Edit())
+        {
+            _suggested = -1;
+            return;
+        }
+
         if (Repeats(Key.Backspace))
         {
             _console.Backspace();
             _suggested = -1;
         }
+
+        if (Repeats(Key.Delete))
+        {
+            _console.Delete();
+            _suggested = -1;
+        }
+
+        // The left and right keys walk the caret, and the home and end keys take it to the ends of the line: what a person editing a
+        // line of a console reaches for, which a history does not use because the up and down keys already walk that.
+        CaretKeys();
 
         // The down and up keys walk the rows of suggestions while a command is being named, and the history of the console when
         // it is not: an empty line names every command, and walking a list of all of them would hide the history behind it.

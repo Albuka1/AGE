@@ -112,6 +112,71 @@ public sealed class ConsoleServiceTests
 
         console.Input.Should().BeEmpty("an empty line loses nothing");
     }
+    [Fact]
+    public void ConsoleService_Type_InsertsAtTheCaretAndCollapsesASelection()
+    {
+        var console = new ConsoleService();
+        console.SetInput("hello");
+
+        // A caret in the middle of the line is where the next character lands, which is what lets a person fix a line rather than
+        // only add to its end.
+        console.Caret = 2;
+        console.Type('X');
+
+        console.Input.Should().Be("heXllo");
+        console.Caret.Should().Be(3);
+
+        // A character typed over a selection replaces it, which is what typing over marked text does.
+        console.SelectAll();
+        console.Type('y');
+
+        console.Input.Should().Be("y");
+        console.SelectionLength.Should().Be(0, "typing ends the selection");
+    }
+
+    [Fact]
+    public void ConsoleService_Selection_IsTakenBetweenTheAnchorAndTheCaretInEitherOrder()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abcdef");
+
+        // A selection that was made to the right and one that was made to the left hold the same text, which is what the lesser of
+        // the two indices being the start means.
+        console.Caret = 5;
+        console.SelectionAnchor = 2;
+
+        console.SelectionStart.Should().Be(2);
+        console.SelectionLength.Should().Be(3);
+        console.Selection.Should().Be("cde");
+
+        // A select all marks the whole line and leaves the caret at its end.
+        console.SelectAll();
+
+        console.Selection.Should().Be("abcdef");
+        console.Caret.Should().Be(6);
+        console.SelectionAnchor.Should().Be(0);
+
+        // Removing the selection leaves the line empty and the caret at the start.
+        console.RemoveSelection().Should().BeTrue();
+        console.Input.Should().BeEmpty();
+        console.Caret.Should().Be(0);
+    }
+
+    [Fact]
+    public void ConsoleService_Backspace_RemovesTheSelectionBeforeOneCharacter()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abcdef");
+        console.Caret = 5;
+        console.SelectionAnchor = 2;
+
+        console.Backspace();
+
+        console.Input.Should().Be("abf", "the selection goes rather than the one character before the caret");
+        console.Caret.Should().Be(2);
+    }
+
+
 
     [Fact]
     public void ConsoleService_Recall_WalksTheHistoryAndEndsOnAnEmptyLine()
