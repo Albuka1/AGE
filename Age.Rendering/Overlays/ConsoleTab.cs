@@ -31,8 +31,11 @@ public sealed class ConsoleTab : IDevWindowTab
     private readonly IClipboardService? _clipboard;
     private readonly float _line;
 
+    // The rows that were drawn on the last frame, which is what turns a click on a row back into the line it came from: a line that is
+    // wrapped over several rows is one line, and every one of its rows copies it whole.
+    private readonly List<ConsoleRow> _rows = [];
+
     private int _selected = -1;
-    private double _copiedAt = double.NegativeInfinity;
 
     /// <summary>Initializes the page from the console whose output it shows and the clipboard a line is copied to.</summary>
     /// <param name="console">The console whose lines are drawn.</param>
@@ -69,26 +72,17 @@ public sealed class ConsoleTab : IDevWindowTab
         }
 
         IReadOnlyList<ConsoleLine> lines = _console.Lines;
-        (int first, int capacity) = Visible(lines.Count, body);
 
-        if (pointer.Position.Y < body.Y || pointer.Position.Y >= body.Y + (capacity * _line))
+        if (At(pointer.Position, body) is not ConsoleRow row || row.Line < 0 || row.Line >= lines.Count)
         {
             return;
         }
 
-        int row = first + (int)((pointer.Position.Y - body.Y) / _line);
-
-        if (row < first || row >= lines.Count)
-        {
-            return;
-        }
-
-        _selected = row;
-        _copiedAt = frame.Total;
+        _selected = row.Line;
 
         if (_clipboard is not null)
         {
-            _clipboard.SetText(lines[row].Text);
+            _clipboard.SetText(lines[row.Line].Text);
         }
     }
 
@@ -97,47 +91,136 @@ public sealed class ConsoleTab : IDevWindowTab
     {
         ArgumentNullException.ThrowIfNull(renderer);
 
-        IReadOnlyList<ConsoleLine> lines = _console.Lines;
-        (int first, int capacity) = Visible(lines.Count, body);
+        Layout(body);
 
-        for (int index = first; index < lines.Count; index++)
+        for (int index = 0; index < _rows.Count; index++)
         {
-            float y = body.Y + ((index - first) * _line);
+            ConsoleRow row = _rows[index];
+            float y = body.Y + (index * _line);
 
-            // The line that was clicked is drawn on a band of its own, which is what says that a click copied it.
-            if (index == _selected)
+            // The line that was clicked is drawn on a band of its own, which is what says that a click copied it. Every row of a
+            // wrapped line is banded, because the line is what was clicked rather than the row it happens to be on.
+            if (row.Line == _selected)
             {
                 renderer.DrawRectangle(new Rect(new Vector2(body.X, y), new Vector2(body.Width, _line)), SelectedColour);
             }
 
-            Line(renderer, lines[index].Text, new Vector2(body.X, y), ColourOf(lines[index].Level));
+            renderer.DrawText(row.Text, new Vector2(body.X, y), ColourOf(row.Level));
         }
 
-        if (lines.Count == 0)
+        if (_rows.Count == 0)
         {
-            Line(renderer, "(the console wrote nothing yet)", new Vector2(body.X, body.Y), HintColour);
+            renderer.DrawText("(the console wrote nothing yet)", new Vector2(body.X, body.Y), HintColour);
         }
-        else if (_selected >= 0 && _copiedAt > double.NegativeInfinity)
+        else if (_selected >= 0)
         {
-            Line(renderer, "copied to the clipboard", new Vector2(body.X, body.Y + body.Height - _line), CopiedColour);
+            renderer.DrawText("copied to the clipboard", new Vector2(body.X, body.Y + body.Height - _line), CopiedColour);
         }
     }
 
-    /// <summary>Returns the first line that is drawn and how many of them fit, which is what a click is turned into a line by.</summary>
-    /// <param name="count">The number of lines the console holds.</param>
+    /// <summary>Fills <see cref="_rows"/> with the rows of the newest lines that fit, wrapped to the width of the page.</summary>
     /// <param name="body">The rectangle the page owns.</param>
     /// <remarks>
-    /// The lines are read from the newest backwards, so a page that is too short shows the end of the output rather than the beginning
-    /// of it, which is where the answer to what was just done is.
+    /// The lines are read from the newest backwards, so a page that is too short shows the end of the output rather than the
+    /// beginning of it, which is where the answer to what was just done is. A line that is wider than the page is broken into rows,
+    /// so a long line of a log is read rather than running off the side of the window.
     /// </remarks>
-    private (int First, int Capacity) Visible(int count, Rect body)
+    private void Layout(Rect body)
     {
+        _rows.Clear();
+
+        IReadOnlyList<ConsoleLine> lines = _console.Lines;
         int capacity = Math.Max(1, (int)(body.Height / _line));
-        return (Math.Max(0, count - capacity), capacity);
+
+        // The rows of the newest lines are collected until the page is full, then the whole collection is reversed so the newest row
+        // is the last one drawn: the output is read bottom-up, the way a console is.
+        var collected = new List<ConsoleRow>();
+
+        for (int index = lines.Count - 1; index >= 0 && collected.Count < capacity; index--)
+        {
+            ConsoleLine line = lines[index];
+            IReadOnlyList<string> wrapped = Wrap(line.Text, body.Width);
+
+            // The rows of one line are pushed in the order they are read, so the first row of a wrapped line comes before its last
+            // one once the whole thing is reversed.
+            for (int row = wrapped.Count - 1; row >= 0; row--)
+            {
+                collected.Add(new ConsoleRow(index, wrapped[row], line.Level));
+            }
+        }
+
+        for (int index = collected.Count - 1; index >= 0; index--)
+        {
+            _rows.Add(collected[index]);
+        }
+
+        // Only the newest rows fit, so the ones beyond the page are dropped from the top rather than the bottom.
+        if (_rows.Count > capacity)
+        {
+            _rows.RemoveRange(capacity, _rows.Count - capacity);
+        }
     }
 
-    /// <summary>Draws a line of the output through the renderer of the window the page lives in.</summary>
-    private static void Line(IRenderer renderer, string text, Vector2 position, Color color) => renderer.DrawText(text, position, color);
+    /// <summary>Returns the row of the page that a point is over, or null when the point is outside the rows that were drawn.</summary>
+    private ConsoleRow? At(Vector2 point, Rect body)
+    {
+        if (point.Y < body.Y || point.Y >= body.Y + (Math.Max(1, (int)(body.Height / _line)) * _line))
+        {
+            return null;
+        }
+
+        int index = (int)((point.Y - body.Y) / _line);
+        return index >= 0 && index < _rows.Count ? _rows[index] : null;
+    }
+
+    /// <summary>Breaks a line of the output into the rows that fit the width of the page, breaking at a space where one is near the end.</summary>
+    /// <param name="text">The line as the console holds it.</param>
+    /// <param name="width">The width of the page in pixels.</param>
+    /// <remarks>
+    /// The text of the page is drawn in the built-in font, so a row holds as many characters as the width of the page divided by the
+    /// width of a character, which is what the host measures a label with. A word that is longer than a row is broken where the row
+    /// ends, because a row that is wider than the page runs off the side of the window rather than being read.
+    /// </remarks>
+    private static IReadOnlyList<string> Wrap(string text, float width)
+    {
+        int perRow = Math.Max(1, (int)(width / BitmapFontMetrics.GlyphWidth));
+
+        if (text.Length <= perRow)
+        {
+            return [text];
+        }
+
+        var rows = new List<string>();
+        int start = 0;
+
+        while (start < text.Length)
+        {
+            int length = Math.Min(perRow, text.Length - start);
+
+            // A break inside a word is worse than one between two of them, so the row is ended at the last space it holds when one
+            // is far enough in to be worth it rather than leaving a row of a couple of characters.
+            if (start + length < text.Length)
+            {
+                int space = text.LastIndexOf(' ', start + length - 1, length);
+
+                if (space >= start + (perRow / 2))
+                {
+                    length = space - start;
+                }
+            }
+
+            rows.Add(text.Substring(start, length).TrimEnd());
+            start += length;
+
+            // The space that ended a row is skipped rather than starting the next one with it.
+            while (start < text.Length && text[start] == ' ')
+            {
+                start++;
+            }
+        }
+
+        return rows;
+    }
 
     /// <summary>Returns the colour a line of the output is drawn in, which is what makes a failure and a warning stand out.</summary>
     private static Color ColourOf(ConsoleLevel level) => level switch
@@ -146,4 +229,7 @@ public sealed class ConsoleTab : IDevWindowTab
         ConsoleLevel.Warning => WarningColour,
         _ => TextColour,
     };
+
+    /// <summary>A row of the page: the text that is drawn on it and the line of the console it came from.</summary>
+    private readonly record struct ConsoleRow(int Line, string Text, ConsoleLevel Level);
 }

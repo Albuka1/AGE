@@ -107,6 +107,30 @@ public sealed class DevWindowServiceTests
         service.Tabs.Should().ContainSingle("a page that is not closable has no cross to press");
     }
 
+    [Fact]
+    public void DevWindowService_TheWindowManagerClosingTheWindow_ClosesItAndTheNextOpenMakesANewOne()
+    {
+        var host = new FakeHost();
+        var service = new DevWindowService(host);
+        service.Add(new FakeTab("one"));
+        service.Open();
+        service.IsOpen.Should().BeTrue();
+
+        // The window manager closed the window, which is what the cross of its own title bar does: the host reports that it is no
+        // longer open, and the window is disposed here rather than kept, so the next `devwindow` opens a window of its own.
+        host.CloseFromTheWindowManager();
+        service.Pump(new GameTime(0.016d, 0.016d));
+
+        service.IsOpen.Should().BeFalse();
+        host.Disposed.Should().BeTrue("the window that the window manager closed is let go");
+        service.Tabs.Should().ContainSingle("closing the window keeps its pages");
+
+        // A window that was closed by its own cross opens again rather than being found half-closed and left standing.
+        service.Open();
+        service.IsOpen.Should().BeTrue();
+        host.Created.Should().Be(2, "the window that went is replaced by one of its own");
+    }
+
     /// <summary>A page that remembers whether it was read, which is how a test reads which page is on top.</summary>
     private sealed class FakeTab(string title) : IDevWindowTab
     {
@@ -130,16 +154,24 @@ public sealed class DevWindowServiceTests
 
         public bool IsOpen { get; private set; }
 
+        public int Created { get; private set; }
+
+        public bool Disposed { get; private set; }
+
         public Vector2 Size { get; private set; }
 
         public Vector2 Pointer { get; private set; }
 
         public bool PointerDown { get; private set; }
 
+        /// <summary>Closes the window the way the window manager does, which is what the cross of the title bar of the window is.</summary>
+        public void CloseFromTheWindowManager() => IsOpen = false;
+
         public void Create(int width, int height, string title)
         {
             Size = new Vector2(width, height);
             IsOpen = true;
+            Created++;
         }
 
         public bool Pump(out Vector2? clicked)
@@ -168,6 +200,10 @@ public sealed class DevWindowServiceTests
 
         public Vector2 Measure(string text) => new(text.Length * BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight);
 
-        public void Dispose() => IsOpen = false;
+        public void Dispose()
+        {
+            IsOpen = false;
+            Disposed = true;
+        }
     }
 }

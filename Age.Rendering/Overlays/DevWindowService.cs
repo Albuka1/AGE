@@ -8,8 +8,8 @@ namespace Age.Rendering;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The page of a tab is drawn by the tab itself and the frame of the window вЂ” the title bar, the row of tabs, the crosses and the
-/// clip of the body вЂ” is drawn here, which is what the window owns and what a page leaves to it.
+/// The page of a tab is drawn by the tab itself and the frame of the window — the title bar, the row of tabs, the crosses and the
+/// clip of the body — is drawn here, which is what the window owns and what a page leaves to it.
 /// was written for one works in the other, because the seam is <see cref="IDevWindowTab"/> either way.
 /// </para>
 /// <para>
@@ -36,7 +36,6 @@ public sealed class DevWindowService : IDevWindowService
     private const float CloseSize = 12f;
 
     private readonly IDevWindowHost _host;
-    private readonly ITextSource? _textSource;
     private readonly List<IDevWindowTab> _tabs = [];
 
     private int _width = 640;
@@ -46,14 +45,12 @@ public sealed class DevWindowService : IDevWindowService
 
     /// <summary>Initializes the window over the host it draws itself into.</summary>
     /// <param name="host">The window of the operating system, or a host that opens nothing in a run with no window.</param>
-    /// <param name="textSource">The source of the strings of the window, or null to draw the keys themselves.</param>
     /// <exception cref="ArgumentNullException">The host is null.</exception>
-    public DevWindowService(IDevWindowHost host, ITextSource? textSource = null)
+    public DevWindowService(IDevWindowHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
 
         _host = host;
-        _textSource = textSource;
     }
 
     /// <inheritdoc />
@@ -141,7 +138,7 @@ public sealed class DevWindowService : IDevWindowService
     /// <inheritdoc />
     public void Close()
     {
-        // The window of the operating system is closed rather than kept hidden, so what it owns вЂ” a context and its surface вЂ” goes
+        // The window of the operating system is closed rather than kept hidden, so what it owns — a context and its surface — goes
         // with it, and a game that opens it again creates a window of its own rather than holding one for the whole run.
         _host.Dispose();
         _open = false;
@@ -162,8 +159,16 @@ public sealed class DevWindowService : IDevWindowService
     /// <inheritdoc />
     public void Pump(in GameTime frame)
     {
-        if (!_open || !_host.IsOpen)
+        if (!_open)
         {
+            return;
+        }
+
+        // The window manager closed the window, which is what the cross of its own title bar does: the window is disposed here
+        // rather than kept, so the next `devwindow` opens a window of its own rather than finding one that is on its way out.
+        if (!_host.IsOpen)
+        {
+            Close();
             return;
         }
 
@@ -176,12 +181,12 @@ public sealed class DevWindowService : IDevWindowService
 
         if (!_host.Pump(out Vector2? clicked))
         {
-            _open = false;
             _host.EndFrame();
+            Close();
             return;
         }
 
-        // A click on the frame of the window is the window's own вЂ” a cross or a tab вЂ” and a click inside the body is the page's. The
+        // A click on the frame of the window is the window's own — a cross or a tab — and a click inside the body is the page's. The
         // window reads its own first, so a click that closed a tab never reaches the page below it.
         bool insideBody = clicked is Vector2 where && Body(_host.Size) is Rect body && Contains(body, where);
 
@@ -307,7 +312,7 @@ public sealed class DevWindowService : IDevWindowService
     private static bool Contains(Rect rect, Vector2 point) =>
         point.X >= rect.X && point.X < rect.X + rect.Width && point.Y >= rect.Y && point.Y < rect.Y + rect.Height;
 
-    /// <summary>Returns the title of the window in the language of the game, or the key itself when the game ships no string for it.</summary>
-    private string ResolveTitle() => _textSource?.Resolve("ui-dev-window-title") ?? "ui-dev-window-title";
+    /// <summary>Returns the title that the window manager writes on the window.</summary>
+    private static string ResolveTitle() => "devwindow";
 }
 

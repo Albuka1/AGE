@@ -52,8 +52,7 @@ public static class RenderingServiceCollectionExtensions
         // no host is given.
         services.AddSingleton<IDevWindowHost>(provider => new SilkDevWindowHost(provider.GetService<IWindowService>()));
         services.AddSingleton<IDevWindowService>(provider => new DevWindowService(
-            provider.GetRequiredService<IDevWindowHost>(),
-            provider.GetService<ITextSource>())
+            provider.GetRequiredService<IDevWindowHost>())
             .Add(provider.GetRequiredService<ConsoleTab>()));
         services.AddSingleton(provider => new DevConsoleOverlay(
             provider.GetRequiredService<IConsoleService>(),
