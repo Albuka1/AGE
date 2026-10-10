@@ -145,6 +145,24 @@ public interface IRenderer : IDisposable
     /// <summary>Draws a single line of text with the built-in bitmap font.</summary>
     void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color);
 
+    /// <summary>Limits the following draws to a rectangle, which is what a scrollable panel or a list longer than its box needs.</summary>
+    /// <param name="rect">The rectangle that the draws are kept inside, in the pixels of the surface that is being drawn into.</param>
+    /// <remarks>
+    /// A push nests: the rectangle that is in force is the intersection of this one and of every clip still pushed, so a child
+    /// of a clipped element is clipped by both. The clip ends a batch at the call, because the quads that follow are drawn under
+    /// another state of the device than the ones before. What was pushed is undone by <see cref="PopClip"/>, which has to be
+    /// called as many times as this was. A renderer that draws without clipping ignores both calls.
+    /// </remarks>
+    void PushClip(Rect rect)
+    {
+    }
+
+    /// <summary>Undoes the most recent <see cref="PushClip"/>.</summary>
+    /// <remarks>A pop past the outermost clip does nothing rather than throwing: the clip of an element that failed to draw is the safest thing to lose.</remarks>
+    void PopClip()
+    {
+    }
+
     /// <summary>Compiles a program from the two stages of a shader.</summary>
     /// <param name="vertexSource">The vertex stage, in the OpenGL Shading Language.</param>
     /// <param name="fragmentSource">The fragment stage, in the OpenGL Shading Language.</param>

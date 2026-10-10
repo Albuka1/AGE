@@ -17,23 +17,28 @@ render target is what holds a layer of a frame that is processed more than once.
 of them naming an image and the material that draws it, and a material is content of its own: a document holds the stages of a
 program and the values its uniforms start with, so a hundred sprites that shine the same way are a hundred names of one material.
 A build reads its content in passes, and a mistake is grouped under the pass that found it, so a person who is told to fix a sheet
-is not sent looking at a string of a language.
+is not sent looking at a string of a language. The renderer can clip what it draws: a rectangle is pushed and popped, the clips
+nest, and what follows a push is kept inside it, which is what a scrollable panel and a list longer than its box need.
 
 What remains are the content features the engine does not have yet, and then the platform work.
 
 ## Features
 
 - UI widgets beyond a button and a label — slider, drop-down, check box, text field, scrollable panel — which the anchors, the
-  scaler of a canvas and the pointer test of the interface are already in place for. The widgets are components rather than kinds
-  of entity: a slider is a component a game attaches to whatever it wants to slide, and the same holds for the rest of them, so
-  a game lays its settings out with them instead of writing each one again.
+  scaler of a canvas, the pointer test of the interface and the clip of the renderer are already in place for. The widgets are
+  components rather than kinds of entity: a slider is a component a game attaches to whatever it wants to slide, and the same
+  holds for the rest of them, so a game lays its settings out with them instead of writing each one again.
+- A window system of its own, and the dev window built on it: a window that stands apart from the frame — movable, resizable,
+  in front of the game — a set of such windows, and tabs inside a window, so the console, the tree of the interface and the
+  textures each get a tab instead of a place on one strip over the game.
+- 2D lighting: a light that a sprite or the world is drawn under, which the renderer does not have today.
 - Positional audio: voices whose position can change, a listener that follows the camera, and the falloff between them.
 - Hierarchy.
 - OBB collision and multiple contacts.
 - A splash screen that works: the resources and the systems of the engine and of a game load while the logo is on screen, with
   a bar under it, instead of a window that stands empty until everything is ready.
 - The graphics settings of a game as settings: vertical sync, a limit on the frames of a second, the mode of the window and a
-  scale, as console variables of the client, which the split of the settings into client and server sorts out when it comes.
+  scale, as console variables.
 - The logs of the engine and of a game in the console, coloured by their level: an error in red, a warning in yellow, the rest
   in the plain colour.
 - A console of its own: the completion of a command that is being typed, the value and the description of a setting in a

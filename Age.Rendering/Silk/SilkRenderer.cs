@@ -99,6 +99,9 @@ public sealed class SilkRenderer : IRenderer
     /// <summary>The attachment that the targets of <see cref="_renderTargets"/> were created under.</summary>
     private uint _targetGeneration;
 
+    /// <summary>The rectangles of the clips that are pushed, innermost last, each already intersected with the ones below it.</summary>
+    private readonly Stack<Rect> _clips = new();
+
     /// <inheritdoc />
     public Vector2 ViewportSize { get; private set; }
 
@@ -157,6 +160,10 @@ public sealed class SilkRenderer : IRenderer
         gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
         ApplyStandardUniforms(gl);
+
+        // The device forgets the scissor of the batch that was drawn outside this frame, so the clip that is in force is pointed
+        // at it again: a pass that opens a frame inside a clip that a caller pushed around several frames draws clipped.
+        ApplyClip();
     }
 
     /// <inheritdoc />
@@ -257,6 +264,33 @@ public sealed class SilkRenderer : IRenderer
     }
 
     /// <inheritdoc />
+    public void PushClip(Rect rect)
+    {
+        // A clip nests: what is in force is the intersection of this rectangle and of the clip below it, so a child of a
+        // clipped element is clipped by both without knowing that a parent is there at all.
+        Rect clip = _clips.Count == 0 ? rect : _clips.Peek().Intersect(rect);
+
+        // What was collected under the clip before this one is drawn first, because the scissor is part of the state of the
+        // device and a batch that was gathered under one clip cannot be drawn under another.
+        Flush();
+        _clips.Push(clip);
+        ApplyClip();
+    }
+
+    /// <inheritdoc />
+    public void PopClip()
+    {
+        if (_clips.Count == 0)
+        {
+            return;
+        }
+
+        Flush();
+        _clips.Pop();
+        ApplyClip();
+    }
+
+    /// <inheritdoc />
     public void EndFrame()
     {
         Flush();
@@ -265,6 +299,10 @@ public sealed class SilkRenderer : IRenderer
         gl.BindTexture(TextureTarget.Texture2D, 0);
         gl.BindVertexArray(0);
         gl.UseProgram(0);
+
+        // The clip is turned off with the rest of the state that a frame leaves behind: a caller that draws between two frames
+        // draws unclipped, and the pass that pushed a clip is expected to pop it before its own frame ends.
+        gl.Disable(EnableCap.ScissorTest);
 
         // The next frame clears every surface it draws into again.
         _clearedSurfaces.Clear();
@@ -331,6 +369,10 @@ public sealed class SilkRenderer : IRenderer
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, _surface);
         gl.Viewport(0, 0, (uint)target.Size.X, (uint)target.Size.Y);
         ClearIfNeeded(gl, _surface, clear);
+
+        // The clip that is in force is measured against the surface that was drawn into before, so it is pointed at the target
+        // that is bound now: the same rectangle in pixels of this surface rather than of the window.
+        ApplyClip();
     }
 
     /// <inheritdoc />
@@ -346,6 +388,9 @@ public sealed class SilkRenderer : IRenderer
         // The window is read again rather than remembered, because the frame that follows can be the one that comes after a
         // resize, and the size of the window is what a camera measures a game in.
         RefreshViewport(force: true);
+
+        // As with a target that is bound, the clip that is in force is measured against the surface that was there before.
+        ApplyClip();
     }
 
     /// <inheritdoc />
@@ -917,6 +962,10 @@ public sealed class SilkRenderer : IRenderer
 
         _renderTargets.Clear();
 
+        // A clip is a state of the device that is being let go of, so the stack that remembers it is emptied here: a renderer that
+        // is attached to another window draws unclipped until a caller pushes a clip of its own.
+        _clips.Clear();
+
         // The targets that are made next belong to another device, which hands the same numbers out again, so they are of
         // another attachment: a handle of the one that is being let go of names nothing of what comes after it.
         _targetGeneration++;
@@ -1047,6 +1096,52 @@ public sealed class SilkRenderer : IRenderer
         }
 
         _batch.Clear();
+    }
+
+    /// <summary>Points the scissor of the device at the clip that is in force, or turns the scissor off when none is.</summary>
+    /// <remarks>
+    /// A scissor rectangle is measured from the bottom-left corner of the surface while a clip is measured from the top-left
+    /// one, and the surface that is being drawn into is the window or a target: the y of the clip is flipped against the height
+    /// of that surface, which <see cref="BeginRenderTarget"/> keeps up to date. A clip that is empty, which an intersection of
+    /// two clips that do not touch comes to, is kept as a rectangle of no size rather than skipped: the scissor then cuts away
+    /// everything, which is what an element that is entirely outside its parent draws as.
+    /// </remarks>
+    private void ApplyClip()
+    {
+        GL gl = RequireContext();
+
+        if (_clips.Count == 0)
+        {
+            gl.Disable(EnableCap.ScissorTest);
+            return;
+        }
+
+        Rect clip = _clips.Peek();
+        float x = MathF.Max(clip.X, 0f);
+        float y = MathF.Max(clip.Y, 0f);
+        float width = MathF.Max(clip.Width, 0f);
+        float height = MathF.Max(clip.Height, 0f);
+
+        // A clip wider or taller than the surface is cut to it, so a scissor that reaches past the framebuffer cannot turn a
+        // draw of a valid rectangle into an error of the device.
+        width = MathF.Min(width, MathF.Max(_surfacePixels.X - x, 0f));
+        height = MathF.Min(height, MathF.Max(_surfacePixels.Y - y, 0f));
+
+        gl.Enable(EnableCap.ScissorTest);
+        gl.Scissor((int)x, (int)(MathF.Max(_surfacePixels.Y - y - height, 0f)), (uint)width, (uint)height);
+    }
+
+    /// <summary>Returns the part of two clips that both of them keep, which is the whole of the clip that is inside the other.</summary>
+    private static Rect Intersect(Rect first, Rect second)
+    {
+        // A rectangle whose size is negative is one of nothing, which keeps a clip that is entirely outside the one below it from
+        // covering its neighbour: the intersection of two that do not touch is in the same place and of no size.
+        float left = MathF.Max(first.X, second.X);
+        float top = MathF.Max(first.Y, second.Y);
+        float right = MathF.Min(first.X + first.Width, second.X + second.Width);
+        float bottom = MathF.Min(first.Y + first.Height, second.Y + second.Height);
+
+        return new Rect(new Vector2(left, top), new Vector2(MathF.Max(right - left, 0f), MathF.Max(bottom - top, 0f)));
     }
 
     private uint CreateFontTexture()
