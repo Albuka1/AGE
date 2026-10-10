@@ -39,11 +39,27 @@ public interface IConsoleService
     /// <summary>Gets the lines that were written, oldest first, which is a snapshot that later writes do not change.</summary>
     IReadOnlyList<string> Output { get; }
 
+    /// <summary>Gets the lines that were written with the severity each of them was written at, oldest first.</summary>
+    /// <remarks>
+    /// This is what a renderer colours a line by: <see cref="Output"/> drops the severity, because a prefix of text is enough for
+    /// a console of a terminal and not for one that draws. The two hold the same lines in the same order, so a caller that draws
+    /// the output reads this one.
+    /// </remarks>
+    IReadOnlyList<ConsoleLine> Lines { get; }
+
     /// <summary>Gets the lines that were entered, oldest first, which <see cref="RecallPrevious"/> and <see cref="RecallNext"/> walk.</summary>
     IReadOnlyList<string> History { get; }
 
     /// <summary>Gets the commands that are registered, in the order they were registered.</summary>
     IEnumerable<ConsoleCommand> Commands { get; }
+
+    /// <summary>Gets the command that the line being typed names, or null when the line names none.</summary>
+    /// <remarks>
+    /// The first word of the line is matched without regard to case, so a line that is half typed still finds its command: this
+    /// is what a console shows the value and the description of. A line that names only arguments, or a word that no command
+    /// matches, answers null.
+    /// </remarks>
+    ConsoleCommand? Hint { get; }
 
     /// <summary>Gets or sets the number of lines that <see cref="Output"/> keeps. The oldest lines fall off when it is reached.</summary>
     /// <exception cref="ArgumentOutOfRangeException">The capacity is zero or negative.</exception>
@@ -68,6 +84,11 @@ public interface IConsoleService
     /// <exception cref="ArgumentNullException">The line is null.</exception>
     void WriteError(string line);
 
+    /// <summary>Appends a line that reports something a developer should look at.</summary>
+    /// <param name="line">The line to append.</param>
+    /// <exception cref="ArgumentNullException">The line is null.</exception>
+    void WriteWarning(string line);
+
     /// <summary>Appends every line of a sequence, in order.</summary>
     /// <param name="lines">The lines to append.</param>
     /// <exception cref="ArgumentNullException">The lines are null.</exception>
@@ -89,6 +110,15 @@ public interface IConsoleService
 
     /// <summary>Replaces the line that is being typed with the line after the one the history points at, which is an empty line at the end of the history.</summary>
     void RecallNext();
+
+    /// <summary>Completes the word that is being typed to the name of a command, which is what Tab does in a console of its own.</summary>
+    /// <returns><see langword="true"/> when the word was completed, <see langword="false"/> when nothing matches it or it is already a whole name.</returns>
+    /// <remarks>
+    /// A word that matches exactly one command is completed to it. A word that matches several is completed to the part they share,
+    /// so pressing Tab twice narrows the word down rather than cycling through the names. Only the first word of the line is a
+    /// command name, so a line whose first word is complete is left alone: the arguments of a command are the business of the game.
+    /// </remarks>
+    bool Complete();
 
     /// <summary>Removes every line of the output.</summary>
     void Clear();

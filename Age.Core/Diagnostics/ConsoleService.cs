@@ -17,7 +17,7 @@ public sealed class ConsoleService : IConsoleService
     private const int DefaultOutputCapacity = 200;
 
     private readonly object _gate = new();
-    private readonly List<string> _output = new();
+    private readonly List<ConsoleLine> _output = new();
     private readonly List<string> _history = new();
     private readonly List<ConsoleCommand> _commands = new();
     private readonly Dictionary<string, ConsoleCommand> _byName = new(StringComparer.OrdinalIgnoreCase);
@@ -54,7 +54,35 @@ public sealed class ConsoleService : IConsoleService
         {
             lock (_gate)
             {
+                return [.. _output.Select(line => line.Text)];
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ConsoleLine> Lines
+    {
+        get
+        {
+            lock (_gate)
+            {
                 return [.. _output];
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public ConsoleCommand? Hint
+    {
+        get
+        {
+            lock (_gate)
+            {
+                // The first word of the line is the name, and the rest is arguments: a line that is empty answers nothing, and a
+                // line whose first word no command matches answers nothing rather than the command of a word that comes later.
+                string word = FirstWord(_input.ToString());
+
+                return word.Length > 0 && _byName.TryGetValue(word, out ConsoleCommand command) ? command : null;
             }
         }
     }
@@ -116,14 +144,21 @@ public sealed class ConsoleService : IConsoleService
     public void Write(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        Append(line, isError: false);
+        Append(line, ConsoleLevel.Normal);
     }
 
     /// <inheritdoc />
     public void WriteError(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        Append(line, isError: true);
+        Append(line, ConsoleLevel.Error);
+    }
+
+    /// <inheritdoc />
+    public void WriteWarning(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        Append(line, ConsoleLevel.Warning);
     }
 
     /// <inheritdoc />
@@ -217,6 +252,43 @@ public sealed class ConsoleService : IConsoleService
             }
 
             _input.Clear().Append(_history[_recall]);
+        }
+    }
+
+    /// <inheritdoc />
+    public bool Complete()
+    {
+        lock (_gate)
+        {
+            string line = _input.ToString();
+            int end = line.AsSpan().IndexOfAny(' ', '\t');
+
+            // Only the first word is a command name. A line that already holds a space is naming arguments, and the arguments of
+            // a command are the business of the game rather than of the console.
+            if (end >= 0)
+            {
+                return false;
+            }
+
+            // A word that matches one command is completed to it; one that matches several is completed to the part they share,
+            // and a word that already is that part is left alone rather than shortened to itself.
+            string[] matches = [.. _byName.Keys.Where(name => name.StartsWith(line, StringComparison.OrdinalIgnoreCase))];
+
+            string completion = matches.Length switch
+            {
+                0 => string.Empty,
+                1 => matches[0],
+                _ => CommonPrefix(matches),
+            };
+
+            if (completion.Length <= line.Length)
+            {
+                return false;
+            }
+
+            _input.Clear().Append(completion);
+            _recall = -1;
+            return true;
         }
     }
 
@@ -329,16 +401,52 @@ public sealed class ConsoleService : IConsoleService
         }
     }
 
-    private void Append(string line, bool isError)
+    private void Append(string line, ConsoleLevel level)
     {
         lock (_gate)
         {
-            _output.Add(isError ? $"error: {line}" : line);
+            // The text of an error keeps the prefix that a console of a terminal shows, because Output answers text; the level
+            // travels beside it, which is what a renderer colours the line by.
+            string text = level == ConsoleLevel.Error ? $"error: {line}" : line;
+            _output.Add(new ConsoleLine(text, level));
 
             while (_output.Count > _outputCapacity)
             {
                 _output.RemoveAt(0);
             }
         }
+    }
+
+    /// <summary>Returns the first word of a line, which is the part of it before the first whitespace.</summary>
+    private static string FirstWord(string line)
+    {
+        int end = line.AsSpan().IndexOfAny(' ', '\t');
+
+        return end < 0 ? line : line[..end];
+    }
+
+    /// <summary>Returns the longest start that every name of a set shares, which is what a word that matches several is completed to.</summary>
+    private static string CommonPrefix(string[] names)
+    {
+        string prefix = names[0];
+
+        foreach (string name in names)
+        {
+            int length = 0;
+
+            while (length < prefix.Length && length < name.Length && char.ToUpperInvariant(prefix[length]) == char.ToUpperInvariant(name[length]))
+            {
+                length++;
+            }
+
+            prefix = prefix[..length];
+
+            if (prefix.Length == 0)
+            {
+                break;
+            }
+        }
+
+        return prefix;
     }
 }

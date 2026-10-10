@@ -50,6 +50,7 @@ public sealed class SplashScreen : IDisposable
 
     private IRenderer? _renderer;
     private TextureHandle? _builtInLogo;
+    private bool _ending;
     private bool _ended;
 
     /// <summary>Gets or sets a value indicating whether the splash runs at all. The default is <see langword="true"/>.</summary>
@@ -57,6 +58,14 @@ public sealed class SplashScreen : IDisposable
 
     /// <summary>Gets or sets how long the logo stays on screen, measured from the start of the game loop. The default is 2.5 seconds.</summary>
     public TimeSpan Duration { get; set; } = TimeSpan.FromSeconds(2.5);
+
+    /// <summary>Gets or sets the shortest time the logo stays on screen, even when the game asked for it to end and nothing is left to load. The default is 0.75 seconds.</summary>
+    /// <remarks>
+    /// A game whose loading is instant would otherwise flash the logo for a single frame, which reads as a glitch rather than
+    /// as a brand. The minimum is measured from the start of the game loop like <see cref="Duration"/>, and it is clamped to
+    /// <see cref="Duration"/> so that a game cannot hold the logo longer than the time it asked for.
+    /// </remarks>
+    public TimeSpan MinimumDuration { get; set; } = TimeSpan.FromSeconds(0.75);
 
     /// <summary>Gets or sets the size of the logo, in pixels.</summary>
     /// <remarks>
@@ -84,9 +93,12 @@ public sealed class SplashScreen : IDisposable
     /// <remarks>The logo belongs to the caller when it is set here, so the splash never releases it.</remarks>
     public TextureHandle? Logo { get; set; }
 
-    /// <summary>Ends the splash before its duration ran out.</summary>
-    /// <remarks>Use it to start the game right after its assets were loaded, instead of waiting for the remaining time.</remarks>
-    public void End() => _ended = true;
+    /// <summary>Asks the splash to finish, which it does once the shortest time of the logo has passed.</summary>
+    /// <remarks>
+    /// Use it to start the game right after its assets were loaded instead of waiting out <see cref="Duration"/>. The logo stays
+    /// for <see cref="MinimumDuration"/> in any case, so a load that took no time still shows the brand rather than a flash.
+    /// </remarks>
+    public void End() => _ending = true;
 
     /// <summary>Draws the logo over a cleared screen, for as long as the splash runs.</summary>
     /// <param name="renderer">The renderer to draw with.</param>
@@ -106,7 +118,11 @@ public sealed class SplashScreen : IDisposable
             return false;
         }
 
-        if (time.Total >= Duration.TotalSeconds)
+        // The logo stays for the shortest time it was given, and no longer than the duration the game asked for: a game that
+        // finished loading asks to end, but a flash of one frame is a glitch rather than a brand, so the minimum holds it.
+        double minimum = Math.Min(MinimumDuration.TotalSeconds, Duration.TotalSeconds);
+
+        if (time.Total >= Duration.TotalSeconds || (_ending && time.Total >= minimum))
         {
             _ended = true;
             return false;

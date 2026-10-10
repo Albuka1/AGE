@@ -72,6 +72,12 @@ public sealed class ConsoleLoggerProvider : ILoggerProvider
                 return;
             }
 
+            if (logLevel == LogLevel.Warning)
+            {
+                _console.WriteWarning(line);
+                return;
+            }
+
             _console.Write(line);
         }
     }

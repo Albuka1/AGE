@@ -38,6 +38,7 @@ public sealed class DevOverlay : IRenderPass
 {
     private static readonly Color TextColour = new(230, 230, 230);
     private static readonly Color ErrorColour = new(255, 120, 120);
+    private static readonly Color WarningColour = new(255, 220, 120);
     private static readonly Color HintColour = new(150, 150, 150);
 
     private readonly IConsoleService _console;
@@ -137,6 +138,8 @@ public sealed class DevOverlay : IRenderPass
             ShowStats = !ShowStats;
         }
 
+        bool wasOpen = _console.IsOpen;
+
         if (_input.IsKeyPressed(ConsoleKey))
         {
             _console.Toggle();
@@ -153,6 +156,13 @@ public sealed class DevOverlay : IRenderPass
             _console.Close();
             ApplyPause();
             return;
+        }
+
+        // Tab completes the word that is being typed. The frame that opened the console with this key is left alone, because the
+        // key that opens a console is not the key that completes a word: a person who pressed it once means to see the console.
+        if (wasOpen && _input.IsKeyPressed(Key.Tab))
+        {
+            _console.Complete();
         }
 
         if (_input.IsKeyPressed(Key.Enter))
@@ -249,26 +259,42 @@ public sealed class DevOverlay : IRenderPass
         _textRenderer.Draw(text, position, new TextStyle { Color = color });
     }
 
-    /// <summary>Draws the visible lines of the console and the line that is being typed, and returns the line below them.</summary>
+    /// <summary>Draws the visible lines of the console, the line that is being typed and the hint of the command it names, and returns the line below them.</summary>
     private float DrawConsole(Vector2 viewport, float y)
     {
         float line = _line + 2f;
-        IReadOnlyList<string> output = _console.Output;
-        int shown = Math.Min(output.Count, ConsoleLines);
+        IReadOnlyList<ConsoleLine> lines = _console.Lines;
+        ConsoleCommand? hint = _console.Hint;
+        int shown = Math.Min(lines.Count, ConsoleLines);
+        float height = (shown + 2f) * line + (hint is null ? 0f : line);
 
-        _renderer.DrawRectangle(new Rect(Vector2.Zero, new Vector2(viewport.X, (shown + 2f) * line)), Color.Black);
+        _renderer.DrawRectangle(new Rect(Vector2.Zero, new Vector2(viewport.X, height)), Color.Black);
 
         for (var index = 0; index < shown; index++)
         {
-            string text = output[output.Count - shown + index];
-            Color colour = text.StartsWith("error:", StringComparison.Ordinal) ? ErrorColour : TextColour;
-            Line(text, new Vector2(8f, 8f + (index * line)), colour);
+            ConsoleLine entry = lines[lines.Count - shown + index];
+            Line(entry.Text, new Vector2(8f, 8f + (index * line)), ColourOf(entry.Level));
         }
 
         Line($"> {_console.Input}_", new Vector2(8f, 8f + (shown * line)), TextColour);
 
-        return 8f + ((shown + 2f) * line);
+        // The value and the description of the command the line names, which is what a person who types a setting reads: an
+        // argument shows the setting it belongs to, because a command of a setting is the setting itself.
+        if (hint is ConsoleCommand command)
+        {
+            Line($"{command.Name} - {command.Description}", new Vector2(8f, 8f + ((shown + 1) * line)), HintColour);
+        }
+
+        return 8f + height;
     }
+
+    /// <summary>Returns the colour a line of the console is drawn in, which is what makes a failure and a warning stand out.</summary>
+    private static Color ColourOf(ConsoleLevel level) => level switch
+    {
+        ConsoleLevel.Error => ErrorColour,
+        ConsoleLevel.Warning => WarningColour,
+        _ => TextColour,
+    };
 
     /// <summary>Draws the numbers of the frame and of every system behind them.</summary>
     private void DrawStats(World world, float y)

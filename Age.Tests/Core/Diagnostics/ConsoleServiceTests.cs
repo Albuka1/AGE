@@ -236,6 +236,127 @@ public sealed class ConsoleServiceTests
         console.Execute("help").Should().BeTrue("the console keeps working after a command failed");
     }
 
+    [Fact]
+    public void ConsoleService_Lines_CarryTheLevelOfTheLine()
+    {
+        var console = new ConsoleService();
+
+        console.Write("plain");
+        console.WriteWarning("careful");
+        console.WriteError("broken");
+
+        console.Lines.Should().HaveCount(3);
+        console.Lines[0].Should().Be(new ConsoleLine("plain", ConsoleLevel.Normal));
+        console.Lines[1].Should().Be(new ConsoleLine("careful", ConsoleLevel.Warning));
+        console.Lines[2].Should().Be(new ConsoleLine("error: broken", ConsoleLevel.Error));
+    }
+
+    [Fact]
+    public void ConsoleService_Lines_AndOutput_HoldTheSameText()
+    {
+        var console = new ConsoleService();
+
+        console.Write("plain");
+        console.WriteError("broken");
+
+        console.Lines.Select(line => line.Text).Should().Equal(console.Output);
+    }
+
+    [Fact]
+    public void ConsoleService_Hint_AnswersTheCommandTheLineNames()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        console.Type('s');
+        console.Type('p');
+        console.Type('a');
+        console.Type('w');
+        console.Type('n');
+
+        console.Hint.Should().NotBeNull();
+        console.Hint!.Value.Description.Should().Be("Puts sprites on screen.");
+    }
+
+    [Fact]
+    public void ConsoleService_Hint_IgnoresTheArguments()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        foreach (char character in "spawn 3")
+        {
+            console.Type(character);
+        }
+
+        console.Hint!.Value.Name.Should().Be("spawn", "a line still names its command when it holds arguments");
+    }
+
+    [Fact]
+    public void ConsoleService_Hint_AnswersNothingForAWordNoCommandMatches()
+    {
+        var console = new ConsoleService();
+
+        console.Type('z');
+
+        console.Hint.Should().BeNull();
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesAWordThatMatchesOneCommand()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        console.Type('s');
+        console.Type('p');
+        console.Type('a');
+
+        console.Complete().Should().BeTrue();
+        console.Input.Should().Be("spawn");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesToThePartSeveralNamesShare()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+        console.Register("spawnMany", "Puts many sprites on screen.", _ => { });
+
+        console.Type('s');
+        console.Type('p');
+        console.Type('a');
+
+        console.Complete().Should().BeTrue();
+        console.Input.Should().Be("spawn", "the shared start of the two names is what a word is completed to");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_LeavesAWholeNameAlone()
+    {
+        var console = new ConsoleService();
+
+        Enter(console, "help");
+
+        console.Complete().Should().BeFalse("a word that is already a whole name is nothing to complete");
+        console.Input.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_IgnoresTheWordsBehindTheFirstOne()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        foreach (char character in "spawn s")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeFalse("only the first word of a line is a command name");
+        console.Input.Should().Be("spawn s");
+    }
+
     /// <summary>Types a line and runs it, which is what a developer at the console does.</summary>
     private static void Enter(ConsoleService console, string line)
     {

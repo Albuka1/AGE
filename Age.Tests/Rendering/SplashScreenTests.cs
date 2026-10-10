@@ -28,6 +28,43 @@ public sealed class SplashScreenTests
     }
 
     [Fact]
+    public void SplashScreen_End_HoldsTheLogoForTheShortestTime()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(5), MinimumDuration = TimeSpan.FromSeconds(1) };
+
+        // The loading of a light game finishes on the first frame, which is what asks the splash to end.
+        splash.End();
+
+        splash.Draw(renderer, new GameTime(0.016, 0)).Should().BeTrue("the logo stays while the shortest time has not passed");
+        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeTrue();
+        splash.Draw(renderer, new GameTime(0.016, 1)).Should().BeFalse("the logo goes once the shortest time passed");
+    }
+
+    [Fact]
+    public void SplashScreen_End_DoesNotOutlastTheDurationWhenTheMinimumIsLonger()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(1), MinimumDuration = TimeSpan.FromSeconds(5) };
+
+        splash.End();
+
+        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeTrue();
+        splash.Draw(renderer, new GameTime(0.016, 1)).Should().BeFalse("the duration is what the game asked for, so the minimum cannot hold the logo past it");
+    }
+
+    [Fact]
+    public void SplashScreen_AKey_EndsTheLogoEvenBeforeTheShortestTime()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(5), MinimumDuration = TimeSpan.FromSeconds(2) };
+        var input = new FakeInput { PressedKeys = [Key.Space] };
+
+        splash.Draw(renderer, new GameTime(0.016, 0), input).Should().BeTrue("the frame with the skip request still belongs to the splash");
+        splash.Draw(renderer, new GameTime(0.016, 0.016), input).Should().BeFalse("a person who skips is not held by the shortest time");
+    }
+
+    [Fact]
     public void SplashScreen_Draw_DrawsTheLogoInTheCentreOfAWhiteClearedFrame()
     {
         var renderer = new FakeRenderer();
@@ -187,13 +224,14 @@ public sealed class SplashScreenTests
     public void SplashScreen_End_EndsTheSplashBeforeTheDurationRanOut()
     {
         var renderer = new FakeRenderer();
-        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(10) };
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(10), MinimumDuration = TimeSpan.FromSeconds(0.5) };
         splash.Draw(renderer, new GameTime(0.016, 0));
 
         splash.End();
 
-        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeFalse();
-        renderer.Drawn.Should().HaveCount(1);
+        splash.Draw(renderer, new GameTime(0.016, 0.25)).Should().BeTrue("the shortest time of the logo has not passed");
+        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeFalse("the end of the loading ends the logo before the duration");
+        renderer.Drawn.Should().HaveCount(2);
     }
 
     [Fact]
