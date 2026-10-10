@@ -29,7 +29,6 @@ public sealed class ConsoleTab : IDevWindowTab
 
     private readonly IConsoleService _console;
     private readonly IClipboardService? _clipboard;
-    private readonly TextRenderer? _textRenderer;
     private readonly float _line;
 
     private int _selected = -1;
@@ -38,16 +37,19 @@ public sealed class ConsoleTab : IDevWindowTab
     /// <summary>Initializes the page from the console whose output it shows and the clipboard a line is copied to.</summary>
     /// <param name="console">The console whose lines are drawn.</param>
     /// <param name="clipboard">The clipboard a clicked line is copied to, or null to leave a click selecting only.</param>
-    /// <param name="textRenderer">The renderer of the text, which measures and draws it with the fonts of the engine, or null to draw it with the built-in font.</param>
     /// <exception cref="ArgumentNullException">The console is null.</exception>
-    public ConsoleTab(IConsoleService console, IClipboardService? clipboard = null, TextRenderer? textRenderer = null)
+    /// <remarks>
+    /// The page draws through the renderer it is handed, which is the one of the window it lives in rather than the one of the game:
+    /// a text renderer of the engine draws into the context of the game, and a page of a window beside the game has a context of its
+    /// own. The line height is therefore the one of the built-in font, which is what a window host draws its text with.
+    /// </remarks>
+    public ConsoleTab(IConsoleService console, IClipboardService? clipboard = null)
     {
         ArgumentNullException.ThrowIfNull(console);
 
         _console = console;
         _clipboard = clipboard;
-        _textRenderer = textRenderer;
-        _line = (textRenderer?.LineHeight ?? BitmapFontMetrics.GlyphHeight) + 2f;
+        _line = BitmapFontMetrics.GlyphHeight + 4f;
     }
 
     /// <inheritdoc />
@@ -134,17 +136,8 @@ public sealed class ConsoleTab : IDevWindowTab
         return (Math.Max(0, count - capacity), capacity);
     }
 
-    /// <summary>Draws a line of the output with the fonts of the engine, or with the built-in font when there is none of them.</summary>
-    private void Line(IRenderer renderer, string text, Vector2 position, Color color)
-    {
-        if (_textRenderer is null)
-        {
-            renderer.DrawText(text, position, color);
-            return;
-        }
-
-        _textRenderer.Draw(text, position, new TextStyle { Color = color });
-    }
+    /// <summary>Draws a line of the output through the renderer of the window the page lives in.</summary>
+    private static void Line(IRenderer renderer, string text, Vector2 position, Color color) => renderer.DrawText(text, position, color);
 
     /// <summary>Returns the colour a line of the output is drawn in, which is what makes a failure and a warning stand out.</summary>
     private static Color ColourOf(ConsoleLevel level) => level switch

@@ -25,7 +25,6 @@ public sealed class DevWindowService : IDevWindowService
     private static readonly Color BorderColour = new(80, 80, 92);
     private static readonly Color ActiveTabColour = new(58, 58, 76);
     private static readonly Color InactiveTabColour = new(24, 24, 32);
-    private static readonly Color TitleTextColour = new(190, 205, 255);
     private static readonly Color TabTextColour = new(215, 215, 225);
     private static readonly Color CloseColour = new(150, 150, 165);
     private static readonly Color CloseHotColour = new(255, 130, 130);
@@ -217,8 +216,6 @@ public sealed class DevWindowService : IDevWindowService
         _host.DrawRectangle(new Rect(Vector2.Zero, size), PanelColour);
         _host.DrawRectangle(new Rect(Vector2.Zero, new Vector2(size.X, TitleHeight)), TitleColour);
         _host.DrawRectangle(new Rect(new Vector2(0f, TitleHeight), new Vector2(size.X, 1f)), BorderColour);
-
-        _host.DrawText(ResolveTitle(), new Vector2(Padding, 6f), TitleTextColour);
 
         float x = 0f;
 

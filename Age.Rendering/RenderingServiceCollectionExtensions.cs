@@ -43,8 +43,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<DevOverlay>();
         services.AddSingleton(provider => new ConsoleTab(
             provider.GetRequiredService<IConsoleService>(),
-            provider.GetService<IClipboardService>(),
-            provider.GetService<TextRenderer>()));
+            provider.GetService<IClipboardService>()));
 
         // The developer window stands beside the game as a window of the operating system rather than as a panel over the frame: its
         // host creates the window and the service draws the pages into it. Register a host of your own — a null host leaves it with its
