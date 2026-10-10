@@ -78,11 +78,10 @@ public sealed class ConsoleService : IConsoleService
         {
             lock (_gate)
             {
-                // The first word of the line is the name, and the rest is arguments: a line that is empty answers nothing, and a
-                // line whose first word no command matches answers nothing rather than the command of a word that comes later.
-                string word = FirstWord(_input.ToString());
-
-                return word.Length > 0 && _byName.TryGetValue(word, out ConsoleCommand command) ? command : null;
+                // The command a line names is the longest path of words that a registered name matches, and the rest of the line
+                // is its arguments: a line whose words name no command answers nothing, and a half-typed last word still finds
+                // the command above it, which is what a panel shows the description of.
+                return Find(_input.ToString()) is (ConsoleCommand command, _) ? command : null;
             }
         }
     }
@@ -261,19 +260,23 @@ public sealed class ConsoleService : IConsoleService
         lock (_gate)
         {
             string line = _input.ToString();
-            int end = line.AsSpan().IndexOfAny(' ', '\t');
 
-            // Only the first word is a command name. A line that already holds a space is naming arguments, and the arguments of
-            // a command are the business of the game rather than of the console.
-            if (end >= 0)
+            // Only the last word is completed, and the words before it are the path of the command: 'cvars se' completes the word
+            // 'se' to the command 'cvars set', which is what a console of several levels does.
+            int end = line.AsSpan().LastIndexOfAny(' ', '\t');
+            string path = end < 0 ? string.Empty : line[..(end + 1)];
+            string word = end < 0 ? line : line[(end + 1)..];
+
+            if (word.Length == 0)
             {
                 return false;
             }
 
-            // A word that matches one command is completed to it; one that matches several is completed to the part they share,
-            // and a word that already is that part is left alone rather than shortened to itself.
-            string[] matches = [.. _byName.Keys.Where(name => name.StartsWith(line, StringComparison.OrdinalIgnoreCase))];
+            string[] matches = [.. _byName.Keys.Where(name => name.StartsWith(path + word, StringComparison.OrdinalIgnoreCase))];
 
+            // A word that matches one command is completed to it; one that matches several is completed to the part they share,
+            // and a word that already is that part is left alone rather than shortened to itself. Only the word is replaced, so
+            // the path that is already typed stays.
             string completion = matches.Length switch
             {
                 0 => string.Empty,
@@ -281,7 +284,7 @@ public sealed class ConsoleService : IConsoleService
                 _ => CommonPrefix(matches),
             };
 
-            if (completion.Length <= line.Length)
+            if (completion.Length <= path.Length + word.Length)
             {
                 return false;
             }
@@ -303,7 +306,8 @@ public sealed class ConsoleService : IConsoleService
     }
 
     /// <summary>Returns the commands whose name starts with a prefix, in the order they were registered, which is what a console lists as suggestions.</summary>
-    /// <param name="prefix">The start of a name to match. An empty prefix matches every command.</param>
+    /// <param name="prefix">The start of a name to match, which may hold several words. An empty prefix matches every command.</param>
+    /// <remarks>A name that starts with more words than the prefix counts as a match, so 'cvars' lists 'cvars set' as well: what a panel shows is what the line could still become.</remarks>
     public IEnumerable<ConsoleCommand> Matches(string prefix)
     {
         ArgumentNullException.ThrowIfNull(prefix);
@@ -330,10 +334,17 @@ public sealed class ConsoleService : IConsoleService
         ArgumentNullException.ThrowIfNull(description);
         ArgumentNullException.ThrowIfNull(run);
 
-        if (name.Any(char.IsWhiteSpace))
+        // A name holds words joined by single spaces, which is what makes a command of several levels: 'cvars set' is the name
+        // of the command that a line of those two words runs. The name is stored with one space between its words, so a caller
+        // that wrote a tab or two spaces still registers the name that a line matches.
+        string[] words = name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+        if (words.Length == 0)
         {
-            throw new ArgumentException($"The name of a command cannot hold whitespace, but '{name}' does.", nameof(name));
+            throw new ArgumentException("The name of a command holds at least one word.", nameof(name));
         }
+
+        name = string.Join(' ', words);
 
         lock (_gate)
         {
@@ -378,29 +389,58 @@ public sealed class ConsoleService : IConsoleService
         }
 
         ConsoleCommand command;
+        string[] arguments;
 
         lock (_gate)
         {
-            if (!_byName.TryGetValue(parts[0], out command))
+            // The name of a command may hold more than one word, so the line is read from its start for the longest name that
+            // matches: 'cvars set locale ru' runs the command 'cvars set' with 'locale' and 'ru', and a command of one word is
+            // the same case with an empty argument list.
+            if (Find(line) is not (ConsoleCommand found, string[] rest))
             {
-                WriteError($"there is no command named '{parts[0]}'. Type 'help' for the list.");
+                WriteError($"there is no command named '{FirstWord(line)}'. Type 'help' for the list.");
                 return false;
             }
+
+            command = found;
+            arguments = rest;
         }
 
         try
         {
-            command.Run([.. parts[1..]]);
+            command.Run(arguments);
         }
         catch (Exception exception)
         {
             // A command is a tool of a developer, so a failure of one is a line in the console rather than a game that
             // stops: the caller learns that the line did not run and reads why in the same place it typed it.
-            WriteError($"the command '{parts[0]}' failed: {exception.GetType().Name}: {exception.Message}");
+            WriteError($"the command '{command.Name}' failed: {exception.GetType().Name}: {exception.Message}");
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>Returns the command a line names and the arguments behind it, or null when no name matches the start of the line.</summary>
+    /// <param name="line">The line to read.</param>
+    /// <remarks>
+    /// A name holds one or more words, so the words of the line are tried as a name from the longest run to the shortest: the
+    /// command of the most words wins, which is what lets 'cvars' and 'cvars set' both exist and the longer one run for the line
+    /// that names it. The words that are left are the arguments.
+    /// </remarks>
+    private (ConsoleCommand Command, string[] Arguments)? Find(string line)
+    {
+        string[] words = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+        for (int count = words.Length; count >= 1; count--)
+        {
+            if (_byName.TryGetValue(string.Join(' ', words[..count]), out ConsoleCommand command))
+            {
+                return (command, [.. words[count..]]);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Returns what the <c>help</c> command prints: one line per command, in the order they were registered.</summary>

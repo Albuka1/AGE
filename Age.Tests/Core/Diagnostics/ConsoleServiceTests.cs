@@ -151,18 +151,42 @@ public sealed class ConsoleServiceTests
     }
 
     [Fact]
-    public void ConsoleService_Register_RejectsANameThatIsTakenOrHoldsWhitespace()
+    public void ConsoleService_Register_RejectsANameThatIsTakenOrBlank()
     {
         var console = new ConsoleService();
         console.Register("spawn", "Puts sprites on screen.", _ => { });
 
         Action taken = () => console.Register("spawn", "Again.", _ => { });
-        Action spaced = () => console.Register("two words", "Nothing.", _ => { });
         Action blank = () => console.Register(" ", "Nothing.", _ => { });
 
         taken.Should().Throw<ArgumentException>().WithMessage("*already registered*");
-        spaced.Should().Throw<ArgumentException>().WithMessage("*whitespace*");
         blank.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void ConsoleService_Register_KeepsAWholeNameOfSeveralWordsToTheSameSpacing()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars   set", "Sets a setting.", _ => { });
+
+        Action again = () => console.Register("cvars set", "Again.", _ => { });
+
+        again.Should().Throw<ArgumentException>("the name is stored with one space between its words");
+    }
+
+    [Fact]
+    public void ConsoleService_Execute_RunsTheCommandOfTheMostWordsThatTheLineNames()
+    {
+        var console = new ConsoleService();
+        var ran = new List<string>();
+
+        console.Register("cvars", "Lists the settings.", _ => ran.Add("list"));
+        console.Register("cvars set", "Sets a setting.", arguments => ran.Add($"set {string.Join(' ', arguments)}"));
+
+        console.Execute("cvars set locale ru").Should().BeTrue();
+        console.Execute("cvars").Should().BeTrue();
+
+        ran.Should().Equal("set locale ru", "list");
     }
 
     [Fact]
@@ -303,6 +327,32 @@ public sealed class ConsoleServiceTests
     }
 
     [Fact]
+    public void ConsoleService_Hint_FindsACommandOfSeveralWords()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Sets a setting.", _ => { });
+
+        foreach (char character in "cvars set")
+        {
+            console.Type(character);
+        }
+
+        console.Hint!.Value.Name.Should().Be("cvars set", "the whole path of the line names the command");
+    }
+
+    [Fact]
+    public void ConsoleService_Matches_ListTheCommandsThatCouldStillBeTyped()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars", "Lists the settings.", _ => { });
+        console.Register("cvars set", "Sets a setting.", _ => { });
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        console.Matches("cvars").Select(command => command.Name).Should().Equal("cvars", "cvars set");
+        console.Matches("cvars ").Select(command => command.Name).Should().Equal("cvars set");
+    }
+
+    [Fact]
     public void ConsoleService_Complete_CompletesAWordThatMatchesOneCommand()
     {
         var console = new ConsoleService();
@@ -343,18 +393,33 @@ public sealed class ConsoleServiceTests
     }
 
     [Fact]
-    public void ConsoleService_Complete_IgnoresTheWordsBehindTheFirstOne()
+    public void ConsoleService_Complete_CompletesTheLastWordBehindAPath()
     {
         var console = new ConsoleService();
-        console.Register("spawn", "Puts sprites on screen.", _ => { });
+        console.Register("cvars set", "Sets a setting.", _ => { });
 
-        foreach (char character in "spawn s")
+        foreach (char character in "cvars se")
         {
             console.Type(character);
         }
 
-        console.Complete().Should().BeFalse("only the first word of a line is a command name");
-        console.Input.Should().Be("spawn s");
+        console.Complete().Should().BeTrue("the last word is completed and the path that is already typed stays");
+        console.Input.Should().Be("cvars set");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_OfAWordThatMatchesNothing_LeavesTheLineAlone()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        foreach (char character in "spawn zzz")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeFalse("no command answers the word, so there is nothing to complete");
+        console.Input.Should().Be("spawn zzz");
     }
 
     /// <summary>Types a line and runs it, which is what a developer at the console does.</summary>

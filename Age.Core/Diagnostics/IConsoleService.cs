@@ -134,10 +134,15 @@ public interface IConsoleService
     void Clear();
 
     /// <summary>Registers a command, which is how a game adds one of its own.</summary>
-    /// <param name="name">The word that runs the command. It has to be unique and must not hold whitespace.</param>
+    /// <param name="name">The words that run the command, joined by single spaces. It has to be unique.</param>
     /// <param name="description">A single line that describes what the command does.</param>
     /// <param name="run">Runs the command with the arguments behind its name.</param>
-    /// <exception cref="ArgumentException">The name is null, empty, holds whitespace or is already registered.</exception>
+    /// <remarks>
+    /// A name holds one or more words, so a command has levels: <c>cvars</c> lists the settings and <c>cvars set locale ru</c>
+    /// runs the command named <c>cvars set</c> with the arguments <c>locale</c> and <c>ru</c>. A line is matched from its start
+    /// and the name of the most words wins, so a command of one word and one of two that starts the same way both work.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The name is null, empty or already registered.</exception>
     /// <exception cref="ArgumentNullException">The description or the code to run is null.</exception>
     void Register(string name, string description, Action<IReadOnlyList<string>> run);
 

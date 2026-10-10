@@ -51,8 +51,17 @@ public sealed partial class DevConsoleOverlay : IRenderPass
     /// <summary>The colour of the row of a suggestion that is chosen.</summary>
     private static readonly Color SelectedColour = new(70, 90, 140);
 
-    /// <summary>The padding between the edge of the panel and its lines, in pixels.</summary>
+    /// <summary>The gap between the edge of the panel and its rows, in pixels.</summary>
     private const float Padding = 10f;
+
+    /// <summary>The space between two rows of the panel, which is what keeps a block of lines of a log readable.</summary>
+    private const float LineGap = 8f;
+
+    /// <summary>How long a key that is held waits before it starts to repeat, in seconds.</summary>
+    private const double RepeatDelay = 0.4d;
+
+    /// <summary>How often a key that is held repeats once it started, in seconds.</summary>
+    private const double RepeatInterval = 0.04d;
 
     /// <summary>The height of the strip of the panel above the lines, which holds the title.</summary>
     private const float HeaderHeight = 26f;
@@ -78,6 +87,12 @@ public sealed partial class DevConsoleOverlay : IRenderPass
     private int _visibleLines = 14;
     private int _visibleSuggestions = 8;
 
+    /// <summary>The time each held key acts next, which is what makes a key that is held repeat rather than act once.</summary>
+    private readonly Dictionary<Key, double> _repeating = [];
+
+    /// <summary>The height of the panel as it was drawn last, which is what a game offsets its own overlay by.</summary>
+    private float _panelHeight;
+
     /// <summary>Initializes the console overlay from the console it drives and the services it reads.</summary>
     /// <param name="console">The console whose lines are drawn and whose input the typed characters reach.</param>
     /// <param name="input">The keys that open the console, run a line, walk its history and its suggestions.</param>
@@ -102,6 +117,6 @@ public sealed partial class DevConsoleOverlay : IRenderPass
         _renderer = renderer;
         _textRenderer = textRenderer;
         _textSource = textSource;
-        _line = (textRenderer?.LineHeight ?? BitmapFontMetrics.GlyphHeight) + 2f;
+        _line = (textRenderer?.LineHeight ?? BitmapFontMetrics.GlyphHeight) + LineGap;
     }
 }

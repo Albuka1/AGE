@@ -78,6 +78,16 @@ public sealed class CVarServiceTests
     }
 
     [Fact]
+    public void CVarService_GetText_AnswersTheValueOfASettingOrNothingForANameNoSettingHolds()
+    {
+        var cvars = new CVarService();
+        cvars.Register("step", 0.02f, "The fixed step of the clock, in seconds.");
+
+        cvars.GetText("step").Should().Be("0.02", "a value is answered as text with the invariant culture");
+        cvars.GetText("missing").Should().BeEmpty("a name no setting holds answers nothing rather than throwing");
+    }
+
+    [Fact]
     public void CVarService_WithAConsole_RegistersACommandForEverySetting()
     {
         var console = new ConsoleService();

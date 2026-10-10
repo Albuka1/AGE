@@ -89,6 +89,14 @@ public sealed class DevOverlay : IRenderPass
     /// <summary>Gets the frames per second over the last window of a second, which is what the overlay prints.</summary>
     public double FramesPerSecond => _framesPerSecond;
 
+    /// <summary>Gets or sets how far the numbers are drawn from the top of the frame, in pixels. The default is zero.</summary>
+    /// <remarks>
+    /// A game that draws a panel at the top of its frame sets this to the height of that panel, so the numbers stand below it
+    /// rather than under it: the console of the engine reports its height through <c>PanelHeight</c>, which is what the sample
+    /// hands to this property while the console is open.
+    /// </remarks>
+    public float TopMargin { get; set; }
+
     /// <summary>Reads the keys of one frame, which is what shows and hides the numbers.</summary>
     /// <param name="frame">The time of the frame, which the frames per second are measured over.</param>
     /// <remarks>Call it once per frame from the render callback of the loop, before the passes are rendered.</remarks>
@@ -128,7 +136,7 @@ public sealed class DevOverlay : IRenderPass
 
         if (ShowStats)
         {
-            DrawStats(world, 8f);
+            DrawStats(world, 8f + TopMargin);
         }
 
         _renderer.EndFrame();

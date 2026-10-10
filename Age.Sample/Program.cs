@@ -346,6 +346,38 @@ cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen liv
 cvars.Register("locale", locale.Language, "The language the strings of the game are read in, such as en or ru.");
 locale.Language = cvars.Get<string>("locale");
 
+// A command of several levels: `cvars` lists the settings (registered by the service itself), `cvars get <name>` answers one, and
+// `cvars set <name> <value>` writes it. The two are separate names rather than one command that reads its first argument, which
+// is what makes each of them complete on its own and what a person reads in the list of suggestions.
+console.Register("cvars get", "Answers what a setting holds. Usage: cvars get spawnLifetime.", arguments =>
+{
+    if (arguments.Count == 0)
+    {
+        console.WriteError("usage: cvars get <name>");
+        return;
+    }
+
+    console.Write($"{arguments[0]} = {cvars.GetText(arguments[0])}");
+});
+console.Register("cvars set", "Writes a setting. Usage: cvars set lifetime 4, cvars set locale ru.", arguments =>
+{
+    if (arguments.Count < 2)
+    {
+        console.WriteError("usage: cvars set <name> <value>");
+        return;
+    }
+
+    string name = arguments[0];
+    string value = string.Join(' ', arguments.Skip(1));
+
+    // The service reports a name or a value that does not fit in the console itself, so this only answers the new value when the
+    // write went through.
+    if (cvars.SetFromText(name, value))
+    {
+        console.Write($"{name} = {cvars.GetText(name)}");
+    }
+});
+
 // The camera that the last frame was drawn through, which a console command reads: the camera of a frame is built in the
 // callback that draws it, and a command runs at the boundary of a step, so the last one that was drawn is what the game is
 // looking through when the command runs.
@@ -499,6 +531,10 @@ gameLoop.Run(
         // The console reads the keys of this frame before the passes draw, and the numbers of a frame are read beside it. The
         // console takes the whole input while it is visible, so the game below reads the keys only when it is not.
         consoleOverlay.Update(time);
+
+        // The numbers of a frame stand below the console while it is open, which is what keeps the two from drawing over one
+        // another: the console reports the height of its panel and the overlay is offset by it.
+        overlay.TopMargin = consoleOverlay.PanelHeight;
         overlay.Update(time);
 
         // The splash is over, so the clock runs: from here the tick of the HUD counts the steps of this game.

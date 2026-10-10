@@ -40,8 +40,16 @@ public sealed partial class DevConsoleOverlay
     /// <summary>Gets a value indicating whether the panel is open or on its way in, which is when a game keeps its input away.</summary>
     public bool IsVisible => _console.IsOpen || _closing;
 
+    /// <summary>Gets the height of the panel as it is drawn this frame, in pixels, which is what a game offsets its own overlay by.</summary>
+    /// <remarks>
+    /// The height follows the rows the panel draws, so it grows with the output and the suggestions and shrinks to the header
+    /// when the console closes. A panel that is not there answers zero, so a game that adds it to a margin draws at the top of
+    /// the frame again once the console is gone.
+    /// </remarks>
+    public float PanelHeight => _panelHeight;
+
     /// <summary>Reads the keys and the characters of one frame, which is what opens the console, runs a line and takes a suggestion.</summary>
-    /// <param name="frame">The time of the frame, which the animation of the panel is measured over.</param>
+    /// <param name="frame">The time of the frame, which the animation of the panel and the repeat of a held key are measured over.</param>
     /// <remarks>Call it once per frame from the render callback of the loop, before the passes are rendered.</remarks>
     public void Update(in GameTime frame)
     {
@@ -71,6 +79,31 @@ public sealed partial class DevConsoleOverlay
             _suggested = -1;
         }
 
+        if (Repeats(Key.Backspace))
+        {
+            _console.Backspace();
+            _suggested = -1;
+        }
+
+        // The down and up keys walk the rows of suggestions while a command is being named, and the history of the console when
+        // it is not: an empty line names every command, and walking a list of all of them would hide the history behind it.
+        bool naming = _console.Input.Length > 0;
+
+        if (Repeats(Key.Down))
+        {
+            if (!naming || !MoveSuggestion(1))
+            {
+                _console.RecallNext();
+            }
+        }
+        else if (Repeats(Key.Up))
+        {
+            if (!naming || !MoveSuggestion(-1))
+            {
+                _console.RecallPrevious();
+            }
+        }
+
         // Tab takes the chosen suggestion, and completes the word when there is nothing to take: the rows are drawn under the
         // line, which is where a person reads the choice, so the list is answered before the completion.
         if (_input.IsKeyPressed(Key.Tab) && !TakeSuggestion())
@@ -79,36 +112,56 @@ public sealed partial class DevConsoleOverlay
             _suggested = -1;
         }
 
-        // The up and down keys walk the rows while a command is being named, and the history of the console otherwise: an empty
-        // line names every command, and walking a list of all of them would hide the history behind it.
-        bool naming = _console.Input.Length > 0;
-
-        if (_input.IsKeyPressed(Key.Down))
-        {
-            if (!naming || !MoveSuggestion(1))
-            {
-                _console.RecallNext();
-            }
-        }
-        else if (_input.IsKeyPressed(Key.Up))
-        {
-            if (!naming || !MoveSuggestion(-1))
-            {
-                _console.RecallPrevious();
-            }
-        }
-
         if (_input.IsKeyPressed(Key.Enter))
         {
             _console.Submit();
             _suggested = -1;
         }
+    }
 
-        if (_input.IsKeyPressed(Key.Backspace))
+    /// <summary>Returns a value indicating whether a key acts on this frame, which is on the frame it went down and then at the repeat rate while it is held.</summary>
+    /// <param name="key">The key to read.</param>
+    /// <remarks>
+    /// A key that is held acts once, then again after a short delay and then every repeat interval, which is what makes a
+    /// backspace that is held erase the line rather than one character. The device reports a key that is held as down and not as
+    /// pressed, so a console of its own counts the time rather than waiting for a transition that never comes.
+    /// </remarks>
+    private bool Repeats(Key key)
+    {
+        if (_input.IsKeyPressed(key))
         {
-            _console.Backspace();
-            _suggested = -1;
+            _repeating[key] = _frameTime + RepeatDelay;
+            return true;
         }
+
+        if (!_input.IsKeyDown(key))
+        {
+            _repeating.Remove(key);
+            return false;
+        }
+
+        // A key that is held without a recorded repeat, which happens on the frame the panel opened while the key was already
+        // down, starts its repeat here rather than acting on that frame.
+        if (!_repeating.TryGetValue(key, out double next))
+        {
+            _repeating[key] = _frameTime + RepeatDelay;
+            return false;
+        }
+
+        if (_frameTime < next)
+        {
+            return false;
+        }
+
+        // The next time is taken from the last one rather than from this frame, so a frame that ran long does not push the repeat
+        // far into the future: the key keeps its own pace rather than the pace of the display.
+        while (next <= _frameTime)
+        {
+            next += RepeatInterval;
+        }
+
+        _repeating[key] = next;
+        return true;
     }
 
     /// <summary>Opens the console when it is closed and closes it when it is open, which is what the open key does.</summary>

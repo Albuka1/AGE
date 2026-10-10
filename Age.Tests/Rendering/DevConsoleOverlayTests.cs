@@ -147,6 +147,41 @@ public sealed class DevConsoleOverlayTests
         console.IsOpen.Should().BeFalse();
     }
 
+    [Fact]
+    public void DevConsoleOverlay_Update_AHeldBackspace_ErasesMoreThanOneCharacter()
+    {
+        var console = new ConsoleService();
+        var input = new FakeInputService();
+        var text = new FakeTextInputService();
+        DevConsoleOverlay overlay = Create(console, input, text: text);
+
+        Press(overlay, input, overlay.OpenKey);
+
+        text.Type("hello");
+        Frame(overlay, input);
+        console.Input.Should().Be("hello");
+
+        // The key goes down on this frame, which erases one character, and then stays down, which is what a device reports for a
+        // key that is held.
+        input.BeginFrame();
+        input.Press(Key.Backspace);
+        overlay.Update(new GameTime(0.016d, 0.016d));
+        console.Input.Should().Be("hell", "the frame of the press erases one character");
+
+        // A held key waits out the delay and then repeats on its own, without a second press.
+        double time = 0.016d;
+
+        for (var frame = 0; frame < 40; frame++)
+        {
+            time += 0.05d;
+            input.BeginFrame();
+            input.Hold(Key.Backspace);
+            overlay.Update(new GameTime(0.05d, time));
+        }
+
+        console.Input.Should().BeEmpty("a key that is held erases the line rather than one character");
+    }
+
     /// <summary>Presses a key for one frame and runs it, which is one frame of the loop: the frame opens, the device reports the key, the console reads it.</summary>
     private static void Press(DevConsoleOverlay overlay, FakeInputService input, Key key, double delta = 0.016d)
     {
@@ -171,19 +206,27 @@ public sealed class DevConsoleOverlayTests
         IRenderer? renderer = null) =>
         new(console, input, text ?? new FakeTextInputService(), timestep ?? new FixedTimestep(FixedTimestep.DefaultStep), renderer ?? new FakeRenderer());
 
-    /// <summary>Reports a pointer at the origin and the key that a test pressed for one frame.</summary>
+    /// <summary>Reports a pointer at the origin and the key that a test pressed or held for one frame.</summary>
     private sealed class FakeInputService : IInputService
     {
         private readonly HashSet<Key> _pressed = [];
+        private readonly HashSet<Key> _down = [];
 
         public Vector2 MousePosition => Vector2.Zero;
 
         /// <summary>Records a key as pressed for the frame that is open, which is how a device reports a transition.</summary>
-        public void Press(Key key) => _pressed.Add(key);
+        public void Press(Key key)
+        {
+            _pressed.Add(key);
+            _down.Add(key);
+        }
+
+        /// <summary>Records a key as held without a transition, which is what a device reports for a key that stays down.</summary>
+        public void Hold(Key key) => _down.Add(key);
 
         public void BeginFrame() => _pressed.Clear();
 
-        public bool IsKeyDown(Key key) => _pressed.Contains(key);
+        public bool IsKeyDown(Key key) => _down.Contains(key);
 
         public bool IsKeyPressed(Key key) => _pressed.Contains(key);
 

@@ -101,6 +101,49 @@ public sealed partial class DevConsoleOverlay
     /// <summary>Returns the title of the panel in the language of the game, or the key itself when the game ships no string for it.</summary>
     private string ResolveTitle() => _textSource?.Resolve("console-title") ?? "console-title";
 
+    /// <summary>Breaks a line into rows that fit the width, one row per run of words that fits.</summary>
+    /// <param name="text">The line to break.</param>
+    /// <param name="width">The width the rows are kept inside, in pixels.</param>
+    /// <returns>The rows, in order. A line that fits is one row, and an empty line is one empty row.</returns>
+    /// <remarks>A word that is wider than the width on its own is left on a row of its own rather than cut, because there is nowhere to break it.</remarks>
+    private IEnumerable<string> Wrap(string text, float width)
+    {
+        if (text.Length == 0)
+        {
+            yield return string.Empty;
+            yield break;
+        }
+
+        string row = string.Empty;
+
+        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string candidate = row.Length == 0 ? word : $"{row} {word}";
+
+            if (row.Length > 0 && LineWidth(candidate) > width)
+            {
+                yield return row;
+                row = word;
+                continue;
+            }
+
+            row = candidate;
+        }
+
+        if (row.Length > 0)
+        {
+            yield return row;
+        }
+    }
+
+    /// <summary>Returns the width a row takes, which is what breaks a line into rows that fit the window.</summary>
+    /// <remarks>
+    /// A row is measured with the built-in font, whose glyphs are all the same width, so the panel breaks its lines the same way
+    /// whatever font it draws them in. The engine font of a game is proportional, so a row may end up a little shorter or longer
+    /// than the measurement, which is why the caret of the line that is being typed is placed by what that line drew.
+    /// </remarks>
+    private static float LineWidth(string text) => text.Length * BitmapFontMetrics.GlyphWidth;
+
     /// <summary>Returns the colour a line of the output is drawn in, which is what makes a failure and a warning stand out.</summary>
     private static Color ColourOf(ConsoleLevel level) => level switch
     {

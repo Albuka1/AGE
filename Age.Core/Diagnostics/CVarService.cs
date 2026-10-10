@@ -105,6 +105,18 @@ public sealed class CVarService
         throw new InvalidOperationException($"There is no setting named '{name}' that holds a {typeof(T).Name}. Register it before it is read.");
     }
 
+    /// <summary>Returns the value of a setting as text, which is how the console shows it and how a configuration file writes it.</summary>
+    /// <param name="name">The name of the setting.</param>
+    /// <returns>The value with the invariant culture, or an empty text when nothing was registered under that name.</returns>
+    /// <remarks>An unknown name answers an empty text rather than throwing, because a console shows what a person typed without a value in front of it.</remarks>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
+    public string GetText(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        return _values.TryGetValue(name, out CVar cvar) ? cvar.Text : string.Empty;
+    }
+
     /// <summary>Returns the value of a setting when there is one of that type.</summary>
     /// <typeparam name="T">The type the setting was registered with.</typeparam>
     /// <param name="name">The name of the setting.</param>
