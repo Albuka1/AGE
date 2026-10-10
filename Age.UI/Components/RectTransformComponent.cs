@@ -66,8 +66,13 @@ public struct RectTransformComponent : IComponent
     /// <summary>Gets or sets the corner of the canvas that the element is placed against: zero is its left or top edge and one its right or bottom edge.</summary>
     public Vector2 AnchorMin;
 
-    /// <summary>Gets or sets the other corner of the rectangle of the anchors, which is added to <see cref="AnchorMin"/>.</summary>
-    /// <remarks>An element that leaves this equal to <see cref="AnchorMin"/> has a point anchor and keeps its size; an element that gives it another corner stretches with the canvas, which is what a background or a full-screen shade needs.</remarks>
+    /// <summary>Gets or sets the corner of the canvas that the other corner of the element is placed against: zero is the left or top edge and one the right or bottom one.</summary>
+    /// <remarks>
+    /// This corner and <see cref="AnchorMin"/> are the two normalized corners of the canvas that the element is placed in, so the room it
+    /// is laid out in is the rectangle between them rather than an offset one of them adds to the other. An element that leaves this
+    /// equal to <see cref="AnchorMin"/> has a point anchor and keeps its size; an element that gives it another corner stretches with
+    /// the canvas, which is what a background or a full-screen shade needs.
+    /// </remarks>
     public Vector2 AnchorMax;
 
     /// <summary>Gets or sets the point of the element that sits on the anchors: zero is its top-left corner and one its bottom-right corner.</summary>

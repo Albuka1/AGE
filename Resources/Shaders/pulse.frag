@@ -8,8 +8,10 @@ void main()
     // stage that shades an image starts from the image rather than from the tint of the sprite.
     vec4 image = sampleTexture(UV);
 
-    // A pulse between nothing and the whole of the brightness of the layer again, twice a second: the layer below shows through
-    // it and the two of them together are the picture that the sprite draws.
+    // A pulse between nothing and the whole of the brightness of the layer again, a little over half a cycle a second: the alpha
+    // swings from zero, where nothing of the layer shows, to one, where the layer below shows through it, and the image is
+    // multiplied by one to two of its own brightness on the way. TIME is in seconds, so TIME * 4.0 is radians and a full turn
+    // takes about 1.6 seconds. The two layers together are the picture that the sprite draws.
     float pulse = 0.5 + (0.5 * sin(TIME * 4.0));
 
     COLOR = vec4(image.rgb * (1.0 + pulse), image.a * pulse);
