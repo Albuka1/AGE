@@ -87,11 +87,17 @@ try {
     $date = (Get-Date).ToString('yyyy-MM-dd')
 
     $props = Read-Text 'Directory.Build.props'
-    $bumped = [regex]::Replace($props, '<Version>[^<]+</Version>', "<Version>$Version</Version>")
 
-    if ($bumped -eq $props) {
+    # The version the build already reports. A release that names the version the build already reports is not a mistake — the
+    # property is often bumped while a version is being finished — so what is checked is that there is a version at all, and the
+    # patch below is what writes the one that was asked for.
+    [string] $current = [regex]::Match($props, '<Version>([^<]+)</Version>').Groups[1].Value
+
+    if ([string]::IsNullOrWhiteSpace($current)) {
         throw 'Directory.Build.props holds no <Version>...</Version>, so there is nothing to bump.'
     }
+
+    $bumped = [regex]::Replace($props, '<Version>[^<]+</Version>', "<Version>$Version</Version>")
 
     # The two version files say the same thing as the build, and the script keeps them in step: the engine one is read when a game is
     # compared with the engine in another repository, and the game one is what the sample declares it was written for. A release that
