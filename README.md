@@ -92,7 +92,8 @@ dotnet test --project Age.Tests/Age.Tests.csproj -c Release
 dotnet run --project Age.Sample/Age.Sample.csproj
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for a guided tour, and [CHANGELOG.md](CHANGELOG.md) for what
+See [QUICKSTART.md](QUICKSTART.md) for a guided tour, the [API reference](https://albuka1.github.io/AGE/api/)
+for every public type of every assembly, and [CHANGELOG.md](CHANGELOG.md) for what
 changed in each release and [RELEASING.md](RELEASING.md) for how a release is cut.
 
 ## Architecture
