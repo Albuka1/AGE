@@ -89,14 +89,15 @@ public struct RectTransformComponent : IComponent
     /// </remarks>
     public Vector2 SizeDelta;
 
-    /// <summary>Resolves <see cref="Position"/> and <see cref="Size"/> from the anchors, the canvas and the scale of it.</summary>
-    /// <param name="canvas">The rectangle of the canvas in design units: its origin is the top-left corner of the screen and its size is the resolution the interface was authored against.</param>
+    /// <summary>Resolves <see cref="Position"/> and <see cref="Size"/> from the anchors, the rectangle the element is placed in and the scale of it.</summary>
+    /// <param name="canvas">The rectangle the element is placed in, in design units: its origin is the top-left corner of the parent or of the screen and its size is the room it is placed in.</param>
     /// <param name="scale">The scale of the canvas, which is how many pixels of the screen a design unit is.</param>
     /// <remarks>
-    /// The anchors cut the canvas into the room the element is placed in, the pivot chooses the point of that room the element
+    /// The anchors cut the rectangle into the room the element is placed in, the pivot chooses the point of that room the element
     /// hangs from, and <see cref="AnchoredPosition"/> moves the element away from it. Everything a game authored is in design
     /// units and everything written here is in pixels of the screen, so the same values lay the same interface out on a display
-    /// of any resolution.
+    /// of any resolution. An element of a tree is placed in the rectangle of its parent rather than in the canvas, which is what
+    /// makes it follow the panel it stands inside; a root is placed in the canvas.
     /// </remarks>
     public void Resolve(Rect canvas, float scale)
     {

@@ -80,10 +80,20 @@ public struct SpriteComponent : IComponent
     /// <remarks>A <see cref="SpriteAnimationSystem"/> writes this field, and a game may set it for a state that stands still.</remarks>
     public int Frame;
 
-    /// <summary>Gets or sets the base size, in pixels, before the transform scale is applied.</summary>
+    /// <summary>Gets or sets the base size, in pixels, before the transform scale is applied. Zero means the size of the image that is drawn.</summary>
+    /// <remarks>
+    /// A sprite that names no size takes the size of the image it draws, which is what content that says only which image it draws
+    /// needs: the number is in the file, so a document repeats nothing. A sprite that names layers and no size takes the size of the
+    /// image of its first layer. A handle that a game made itself has no size the engine can read, so such a sprite still sets this.
+    /// </remarks>
     public Vector2 Size;
 
-    /// <summary>Gets or sets the tint color.</summary>
+    /// <summary>Gets or sets the tint color. The default of the structure, transparent black, draws the image as it is.</summary>
+    /// <remarks>
+    /// A sprite that names no colour is drawn white, which is the image as it is: a component that no document writes a colour for has
+    /// the default of the structure, and drawing with that would show nothing. A colour that is fully transparent is therefore written
+    /// as a tint that leaves one channel just off zero, which no sprite of a game needs.
+    /// </remarks>
     public Color Color;
 
     /// <summary>Gets or sets the draw order. Larger values draw on top.</summary>

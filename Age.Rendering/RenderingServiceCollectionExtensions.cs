@@ -41,6 +41,28 @@ public static class RenderingServiceCollectionExtensions
             TextDefaults.Fonts));
         services.AddSingleton<SplashScreen>();
         services.AddSingleton<DevOverlay>();
+        services.AddSingleton(provider => new ConsoleTab(
+            provider.GetRequiredService<IConsoleService>(),
+            provider.GetService<IClipboardService>()));
+
+        // The developer window stands beside the game as a window of the operating system rather than as a panel over the frame: its
+        // host creates the window and the service draws the pages into it. Register a host of your own — a null host leaves it with its
+        // pages and nothing drawn — to change where it is drawn, and the service is what a game pumps each frame. A game that cannot
+        // open a second window is better off with no developer window than with one that hangs it, which is why nothing is drawn when
+        // no host is given.
+        services.AddSingleton<IDevWindowHost>(provider => new SilkDevWindowHost(provider.GetService<IWindowService>()));
+        services.AddSingleton<IDevWindowService>(provider => new DevWindowService(
+            provider.GetRequiredService<IDevWindowHost>())
+            .Add(provider.GetRequiredService<ConsoleTab>()));
+        services.AddSingleton(provider => new DevConsoleOverlay(
+            provider.GetRequiredService<IConsoleService>(),
+            provider.GetRequiredService<IInputService>(),
+            provider.GetRequiredService<ITextInputService>(),
+            provider.GetRequiredService<FixedTimestep>(),
+            provider.GetRequiredService<IRenderer>(),
+            provider.GetService<TextRenderer>(),
+            provider.GetService<ITextSource>(),
+            provider.GetService<IClipboardService>()));
         services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();
         services.AddSingleton<IGameShutdownStep, WindowShutdownStep>();
         services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
@@ -67,6 +89,7 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<SilkInputService>();
         services.AddSingleton<IInputService>(provider => provider.GetRequiredService<SilkInputService>());
         services.AddSingleton<ITextInputService>(provider => provider.GetRequiredService<SilkInputService>());
+        services.AddSingleton<IClipboardService>(provider => provider.GetRequiredService<SilkInputService>());
         return services;
     }
 }

@@ -112,6 +112,100 @@ public sealed class ConsoleServiceTests
 
         console.Input.Should().BeEmpty("an empty line loses nothing");
     }
+    [Fact]
+    public void ConsoleService_Type_InsertsAtTheCaretAndCollapsesASelection()
+    {
+        var console = new ConsoleService();
+        console.SetInput("hello");
+
+        // A caret in the middle of the line is where the next character lands, which is what lets a person fix a line rather than
+        // only add to its end.
+        console.Caret = 2;
+        console.Type('X');
+
+        console.Input.Should().Be("heXllo");
+        console.Caret.Should().Be(3);
+
+        // A character typed over a selection replaces it, which is what typing over marked text does.
+        console.SelectAll();
+        console.Type('y');
+
+        console.Input.Should().Be("y");
+        console.SelectionLength.Should().Be(0, "typing ends the selection");
+    }
+
+    [Fact]
+    public void ConsoleService_Selection_IsTakenBetweenTheAnchorAndTheCaretInEitherOrder()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abcdef");
+
+        // A selection that was made to the right and one that was made to the left hold the same text, which is what the lesser of
+        // the two indices being the start means.
+        console.Caret = 5;
+        console.SelectionAnchor = 2;
+
+        console.SelectionStart.Should().Be(2);
+        console.SelectionLength.Should().Be(3);
+        console.Selection.Should().Be("cde");
+
+        // A select all marks the whole line and leaves the caret at its end.
+        console.SelectAll();
+
+        console.Selection.Should().Be("abcdef");
+        console.Caret.Should().Be(6);
+        console.SelectionAnchor.Should().Be(0);
+
+        // Removing the selection leaves the line empty and the caret at the start.
+        console.RemoveSelection().Should().BeTrue();
+        console.Input.Should().BeEmpty();
+        console.Caret.Should().Be(0);
+    }
+
+    [Fact]
+    public void ConsoleService_Backspace_RemovesTheSelectionBeforeOneCharacter()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abcdef");
+        console.Caret = 5;
+        console.SelectionAnchor = 2;
+
+        console.Backspace();
+
+        console.Input.Should().Be("abf", "the selection goes rather than the one character before the caret");
+        console.Caret.Should().Be(2);
+    }
+
+
+
+    [Fact]
+    public void ConsoleService_Delete_RemovesTheSelectionAndLeavesTheCharacterAfterIt()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abcdef");
+        console.Caret = 2;
+        console.SelectionAnchor = 5;
+
+        console.Delete();
+
+        // The selection goes and the character after it stays: a delete that removed the selection and then the character at the
+        // caret would answer "ab" here, losing the "f" that stood outside the mark.
+        console.Input.Should().Be("abf");
+        console.Caret.Should().Be(2);
+    }
+
+    [Fact]
+    public void ConsoleService_Delete_WithNoSelection_RemovesTheCharacterAtTheCaret()
+    {
+        var console = new ConsoleService();
+        console.SetInput("abc");
+        console.Caret = 1;
+
+        console.Delete();
+
+        console.Input.Should().Be("ac", "a delete with nothing marked removes the character the caret stands on");
+        console.Caret.Should().Be(1);
+    }
 
     [Fact]
     public void ConsoleService_Recall_WalksTheHistoryAndEndsOnAnEmptyLine()
@@ -151,18 +245,42 @@ public sealed class ConsoleServiceTests
     }
 
     [Fact]
-    public void ConsoleService_Register_RejectsANameThatIsTakenOrHoldsWhitespace()
+    public void ConsoleService_Register_RejectsANameThatIsTakenOrBlank()
     {
         var console = new ConsoleService();
         console.Register("spawn", "Puts sprites on screen.", _ => { });
 
         Action taken = () => console.Register("spawn", "Again.", _ => { });
-        Action spaced = () => console.Register("two words", "Nothing.", _ => { });
         Action blank = () => console.Register(" ", "Nothing.", _ => { });
 
         taken.Should().Throw<ArgumentException>().WithMessage("*already registered*");
-        spaced.Should().Throw<ArgumentException>().WithMessage("*whitespace*");
         blank.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void ConsoleService_Register_KeepsAWholeNameOfSeveralWordsToTheSameSpacing()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars   set", "Sets a setting.", _ => { });
+
+        Action again = () => console.Register("cvars set", "Again.", _ => { });
+
+        again.Should().Throw<ArgumentException>("the name is stored with one space between its words");
+    }
+
+    [Fact]
+    public void ConsoleService_Execute_RunsTheCommandOfTheMostWordsThatTheLineNames()
+    {
+        var console = new ConsoleService();
+        var ran = new List<string>();
+
+        console.Register("cvars", "Lists the settings.", _ => ran.Add("list"));
+        console.Register("cvars set", "Sets a setting.", arguments => ran.Add($"set {string.Join(' ', arguments)}"));
+
+        console.Execute("cvars set locale ru").Should().BeTrue();
+        console.Execute("cvars").Should().BeTrue();
+
+        ran.Should().Equal("set locale ru", "list");
     }
 
     [Fact]
@@ -176,6 +294,45 @@ public sealed class ConsoleServiceTests
         console.Execute("spawn").Should().BeFalse();
 
         console.Commands.Should().NotContain(command => command.Name == "spawn");
+    }
+
+    [Fact]
+    public void ConsoleService_Unregister_ANameThatOnlySharesItsFirstWords_RemovesNothing()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars", "Lists the settings.", _ => { });
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        // A name that walks to no level is not the command above it: 'cvars bogus' names no command, so removing it must not take
+        // 'cvars' away, which is what a walk that stopped at the last level it reached would do.
+        console.Unregister("cvars bogus").Should().BeFalse();
+        console.Execute("cvars").Should().BeTrue();
+
+        console.Commands.Should().Contain(command => command.Name == "cvars");
+    }
+
+    [Fact]
+    public void ConsoleService_Matches_APathThatNamesNoLevel_ListsNothing()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+
+        // The levels below a path that does not exist are not the levels of the part of it that matched: suggesting what follows
+        // 'cvars' for the line 'cvars bogus ' would offer a command the line cannot reach.
+        console.Matches("cvars bogus ").Should().BeEmpty();
+        console.Matches("cvars ").Select(command => command.Name).Should().Equal(new[] { "cvars set", "cvars get" });
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_AWordBehindAPathThatNamesNoLevel_LeavesTheLineAlone()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        console.SetInput("cvars bogus se");
+        console.Complete().Should().BeFalse("the path names no level, so there is nothing below it to complete to");
+        console.Input.Should().Be("cvars bogus se", "the word behind the mistake of the path is left as it was typed");
     }
 
     [Fact]
@@ -234,6 +391,279 @@ public sealed class ConsoleServiceTests
         console.Output.Should().ContainSingle().Which.Should().StartWith("error:").And.Contain("boom").And.Contain("the command failed");
 
         console.Execute("help").Should().BeTrue("the console keeps working after a command failed");
+    }
+
+    [Fact]
+    public void ConsoleService_Lines_CarryTheLevelOfTheLine()
+    {
+        var console = new ConsoleService();
+
+        console.Write("plain");
+        console.WriteWarning("careful");
+        console.WriteError("broken");
+
+        console.Lines.Should().HaveCount(3);
+        console.Lines[0].Should().Be(new ConsoleLine("plain", ConsoleLevel.Normal));
+        console.Lines[1].Should().Be(new ConsoleLine("careful", ConsoleLevel.Warning));
+        console.Lines[2].Should().Be(new ConsoleLine("error: broken", ConsoleLevel.Error));
+    }
+
+    [Fact]
+    public void ConsoleService_Lines_AndOutput_HoldTheSameText()
+    {
+        var console = new ConsoleService();
+
+        console.Write("plain");
+        console.WriteError("broken");
+
+        console.Lines.Select(line => line.Text).Should().Equal(console.Output);
+    }
+
+    [Fact]
+    public void ConsoleService_Hint_AnswersTheCommandTheLineNames()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        console.Type('s');
+        console.Type('p');
+        console.Type('a');
+        console.Type('w');
+        console.Type('n');
+
+        console.Hint.Should().NotBeNull();
+        console.Hint!.Value.Description.Should().Be("Puts sprites on screen.");
+    }
+
+    [Fact]
+    public void ConsoleService_Hint_IgnoresTheArguments()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        foreach (char character in "spawn 3")
+        {
+            console.Type(character);
+        }
+
+        console.Hint!.Value.Name.Should().Be("spawn", "a line still names its command when it holds arguments");
+    }
+
+    [Fact]
+    public void ConsoleService_Hint_AnswersNothingForAWordNoCommandMatches()
+    {
+        var console = new ConsoleService();
+
+        console.Type('z');
+
+        console.Hint.Should().BeNull();
+    }
+
+    [Fact]
+    public void ConsoleService_Hint_FindsACommandOfSeveralWords()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Sets a setting.", _ => { });
+
+        foreach (char character in "cvars set")
+        {
+            console.Type(character);
+        }
+
+        console.Hint!.Value.Name.Should().Be("cvars set", "the whole path of the line names the command");
+    }
+
+    [Fact]
+    public void ConsoleService_Matches_ListTheLevelsThatCouldStillBeTyped()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars", "Lists the settings.", _ => { });
+        console.Register("cvars set", "Sets a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        // A line that is being named lists the levels one below it: 'cvars' names the group, and what could be typed at it is the
+        // levels that follow, which is what a console of several levels lists at every stage.
+        console.Matches("cvars").Select(command => command.Name).Should().Equal("cvars");
+        console.Matches("cvars ").Select(command => command.Name).Should().Equal("cvars set", "cvars get");
+        console.Matches("cvars s").Select(command => command.Name).Should().Equal("cvars set");
+    }
+
+    [Fact]
+    public void ConsoleService_Matches_ALineThatWalkedIntoAGroup_ListsTheLevelsBelowIt()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Sets a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+
+        // The path before the last word is walked into the tree, and the levels below it are the rows, so each word of a command is
+        // suggested in turn rather than the whole name at once.
+        console.Matches("cv").Select(command => command.Name).Should().Equal("cvars");
+        console.Matches("cvars ").Select(command => command.Name).Should().Equal("cvars set", "cvars get");
+        console.Matches("cvars set").Select(command => command.Name).Should().Equal(new[] { "cvars set" });
+    }
+
+    [Fact]
+    public void ConsoleService_Execute_WalksTheGroupsOfACommandOfSeveralLevels()
+    {
+        var console = new ConsoleService();
+        var seen = new List<string>();
+
+        // 'set' is a level that is never registered on its own: registering 'cvars set' makes 'cvars' and 'set' groups that a line
+        // walks through, which is what makes a command of several levels a tree rather than a name with spaces in it.
+        console.Register("cvars", "Lists the settings.", _ => seen.Add("list"));
+        console.Register("cvars set", "Writes a setting.", arguments => seen.Add(string.Join(' ', arguments)));
+
+        console.Execute("cvars").Should().BeTrue();
+        console.Execute("cvars set locale ru").Should().BeTrue();
+
+        seen.Should().Equal("list", "locale ru");
+    }
+
+    [Fact]
+    public void ConsoleService_Execute_ALineThatStopsAboveALeaf_RunsTheGroupThatHoldsACommand()
+    {
+        var console = new ConsoleService();
+        var ran = string.Empty;
+
+        console.Register("cvars", "Lists the settings.", _ => ran = "cvars");
+        console.Register("cvars set", "Writes a setting.", _ => ran = "set");
+
+        // 'cvars set locale' reaches the leaf 'cvars set' with the argument 'locale', and a word below a leaf is an argument of it
+        // rather than a level: the leaf that ran is the deepest one the words walked to.
+        console.Execute("cvars set locale").Should().BeTrue();
+
+        ran.Should().Be("set");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesALevelBehindAPathOneWordAtATime()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+        console.Register("cvars get", "Answers a setting.", _ => { });
+
+        // A word that is already a whole level is left alone, so 'cvars' is not shortened to itself and the space that descends the
+        // tree is typed. The word behind the path is completed to the level the path leads to.
+        console.SetInput("cvars");
+        console.Complete().Should().BeFalse("the first level is already the whole word it could be");
+
+        console.SetInput("cvars se");
+        console.Complete().Should().BeTrue();
+        console.Input.Should().Be("cvars set", "the level behind the path is completed and the path is left in place");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_OfAWholeLeaf_LeavesTheLineAlone()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        foreach (char character in "cvars set")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeFalse("a word that is already the level it matches is nothing to complete");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_ReplacesOnlyTheLastWordAndKeepsThePath()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Writes a setting.", _ => { });
+
+        // A setting that was named is an argument of the level above it, and the word that is completed is the level, so the words
+        // that are already typed stay exactly as they were and only the last one changes.
+        console.SetInput("cvars se");
+        console.Complete().Should().BeTrue();
+
+        console.Input.Should().Be("cvars set", "the path that was typed is kept and only the last word is completed");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesAWordThatMatchesOneCommand()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        console.Type('s');
+        console.Type('p');
+        console.Type('a');
+
+        console.Complete().Should().BeTrue();
+        console.Input.Should().Be("spawn");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesToThePartSeveralNamesShare()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+        console.Register("spawnMany", "Puts many sprites on screen.", _ => { });
+
+        console.Type('s');
+        console.Type('p');
+        console.Type('a');
+
+        console.Complete().Should().BeTrue();
+        console.Input.Should().Be("spawn", "the shared start of the two names is what a word is completed to");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_LeavesAWholeNameAlone()
+    {
+        var console = new ConsoleService();
+
+        Enter(console, "help");
+
+        console.Complete().Should().BeFalse("a word that is already a whole name is nothing to complete");
+        console.Input.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesTheLastWordBehindAPath()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Sets a setting.", _ => { });
+
+        foreach (char character in "cvars se")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeTrue("the last word is completed and the path that is already typed stays");
+        console.Input.Should().Be("cvars set");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_CompletesBehindAPathTypedWithExtraWhitespace()
+    {
+        var console = new ConsoleService();
+        console.Register("cvars set", "Sets a setting.", _ => { });
+
+        foreach (char character in "cvars\t se")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeTrue("a path typed with a tab still names the command it completes");
+        console.Input.Should().Be("cvars set", "the path is written back with the single spaces a name holds");
+    }
+
+    [Fact]
+    public void ConsoleService_Complete_OfAWordThatMatchesNothing_LeavesTheLineAlone()
+    {
+        var console = new ConsoleService();
+        console.Register("spawn", "Puts sprites on screen.", _ => { });
+
+        foreach (char character in "spawn zzz")
+        {
+            console.Type(character);
+        }
+
+        console.Complete().Should().BeFalse("no command answers the word, so there is nothing to complete");
+        console.Input.Should().Be("spawn zzz");
     }
 
     /// <summary>Types a line and runs it, which is what a developer at the console does.</summary>

@@ -164,6 +164,10 @@ public sealed class GameShutdownTests
 
         public bool IsAlive(TextureHandle texture) => false;
 
+        public Vector2 Size(TextureHandle texture) => Vector2.Zero;
+
+        public IEnumerable<(string Path, TextureHandle Texture, Vector2 Size)> Textures => [];
+
         public bool Unload(TextureHandle texture) => false;
 
         public void UnloadAll() => Unloaded = true;

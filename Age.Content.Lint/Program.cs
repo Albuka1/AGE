@@ -23,10 +23,23 @@ using Microsoft.Extensions.DependencyInjection;
 //
 // Every mistake is grouped under the pass that found it, which is what an editor and a person both want.
 //
-// Usage: dotnet run --project Age.Content.Lint -- [game root] [prototypes folder] [textures folder]
+// Usage: dotnet run --project Age.Content.Lint -- [game root] [prototypes folder] [textures folder] [area]
+//
+// The area names one pass to read — prototypes, sheets or locales — and leaving it out reads every pass. A build that runs one pass
+// per job names the pass, so a failure says which part of the content is wrong, and the four folders stay defaulted so the common
+// call reads everything.
 string root = args.Length > 0 ? args[0] : "Resources";
 string folder = args.Length > 1 ? args[1] : "Prototypes";
 string textures = args.Length > 2 ? args[2] : "Textures";
+string? area = args.Length > 3 ? args[3] : null;
+
+bool Read(LintArea candidate) => area is null || string.Equals(area, candidate.ToString(), StringComparison.OrdinalIgnoreCase);
+
+if (area is not null && !Enum.GetNames<LintArea>().Any(name => string.Equals(name, area, StringComparison.OrdinalIgnoreCase)))
+{
+    Console.Error.WriteLine($"'{area}' is not a pass of the content: {string.Join(", ", Enum.GetNames<LintArea>())}.");
+    return 1;
+}
 
 using ServiceProvider provider = new ServiceCollection()
     .AddAgeCore()
@@ -51,9 +64,9 @@ var linter = new ContentLinter(prototypes, provider.GetRequiredService<Component
 LintResult result = linter.Lint(new LintOptions
 {
     Root = root,
-    Prototypes = folder,
-    Sheets = textures,
-    Locales = "Locale",
+    Prototypes = Read(LintArea.Prototypes) ? folder : null,
+    Sheets = Read(LintArea.Sheets) ? textures : null,
+    Locales = Read(LintArea.Locales) ? "Locale" : null,
 });
 
 // A mistake is written under the pass that found it, so a person is told which part of the content to look at rather than being

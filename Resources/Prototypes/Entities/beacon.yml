@@ -14,8 +14,6 @@
 # in no colour at all.
 - type: entity
   id: Beacon
-  name: ent-Beacon
-  desc: ent-Beacon.desc
   components:
     - type: Transform
       Position:

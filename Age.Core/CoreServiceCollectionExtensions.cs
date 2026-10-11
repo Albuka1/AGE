@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -13,8 +14,8 @@ public static class CoreServiceCollectionExtensions
     /// <summary>
     /// Registers <see cref="SystemPipeline"/>, <see cref="SpriteSorter"/>, the <see cref="FixedTimestep"/> of the game
     /// loops, the <see cref="ComponentRegistry"/> that collects the components of every registered assembly,
-    /// <see cref="ISceneSerializer"/>, the <see cref="IConsoleService"/> and the <see cref="CVarService"/> of a
-    /// developer, and <see cref="GameShutdown"/>.
+    /// <see cref="ISceneSerializer"/>, the <see cref="IConsoleService"/>, the <see cref="CVarService"/> and the
+    /// <see cref="IUserDataService"/> of a developer, and <see cref="GameShutdown"/>.
     /// </summary>
     /// <remarks>
     /// Every assembly adds its own <see cref="IComponentRegistrations"/> when its services are registered, so the
@@ -38,6 +39,12 @@ public static class CoreServiceCollectionExtensions
         services.AddSingleton<GameShutdown>();
         services.AddSingleton<IConsoleService, ConsoleService>();
         services.AddSingleton<CVarService>();
+
+        // The data of a game belongs to the person playing it, so it lives under the roaming application data of the account
+        // rather than beside the executable, which may be read-only. A game names itself by replacing this registration with a
+        // UserDataService of its own, and the name of its entry assembly answers for a game that does not.
+        services.AddSingleton<IUserDataService>(_ => new UserDataService(Assembly.GetEntryAssembly()?.GetName().Name ?? "Age"));
+
         services.AddSingleton(new FixedTimestep(FixedTimestep.DefaultStep));
         services.AddSingleton<IComponentRegistrations, CoreComponentRegistrations>();
         services.AddSingleton<ComponentRegistry>(CreateComponentRegistry);

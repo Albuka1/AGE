@@ -414,12 +414,17 @@ language is a folder rather than a change in code. A key that the language does 
 (`en`) key by key, so a translation that is not finished shows English rather than keys, and a key that neither holds is
 answered with the key itself, counted in `Missing` and written once in the log rather than taking a frame down. A text
 that writes a count picks the form its language selects — English has `one` and `other`, Russian has `one`, `few`, `many`
-and `other` — and a prototype names its strings with the fields `name` and `desc`, which hold keys such as `ent-Goblin`
-rather than texts, so a spawned goblin is named without a document writing the name again.
+and `other` — and a prototype names its strings with the fields `name` and `desc`, and may write neither: an entity of
+`Goblin` is named by `ent-Goblin` and described by `ent-Goblin.desc`. What a game draws is the string of `ent-<Id>` in the
+language being played, then the string of the base language, then the words the document wrote with `name`/`desc`, and the
+identifier last of all, which `locale.NameOf(entity)` and `locale.Describe(entity)` walk — so a goblin that is translated
+in Russian and written in English in its document is named in both without either repeating the other, and nothing is ever
+drawn as a bare key.
 
 `Age.Content.Lint` reads every language of a build and refuses a key that two documents write, a reference that its
-language does not answer, a translation that holds a key the base language does not, and a name or a description that a
-prototype points at and no string answers, so a language is checked before a build ships rather than by a player.
+language does not answer, a translation that holds a key the base language does not, and a name or a description that
+neither a string of the base language nor the words of a document answers, so a language is checked before a build ships
+rather than by a player.
 
 A `TextComponent` says what a line of the world or a label of the interface says, and where the line stands is what tells the
 two apart: an entity with a `TransformComponent` has its line at the transform, and one with a `RectTransformComponent` has

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 
 namespace Age.Core;
@@ -77,7 +78,8 @@ public sealed class ComponentRegistry
             (world, entity) => world.Has<T>(entity) ? JsonSerializer.SerializeToElement(world.Get<T>(entity), typeInfo) : null,
             json => Deserialize(json, typeInfo, name, carried),
             (world, entity, component) => world.Set(entity, (T)component),
-            json => JsonSerializer.SerializeToElement(JsonSerializer.Deserialize(json, typeInfo)!, typeInfo));
+            json => JsonSerializer.SerializeToElement(JsonSerializer.Deserialize(json, typeInfo)!, typeInfo),
+            (world, entity, json) => MergeOver(world, entity, json, typeInfo, name, carried));
 
         _byName[name] = registration;
         _byType[typeof(T)] = registration;
@@ -107,6 +109,71 @@ public sealed class ComponentRegistry
         return JsonSerializer.Deserialize(values, typeInfo)!;
     }
 
+    /// <summary>Writes the values of a component over the one an entity already carries, so a field the values leave out keeps what it had.</summary>
+    /// <param name="world">The world that holds the entity.</param>
+    /// <param name="entity">The entity the values are written over.</param>
+    /// <param name="values">The values of the component, which may be a part of it.</param>
+    /// <param name="typeInfo">The contract of the component.</param>
+    /// <param name="name">The name the component is registered under, which a refusal mentions.</param>
+    /// <param name="carried">The names that a document may write, or null when the contract decides on its own.</param>
+    /// <remarks>
+    /// A scene keeps only the fields of a component that differ from its prototype, so writing those values over the component the
+    /// prototype already made has to keep the fields the scene leaves out rather than replace them with the default of the structure.
+    /// The merge is a deserialize into the value the entity holds: <c>JsonSerializer</c> writes only the fields the text names, so what
+    /// the text leaves out is what the component already had. An entity that carries no component of this name yet takes the whole value,
+    /// which is what every component of a scene that names no prototype does.
+    /// </remarks>
+    private static bool MergeOver<T>(World world, Entity entity, JsonElement values, JsonTypeInfo<T> typeInfo, string name, HashSet<string>? carried)
+        where T : struct, IComponent
+    {
+        if (!world.Has<T>(entity))
+        {
+            object whole = Deserialize(values, typeInfo, name, carried);
+            world.Set(entity, (T)whole);
+            return true;
+        }
+
+        if (carried is not null && values.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty field in values.EnumerateObject())
+            {
+                if (!carried.Contains(field.Name))
+                {
+                    throw new JsonException($"The field '{field.Name}' is not one that the component '{name}' carries, so the value would be read and dropped: a document of it writes {string.Join(", ", carried.Order(StringComparer.Ordinal))}.");
+                }
+            }
+        }
+
+        // The value that the entity holds is read into, so a field that the text leaves out keeps what the prototype gave it.
+        T current = world.Get<T>(entity);
+        T merged = Populate(values, current, typeInfo);
+        world.Set(entity, merged);
+        return true;
+    }
+
+    /// <summary>Returns a value with the fields of <paramref name="values"/> written over <paramref name="current"/>.</summary>
+    /// <remarks>
+    /// The current value is written as JSON and the overlay is written over it field by field, so a field the overlay names wins and one
+    /// it leaves out keeps what the current value had. This is the one place the fields of a component are known without reflection, so
+    /// the merge happens in the contract of the component rather than in the serializer.
+    /// </remarks>
+    private static T Populate<T>(JsonElement values, T current, JsonTypeInfo<T> typeInfo)
+    {
+        JsonNode? node = JsonSerializer.SerializeToNode(current, typeInfo);
+
+        if (node is not JsonObject currentObject || values.ValueKind != JsonValueKind.Object)
+        {
+            return current;
+        }
+
+        foreach (JsonProperty field in values.EnumerateObject())
+        {
+            currentObject[field.Name] = JsonNode.Parse(field.Value.GetRawText());
+        }
+
+        return currentObject.Deserialize(typeInfo) is T merged ? merged : current;
+    }
+
     /// <summary>Returns the component type that a name was registered under.</summary>
     /// <param name="name">The name a scene file uses.</param>
     /// <param name="type">Receives the component type when the name is registered.</param>
@@ -128,6 +195,33 @@ public sealed class ComponentRegistry
     /// <summary>Returns the registration behind a name, which is how the scene serializer resolves a component.</summary>
     internal bool TryGet(string name, [NotNullWhen(true)] out ComponentRegistration? registration) =>
         _byName.TryGetValue(name, out registration);
+
+    /// <summary>Writes the values of a component over what an entity already carries, so a field the values leave out keeps what it had.</summary>
+    /// <param name="name">The name the component is registered under.</param>
+    /// <param name="world">The world that holds the entity.</param>
+    /// <param name="entity">The entity the values are written over.</param>
+    /// <param name="values">The values of the component, which may be a part of it.</param>
+    /// <returns><see langword="true"/> when the name is registered and the values were written.</returns>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
+    /// <exception cref="JsonException">The values cannot be read, or a field is not one the component carries.</exception>
+    /// <remarks>
+    /// This is what a scene uses for an entity it made from a prototype: the scene wrote only the fields that differ from the prototype,
+    /// so they are written over the component the spawn made rather than replacing it, which is what keeps the fields the scene left out.
+    /// An entity that carries no component of the name yet takes the whole value, which is what a scene that names no prototype does.
+    /// </remarks>
+    internal bool TryMergeInto(string name, World world, Entity entity, JsonElement values)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (_byName.TryGetValue(name, out ComponentRegistration? registration))
+        {
+            registration.Merge(world, entity, values);
+            return true;
+        }
+
+        return false;
+    }
+
 
     /// <summary>Returns the names the registry holds, which tells a caller whether a name is a component at all.</summary>
     /// <param name="name">The name a document uses for a component.</param>
@@ -198,6 +292,8 @@ public sealed class ComponentRegistry
 /// <param name="Deserialize">Reads a value from JSON, which is what staging a scene does before a world is touched.</param>
 /// <param name="Apply">Applies a value that <paramref name="Deserialize"/> read to an entity.</param>
 /// <param name="Normalize">Reads a value from JSON and writes it again, so two values can be compared as they are rather than as they are written.</param>
+/// <param name="Merge">Writes values over the component that an entity already carries, so a field the values leave out keeps what it had.</param>
+
 /// <remarks>
 /// <see cref="Normalize"/> is what lets a scene compare an entity with the prototype it was made from: the fields that a
 /// document leaves out are read as the values the component starts with, so a component that matches its prototype in
@@ -209,4 +305,5 @@ internal sealed record ComponentRegistration(
     Func<World, Entity, JsonElement?> TrySerialize,
     Func<JsonElement, object> Deserialize,
     Action<World, Entity, object> Apply,
-    Func<JsonElement, JsonElement> Normalize);
+    Func<JsonElement, JsonElement> Normalize,
+    Func<World, Entity, JsonElement, bool> Merge);

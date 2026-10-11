@@ -433,8 +433,16 @@ public sealed class ContentLinter
                 continue;
             }
 
-            foreach (string key in new[] { entity.NameKey, entity.DescKey })
+            foreach ((string key, string? text) in new[] { (entity.NameKey, entity.Name), (entity.DescKey, entity.Desc) })
             {
+                // A name is drawn from the key of a language, the words the document wrote, or the identifier, in that order, so a
+                // base language that holds no string under the key is only a mistake when the document wrote no words of its own: the
+                // words are what the key falls back to, and a key with no string and no words is drawn as the identifier.
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
+
                 // The rule of what a key holds lives in the service of the strings, so a name and a description written as
                 // attributes of a key are answered here the way the game answers them.
                 if (!locale.Has(key, LocaleService.Base))
@@ -442,7 +450,7 @@ public sealed class ContentLinter
                     problems.Add(new LintProblem(
                         entity.Data.File,
                         entity.Data.Line,
-                        $"the entity '{entity.Id}' is named by the string '{key}', and '{LocaleService.Base}' holds no string under that key"));
+                        $"the entity '{entity.Id}' is named by the string '{key}', and neither '{LocaleService.Base}' nor the document holds one"));
                 }
             }
         }

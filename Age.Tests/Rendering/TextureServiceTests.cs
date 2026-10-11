@@ -125,6 +125,29 @@ public sealed class TextureServiceTests
     }
 
     [Fact]
+    public void TextureService_UnloadAll_WhenAReleaseFails_KeepsTheSizeAndThePathOfThatTexture()
+    {
+        var renderer = new FakeRenderer { FailRelease = id => id == 1 };
+        var textures = new TextureService(new FakeImageLoader(), renderer);
+        TextureHandle first = textures.Load("art/a.bmp");
+        TextureHandle second = textures.Load("art/b.bmp");
+
+        Action unloadAll = textures.UnloadAll;
+
+        unloadAll.Should().Throw<InvalidOperationException>();
+
+        // The texture the renderer refused is still loaded, so it is still measured and still listed: `Count`, `Size` and `Textures`
+        // agree about what the service holds rather than one of them forgetting a texture that the others still carry.
+        textures.Count.Should().Be(1);
+        textures.Size(first).Should().Be(new Vector2(2f, 2f), "a texture that is still loaded still has the size it was decoded at");
+        textures.Textures.Select(entry => entry.Path).Should().Equal(["art/a.bmp"], "a texture that is still loaded is still listed");
+
+        // The one that did unload is gone from every answer the service gives.
+        textures.Size(second).Should().Be(Vector2.Zero);
+        textures.Textures.Should().NotContain(entry => entry.Path == "art/b.bmp");
+    }
+
+    [Fact]
     public void TextureService_UnloadAll_AfterAFailedRelease_RetriesTheTexture()
     {
         var renderer = new FakeRenderer { FailRelease = id => id == 1 };
@@ -206,6 +229,21 @@ public sealed class TextureServiceTests
         HasPixel(renderer.LastPixels!, 32, 0, 32).Should().BeTrue("which alternates with a near black");
         HasPixel(renderer.LastPixels!, 255, 255, 255).Should().BeTrue("and it spells out what it is");
         textures.Error.Should().Be(error);
+    }
+
+    [Fact]
+    public void TextureService_SizeOfThePlaceholder_IsKnownWithoutALookup()
+    {
+        var renderer = new FakeRenderer();
+        var textures = new TextureService(new FakeImageLoader(), renderer);
+
+        // The id the placeholder was uploaded under is handed back out by the device when a texture is released, so the size is
+        // answered for the handle rather than out of the table: a sprite that drew a missing image is drawn at 64x64 on the frame
+        // that image was released on as well, rather than collapsing to nothing.
+        TextureHandle error = textures.Error;
+
+        textures.Size(error).Should().Be(new Vector2(64f, 64f));
+        textures.Size(error).Should().Be(new Vector2(64f, 64f), "the size is of the placeholder and not of whatever reused its id");
     }
 
     [Fact]

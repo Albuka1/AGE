@@ -169,8 +169,8 @@ public sealed class PrototypeManager : IPrototypeManager
         string? id = null;
         string? kind = null;
         string? parent = null;
-        string? nameKey = null;
-        string? descKey = null;
+        string? nameText = null;
+        string? descText = null;
         var components = new List<PrototypeComponent>();
         var fields = new List<PrototypeComponent>();
 
@@ -190,15 +190,15 @@ public sealed class PrototypeManager : IPrototypeManager
                     parent = Word(name, entry);
                     break;
 
-                // A name and a description are keys of a language rather than texts, so what a document writes here is where
-                // to look for the words: a game draws the string of the key, and an entity whose key is nowhere is drawn as
-                // its identifier rather than as nothing.
+                // A name and a description are the words a document writes for a thing that is not translated: a key of a language wins
+                // over them where one is there, and a document that writes neither is named by its identifier, so nothing has to be
+                // repeated in a file to say what an entity is called.
                 case "name":
-                    nameKey = Word(name, entry);
+                    nameText = Word(name, entry);
                     break;
 
                 case "desc":
-                    descKey = Word(name, entry);
+                    descText = Word(name, entry);
                     break;
 
                 case "components":
@@ -225,7 +225,7 @@ public sealed class PrototypeManager : IPrototypeManager
             throw new PrototypeException($"{name}: the identifier '{id}' was already declared in {declared.File}", name, mapping.Line);
         }
 
-        var prototype = new Prototype(id, kind ?? "prototype", parent, nameKey, descKey, name, mapping.Line, components, fields);
+        var prototype = new Prototype(id, kind ?? "prototype", parent, null, null, name, mapping.Line, components, fields, nameText, descText);
         _declared[id] = prototype;
         _order.Add(prototype);
     }
@@ -335,8 +335,8 @@ public sealed class PrototypeManager : IPrototypeManager
 
         IReadOnlyList<PrototypeComponent> components = declared.Components;
         IReadOnlyList<PrototypeComponent> fields = declared.Fields;
-        string? nameKey = declared.NameKey;
-        string? descKey = declared.DescKey;
+        string? nameText = declared.NameText;
+        string? descText = declared.DescText;
 
         if (declared.Parent is string parentId)
         {
@@ -351,13 +351,13 @@ public sealed class PrototypeManager : IPrototypeManager
 
             // What names a thing is inherited the way a component is: a document that writes none takes the word of the kind
             // it inherits, so a name is written once where the kind is declared rather than once per thing.
-            nameKey ??= inherited.NameKey;
-            descKey ??= inherited.DescKey;
+            nameText ??= inherited.NameText;
+            descText ??= inherited.DescText;
         }
 
         Validate(declared, components);
 
-        var prototype = new Prototype(declared.Id, declared.Kind, declared.Parent, nameKey, descKey, declared.File, declared.Line, components, fields);
+        var prototype = new Prototype(declared.Id, declared.Kind, declared.Parent, declared.NameKey, declared.DescKey, declared.File, declared.Line, components, fields, nameText, descText);
         _resolved[declared.Id] = prototype;
         return prototype;
     }

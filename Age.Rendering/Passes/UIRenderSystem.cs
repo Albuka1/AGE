@@ -18,6 +18,19 @@ namespace Age.Rendering;
 /// </remarks>
 public sealed class UIRenderSystem : IRenderPass
 {
+    private static readonly Color FaceColour = new(44, 48, 60);
+    private static readonly Color HoverColour = new(62, 68, 84);
+    private static readonly Color InkColour = new(22, 24, 30);
+    private static readonly Color MarkColour = new(120, 170, 240);
+    private static readonly Color HandleColour = new(220, 224, 232);
+    private static readonly Color ListColour = new(30, 33, 40);
+    private static readonly Color TextColour = new(225, 225, 225);
+
+    private const float TrackHeight = 8f;
+    private const float HandleWidth = 10f;
+    private const float Border = 2f;
+    private const float LinePad = 6f;
+
     private readonly IRenderer _renderer;
     private readonly SpriteSorter _sorter;
     private readonly TextRenderer _text;
@@ -59,22 +72,174 @@ public sealed class UIRenderSystem : IRenderPass
         foreach (UiItem item in _items)
         {
             RectTransformComponent rect = world.Get<RectTransformComponent>(item.Entity);
+            var box = new Rect(rect.Position, rect.Size);
 
             if (item.HasButton)
             {
-                _renderer.DrawRectangle(new Rect(rect.Position, rect.Size), world.Get<ButtonComponent>(item.Entity).BaseColor);
+                _renderer.DrawRectangle(box, world.Get<ButtonComponent>(item.Entity).BaseColor);
+            }
+
+            if (item.HasProgressBar)
+            {
+                DrawProgressBar(world.Get<ProgressBarComponent>(item.Entity), box);
+            }
+
+            if (item.HasSlider)
+            {
+                DrawSlider(world.Get<SliderComponent>(item.Entity), box);
+            }
+
+            if (item.HasCheckBox)
+            {
+                DrawCheckBox(world.Get<CheckBoxComponent>(item.Entity), box);
+            }
+
+            // A drop-down draws its closed element here, among the rest of them, and keeps its open list for the pass below.
+            if (item.HasDropdown)
+            {
+                DrawDropdown(world.Get<DropdownComponent>(item.Entity), box);
             }
 
             if (item.HasLabel)
             {
                 TextComponent label = world.Get<TextComponent>(item.Entity);
-                Vector2 box = label.Box == Vector2.Zero ? rect.Size : label.Box;
+                Vector2 textBox = label.Box == Vector2.Zero ? rect.Size : label.Box;
 
-                _text.Draw(world, item.Entity, rect.Position, box, label);
+                _text.Draw(world, item.Entity, rect.Position, textBox, label);
+            }
+
+            // The line of a text field is not a text of the world, so it is drawn as a line of the interface rather than through a
+            // component: the field holds the string and the caret, and the pass draws them where the element stands.
+            if (item.HasTextField)
+            {
+                DrawTextField(world.Get<TextFieldComponent>(item.Entity), box);
             }
         }
 
+        // An open list hangs over whatever stands under its element, so it is drawn after every element rather than among them: a
+        // list drawn where its element sits would be covered by the elements that come later in the sort, which is the opposite of
+        // what a list that the pointer can choose from is. The order of the lists among themselves is the order of their elements.
+        foreach (UiItem item in _items)
+        {
+            if (!item.HasDropdown)
+            {
+                continue;
+            }
+
+            DropdownComponent dropdown = world.Get<DropdownComponent>(item.Entity);
+
+            if (!dropdown.Open)
+            {
+                continue;
+            }
+
+            RectTransformComponent rect = world.Get<RectTransformComponent>(item.Entity);
+            DrawDropdownList(dropdown, new Rect(rect.Position, rect.Size));
+        }
+
         _renderer.EndFrame();
+    }
+
+    /// <summary>Draws a check box: a face, and a mark in it when it is checked.</summary>
+    /// <param name="checkBox">The state of the box.</param>
+    /// <param name="box">The rectangle of the element.</param>
+    private void DrawCheckBox(in CheckBoxComponent checkBox, Rect box)
+    {
+        _renderer.DrawRectangle(box, checkBox.IsHovered ? HoverColour : FaceColour);
+
+        if (!checkBox.Checked)
+        {
+            return;
+        }
+
+        // The mark is a rectangle inset from the box rather than a glyph, so a check box is drawn without a font.
+        float inset = MathF.Max(3f, MathF.Min(box.Width, box.Height) * 0.25f);
+        _renderer.DrawRectangle(new Rect(box.Position + new Vector2(inset, inset), box.Size - new Vector2(inset * 2f, inset * 2f)), MarkColour);
+    }
+
+    /// <summary>Draws a slider: a track, the part of it the value has reached, and a handle at the value.</summary>
+    /// <param name="slider">The value of the slider.</param>
+    /// <param name="box">The rectangle of the element.</param>
+    private void DrawSlider(in SliderComponent slider, Rect box)
+    {
+        float height = MathF.Min(box.Height, TrackHeight);
+        float top = box.Position.Y + ((box.Height - height) / 2f);
+        var track = new Rect(new Vector2(box.Position.X, top), new Vector2(box.Width, height));
+
+        _renderer.DrawRectangle(track, InkColour);
+        _renderer.DrawRectangle(new Rect(track.Position, new Vector2(track.Width * slider.Normalized, track.Height)), slider.IsHovered || slider.IsDragging ? MarkColour : FaceColour);
+
+        float handle = MathF.Min(HandleWidth, MathF.Max(4f, box.Width / 4f));
+        float x = box.Position.X + (box.Width * slider.Normalized);
+
+        _renderer.DrawRectangle(new Rect(new Vector2(x - (handle / 2f), box.Position.Y), new Vector2(handle, box.Height)), HandleColour);
+    }
+
+    /// <summary>Draws a progress bar: a track and the part of it the value has reached.</summary>
+    /// <param name="bar">The value of the bar.</param>
+    /// <param name="box">The rectangle of the element.</param>
+    private void DrawProgressBar(in ProgressBarComponent bar, Rect box)
+    {
+        _renderer.DrawRectangle(box, InkColour);
+        _renderer.DrawRectangle(new Rect(box.Position, new Vector2(box.Width * bar.Normalized, box.Height)), FaceColour);
+    }
+
+    /// <summary>Draws the closed element of a drop-down, which is the chosen value on a face.</summary>
+    /// <param name="dropdown">The values of the drop-down.</param>
+    /// <param name="box">The rectangle of the closed element.</param>
+    private void DrawDropdown(in DropdownComponent dropdown, Rect box)
+    {
+        _renderer.DrawRectangle(box, dropdown.IsHovered ? HoverColour : FaceColour);
+
+        if (dropdown.Count == 0)
+        {
+            return;
+        }
+
+        _renderer.DrawText(dropdown.Value, box.Position + new Vector2(LinePad, 0f), TextColour);
+    }
+
+    /// <summary>Draws the open list of a drop-down, which hangs under the closed element and stands over the rest of the interface.</summary>
+    /// <param name="dropdown">The values of the open drop-down.</param>
+    /// <param name="box">The rectangle of the closed element.</param>
+    private void DrawDropdownList(in DropdownComponent dropdown, Rect box)
+    {
+        if (dropdown.Count == 0)
+        {
+            return;
+        }
+
+        float row = dropdown.RowHeight > 0f ? dropdown.RowHeight : box.Height;
+
+        for (var index = 0; index < dropdown.Count; index++)
+        {
+            var rowBox = new Rect(new Vector2(box.Position.X, box.Position.Y + box.Height + (index * row)), new Vector2(box.Width, row));
+
+            _renderer.DrawRectangle(rowBox, index == dropdown.Selected ? MarkColour : ListColour);
+            _renderer.DrawText(dropdown.Options![index], rowBox.Position + new Vector2(LinePad, 0f), TextColour);
+        }
+    }
+
+    /// <summary>Draws the line of a text field and the caret at its place.</summary>
+    /// <param name="field">The line the field holds.</param>
+    /// <param name="box">The rectangle of the element.</param>
+    private void DrawTextField(in TextFieldComponent field, Rect box)
+    {
+        _renderer.DrawRectangle(box, field.IsHovered || field.Focused ? HoverColour : FaceColour);
+        _renderer.DrawText(field.Value, box.Position + new Vector2(LinePad, 0f), TextColour);
+
+        if (!field.Focused)
+        {
+            return;
+        }
+
+        // The caret stands where the characters before it end, which the built-in font measures at a fixed width per glyph.
+        float advance = field.Caret * BitmapFontMetrics.GlyphWidth;
+        var caret = new Rect(
+            new Vector2(box.Position.X + LinePad + advance, box.Position.Y + 2f),
+            new Vector2(Border, MathF.Max(1f, box.Height - 4f)));
+
+        _renderer.DrawRectangle(caret, MarkColour);
     }
 
     /// <summary>Collects the elements of a world that are visible, in ascending entity order.</summary>
@@ -85,12 +250,13 @@ public sealed class UIRenderSystem : IRenderPass
 
         foreach (Entity entity in world.Enumerate<RectTransformComponent>())
         {
-            if (!world.Has<ButtonComponent>(entity) && !world.Has<TextComponent>(entity))
+            if (!IsVisibleElement(world, entity))
             {
                 continue;
             }
 
             RectTransformComponent rect = world.Get<RectTransformComponent>(entity);
+
             if (!rect.Visible)
             {
                 continue;
@@ -100,9 +266,29 @@ public sealed class UIRenderSystem : IRenderPass
                 entity,
                 rect.ZOrder,
                 world.Has<ButtonComponent>(entity),
-                world.Has<TextComponent>(entity)));
+                world.Has<TextComponent>(entity),
+                world.Has<CheckBoxComponent>(entity),
+                world.Has<SliderComponent>(entity),
+                world.Has<ProgressBarComponent>(entity),
+                world.Has<DropdownComponent>(entity),
+                world.Has<TextFieldComponent>(entity)));
         }
     }
 
-    private readonly record struct UiItem(Entity Entity, int ZOrder, bool HasButton, bool HasLabel);
+    /// <summary>Returns a value indicating whether an element carries something this pass draws.</summary>
+    private static bool IsVisibleElement(World world, Entity entity) =>
+        world.Has<ButtonComponent>(entity) || world.Has<TextComponent>(entity) || world.Has<CheckBoxComponent>(entity) ||
+        world.Has<SliderComponent>(entity) || world.Has<ProgressBarComponent>(entity) || world.Has<DropdownComponent>(entity) ||
+        world.Has<TextFieldComponent>(entity);
+
+    private readonly record struct UiItem(
+        Entity Entity,
+        int ZOrder,
+        bool HasButton,
+        bool HasLabel,
+        bool HasCheckBox,
+        bool HasSlider,
+        bool HasProgressBar,
+        bool HasDropdown,
+        bool HasTextField);
 }

@@ -37,7 +37,7 @@ A path is written the same way everywhere: in the engine, in a document of conte
 | `Prototypes/Materials` | `pulse.yml`, which declares the material `Pulse`: the stage `Shaders/pulse.frag` and the values its uniforms start with | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Entities` | `goblin.tga`, the frames of the goblin in a grid of four cells by two, and `goblin.yml`, the document that says where each state lies on it | `Age.Sample`, `Age.Tests`, `Age.Content.Lint` |
 | `Textures/Icons` | `icon-20.png`, `icon-40.png` and `icon-60.png`, the window icon in the three sizes the operating system picks from | `Age.Rendering` |
-| `Textures/Logo` | `logo-320.png`, the logo the splash screen shows | `Age.Rendering` |
+| `Textures/Logo` | `logo-320.png`, the logo the splash screen shows, and `logo.svg`, `logo-big.svg`, `logo-mono-light.svg` and `favicon.svg`, the vector marks the README and the documentation of the repository use | `Age.Rendering`, `README.md` |
 | `Textures/Tiles` | `tiles.bmp`, the tile the sprite of the sample draws | `Age.Sample` |
 | `Shaders` | `vignette.frag`, the fragment stage that the sample draws over its frame to darken the edges of it, and `pulse.frag`, the stage it draws the second layer of its beacon with | `Age.Sample`, `Age.Tests` |
 

@@ -1,0 +1,257 @@
+using Age.Core;
+using Silk.NET.Input;
+using Silk.NET.Maths;
+using Silk.NET.Windowing;
+
+namespace Age.Rendering;
+
+/// <summary>
+/// A developer-window host backed by a second Silk.NET window: a window of the operating system, beside the game, with a context of
+/// its own.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The window is created the first time it is asked for and owns a renderer of its own, because a context belongs to the window it
+/// was made from: what this draws goes to this window and nothing of it needs the context of the game. That is what makes the host a
+/// passthrough — the rectangle and the text a page asks for are drawn here — rather than a second renderer of the world.
+/// </para>
+/// <para>
+/// The pointer and the clicks come from the input context of this window, which is opened here and closed with it, so a click on a tab
+/// is a click in this window and never one the game reads. The two windows have their own input, which is what a window of the
+/// operating system is: the backend of the windowing library delivers an event to the window it happened in.
+/// </para>
+/// </remarks>
+public sealed class SilkDevWindowHost : IDevWindowHost
+{
+    private readonly IWindowService? _game;
+
+    private IWindow? _window;
+    private SilkRenderer? _renderer;
+    private IInputContext? _input;
+    private IMouse? _mouse;
+    private Vector2? _clicked;
+    private bool _clickReported;
+    private Vector2 _cursor;
+    private bool _down;
+    private bool _focused;
+
+    /// <summary>Initializes the host with the window of the game, which its context is handed back to after every frame.</summary>
+    /// <param name="game">
+    /// The window of the game, which this window borrows the current context from: the two windows share one thread, so a frame of
+    /// this window makes its context current and the window of the game is made current again afterwards. A host with no game window
+    /// leaves whatever context was current alone, which is what a headless run and a test have.
+    /// </param>
+    public SilkDevWindowHost(IWindowService? game = null)
+    {
+        _game = game;
+    }
+
+    /// <inheritdoc />
+    public bool IsOpen => _window is { IsClosing: false };
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The focus is tracked from the events of the window rather than asked of the platform on every frame: the window manager
+    /// reports that the focus arrived or went, and what a game reads between two of those reports does not change.
+    /// </remarks>
+    public bool Focused => _focused;
+
+    /// <inheritdoc />
+    public Vector2 Size => _window is IWindow window
+        ? new Vector2(window.Size.X, window.Size.Y)
+        : Vector2.Zero;
+
+    /// <inheritdoc />
+    public Vector2 Pointer => _cursor;
+
+    /// <inheritdoc />
+    public bool PointerDown => _down;
+
+    /// <inheritdoc />
+    public void Create(int width, int height, string title)
+    {
+        if (_window is not null)
+        {
+            return;
+        }
+
+        var options = WindowOptions.Default with
+        {
+            Size = new Vector2D<int>(width, height),
+            Title = title,
+            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3)),
+
+            // The window stands beside the game rather than taking its place, and it is drawn on the frame the game pumps it rather
+            // than on a loop of its own. A window that is driven rather than event-driven is what keeps it from waiting for events of
+            // its own: an event-driven window blocks in DoEvents until one arrives, and two of them on one thread is what hangs the
+            // game, because the events of every window arrive through the one platform of the process.
+            IsEventDriven = false,
+            IsVisible = true,
+            VSync = false,
+        };
+
+        _window = Window.Create(options);
+        _window.Initialize();
+
+        // The focus of this window is what tells a game that the keys are being typed elsewhere, so it is tracked from the event the
+        // window manager sends rather than guessed: the window that took a click is the one whose focus changed.
+        _window.FocusChanged += OnFocusChanged;
+
+        _renderer = new SilkRenderer();
+        _renderer.Attach(new HostWindowService(_window));
+
+        // The input of this window is opened here rather than shared with the game, so a click on a tab is a click in this window:
+        // the backend delivers an event to the window it happened in, and each window answers for the pointer that is over it.
+        _input = _window.CreateInput();
+        _mouse = _input.Mice.Count > 0 ? _input.Mice[0] : null;
+
+        if (_mouse is not null)
+        {
+            _mouse.MouseDown += OnMouseDown;
+            _mouse.MouseUp += OnMouseUp;
+        }
+    }
+
+    /// <inheritdoc />
+    public bool Pump(out Vector2? clicked)
+    {
+        if (_window is not IWindow window || window.IsClosing)
+        {
+            clicked = null;
+            return false;
+        }
+
+        // The events of this window are read here rather than by the loop of the game, because it is a window of its own: what the
+        // window manager sends it, such as a move or a close, arrives while the game runs its frame.
+        window.DoEvents();
+
+        if (_mouse is not null)
+        {
+            _cursor = new Vector2(_mouse.Position.X, _mouse.Position.Y);
+        }
+
+        clicked = _clickReported ? _clicked : null;
+        _clickReported = false;
+        _clicked = null;
+
+        return !window.IsClosing;
+    }
+
+    /// <inheritdoc />
+    public void BeginFrame(bool clear)
+    {
+        _window?.GLContext?.MakeCurrent();
+        _renderer?.BeginFrame(clear);
+    }
+
+    /// <inheritdoc />
+    public void EndFrame()
+    {
+        _renderer?.EndFrame();
+        _window?.SwapBuffers();
+
+        // The two windows share one thread and one device, so this frame made its own context the current one: the window of the game
+        // is made current again, or the game would draw its next frame into this window rather than into its own and stand still.
+        _game?.Window.GLContext?.MakeCurrent();
+    }
+
+    /// <inheritdoc />
+    public void DrawRectangle(Rect rect, Color color) => _renderer?.DrawRectangle(rect, color);
+
+    /// <inheritdoc />
+    public void DrawText(string text, Vector2 position, Color color) => _renderer?.DrawText(text, position, color);
+
+    /// <inheritdoc />
+    /// <remarks>Text is measured with the built-in font, which is what the host draws its text with, so a label is measured by what draws it.</remarks>
+    public Vector2 Measure(string text) => new(text.Length * BitmapFontMetrics.GlyphWidth, BitmapFontMetrics.GlyphHeight);
+
+    /// <inheritdoc />
+    /// <remarks>The renderer of this window clips through the device, so a page that is longer than its body is held in by it.</remarks>
+    public void PushClip(Rect rect) => _renderer?.PushClip(rect);
+
+    /// <inheritdoc />
+    public void PopClip() => _renderer?.PopClip();
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        // The objects of this window are deleted on the context that owns them, which is made current here: a window that the window
+        // manager asked to close is still there, with its context, until it is disposed, and its renderer has to delete its program,
+        // its buffers and its textures while that context is current. A delete that runs on the context of the game instead deletes
+        // the object of the game that holds the same number, because two contexts hand the same numbers out.
+        IWindow? window = _window;
+        window?.GLContext?.MakeCurrent();
+
+        if (window is not null)
+        {
+            window.FocusChanged -= OnFocusChanged;
+        }
+
+        _focused = false;
+
+        if (_mouse is not null)
+        {
+            _mouse.MouseDown -= OnMouseDown;
+            _mouse.MouseUp -= OnMouseUp;
+        }
+
+        // The input of this window goes with it: the context was opened for this window alone, and the devices of a window that is
+        // gone are not the devices of the game.
+        _input?.Dispose();
+        _input = null;
+        _mouse = null;
+        _down = false;
+
+        _renderer?.Dispose();
+        _renderer = null;
+
+        window?.Close();
+        window?.Dispose();
+        _window = null;
+
+        // The window of the game lends a context of its own while this one is open, and the deleting above made the context of this
+        // window the current one: the window of the game is made current again, or every draw of the game after this goes to a
+        // context that no longer exists and the game stands on a black frame.
+        _game?.Window.GLContext?.MakeCurrent();
+    }
+
+    /// <summary>Records that the focus of this window arrived or went, which is what tells a game where the keys are going.</summary>
+    /// <param name="focused">Whether the window now has the keyboard focus.</param>
+    private void OnFocusChanged(bool focused) => _focused = focused;
+
+    /// <summary>Records that the left button of this window went down, which is what a click on a tab or a cross is.</summary>
+    /// <param name="mouse">The mouse of this window, which reports the position of the click.</param>
+    /// <param name="button">The button that went down.</param>
+    private void OnMouseDown(IMouse mouse, MouseButton button)
+    {
+        if (button == MouseButton.Left)
+        {
+            _clicked = new Vector2(mouse.Position.X, mouse.Position.Y);
+            _clickReported = true;
+            _down = true;
+        }
+    }
+
+    /// <summary>Records that the left button of this window came up, which is what the end of a drag of a selection is.</summary>
+    /// <param name="mouse">The mouse of this window.</param>
+    /// <param name="button">The button that came up.</param>
+    private void OnMouseUp(IMouse mouse, MouseButton button)
+    {
+        if (button == MouseButton.Left)
+        {
+            _down = false;
+        }
+    }
+
+    /// <summary>Presents a window of the operating system as the <see cref="IWindowService"/> the renderer attaches to, so the renderer makes its context current and measures the right surface.</summary>
+    private sealed class HostWindowService(IWindow window) : IWindowService
+    {
+        public IWindow Window { get; } = window;
+
+        public void Create(int width, int height, string title) => throw new NotSupportedException("This window service presents a window that already exists.");
+
+        public void SetIcon(ReadOnlySpan<byte> pixels, int width, int height) => throw new NotSupportedException("This window service presents a window that already exists.");
+
+        public void Close() => Window.Close();
+    }
+}

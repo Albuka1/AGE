@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="AGE — Auae Game Engine" width="220" src="docs/images/logo-big.svg" />
+  <img alt="AGE — Auae Game Engine" width="220" src="Resources/Textures/Logo/logo-big.svg" />
 </p>
 
 <h1 align="center">Auae Game Engine</h1>
@@ -63,8 +63,9 @@ understand every line, ship a focused 2D game, and not fight a 500 MB editor.
 | `Age.Sample` | Console sample that wires everything together |
 | `Age.Tests` | Behavioural unit tests |
 
-Every project lives in a folder named after it at the repository root, and all build output is
-collected in a single `artifacts/` folder.
+Every project lives in a folder named after it at the repository root, and every build writes into one
+`bin/` and one `obj/` at the root — a folder per project inside each — rather than into a pair beside
+every project.
 
 Every asset the repository ships lives in one `Resources/` folder at the root, split by kind — `Audio/Effects`,
 `Audio/Samples`, `Fonts`, `Prototypes/Entities`, `Prototypes/Items`, `Textures/Icons`, `Textures/Logo`,
@@ -91,8 +92,8 @@ dotnet test --project Age.Tests/Age.Tests.csproj -c Release
 dotnet run --project Age.Sample/Age.Sample.csproj
 ```
 
-See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour, or the
-[published documentation](https://albuka1.github.io/AGE/) for the API reference.
+See [QUICKSTART.md](QUICKSTART.md) for a guided tour, and [CHANGELOG.md](CHANGELOG.md) for what
+changed in each release and [RELEASING.md](RELEASING.md) for how a release is cut.
 
 ## Architecture
 
@@ -107,28 +108,13 @@ See [docs/articles/quickstart.md](docs/articles/quickstart.md) for a guided tour
 - The renderer is the only component that touches OpenGL. It is never
   instantiated by the test suite.
 
-## Roadmap
-
-The following work is planned but not part of the current foundation: the features the engine does
-not have yet, then the platform work.
-
-- Sprite sheets and animation.
-- UI widgets: slider, drop-down, check box, text field, scrollable panel, with anchors and clipping.
-- Positional audio with a listener.
-- Text in a scene, and UI labels that can pick a font.
-- Hierarchy.
-- User-defined shaders and materials.
-- OBB collision and multiple contacts.
-- AOT.
-- AssemblyLoadContext isolation for plugins.
-
 ## Contributing
 
 Changes are made through pull requests against `main`. See
 [CONTRIBUTING](CODE_OF_CONDUCT.md) and the pull request template for details.
 
 A release is cut by one script and checked by the workflow that publishes it: see
-[docs/articles/releasing.md](docs/articles/releasing.md) for what the version numbers mean and how a version is released.
+[RELEASING.md](RELEASING.md) for what the version numbers mean and how a version is released.
 
 ## License
 

@@ -43,6 +43,18 @@ public sealed class ConsoleLoggerProviderTests
     }
 
     [Fact]
+    public void ConsoleLoggerProvider_LogAtWarning_WritesAWarningLine()
+    {
+        var console = new ConsoleService();
+        ILogger logger = new ConsoleLoggerProvider(console).CreateLogger("Age.Assets");
+
+        logger.LogWarning("The image {Path} is not there.", "tiles.bmp");
+
+        console.Lines.Should().ContainSingle().Which.Level.Should().Be(ConsoleLevel.Warning);
+        console.Lines[0].Text.Should().Be("[Warning] Age.Assets: The image tiles.bmp is not there.");
+    }
+
+    [Fact]
     public void ConsoleLoggerProvider_IsEnabled_LeavesTheLevelsToTheLoggingBuilder()
     {
         ILogger logger = new ConsoleLoggerProvider(new ConsoleService()).CreateLogger("Age.Core");

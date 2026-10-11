@@ -28,6 +28,43 @@ public sealed class SplashScreenTests
     }
 
     [Fact]
+    public void SplashScreen_End_HoldsTheLogoForTheShortestTime()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(5), MinimumDuration = TimeSpan.FromSeconds(1) };
+
+        // The loading of a light game finishes on the first frame, which is what asks the splash to end.
+        splash.End();
+
+        splash.Draw(renderer, new GameTime(0.016, 0)).Should().BeTrue("the logo stays while the shortest time has not passed");
+        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeTrue();
+        splash.Draw(renderer, new GameTime(0.016, 1)).Should().BeFalse("the logo goes once the shortest time passed");
+    }
+
+    [Fact]
+    public void SplashScreen_End_DoesNotOutlastTheDurationWhenTheMinimumIsLonger()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(1), MinimumDuration = TimeSpan.FromSeconds(5) };
+
+        splash.End();
+
+        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeTrue();
+        splash.Draw(renderer, new GameTime(0.016, 1)).Should().BeFalse("the duration is what the game asked for, so the minimum cannot hold the logo past it");
+    }
+
+    [Fact]
+    public void SplashScreen_AKey_EndsTheLogoEvenBeforeTheShortestTime()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(5), MinimumDuration = TimeSpan.FromSeconds(2) };
+        var input = new FakeInput { PressedKeys = [Key.Space] };
+
+        splash.Draw(renderer, new GameTime(0.016, 0), input).Should().BeTrue("the frame with the skip request still belongs to the splash");
+        splash.Draw(renderer, new GameTime(0.016, 0.016), input).Should().BeFalse("a person who skips is not held by the shortest time");
+    }
+
+    [Fact]
     public void SplashScreen_Draw_DrawsTheLogoInTheCentreOfAWhiteClearedFrame()
     {
         var renderer = new FakeRenderer();
@@ -134,16 +171,86 @@ public sealed class SplashScreenTests
     }
 
     [Fact]
+    public void SplashScreen_Draw_DrawsATrackAndAFillWhileLoading()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Progress = 0.5f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().HaveCount(2, "the bar is a track with the filled part over it");
+        renderer.Rectangles[0].Size.X.Should().BeApproximately(0.9f * renderer.LastSize.X, 0.001f, "the bar is a share of the width of the logo");
+        renderer.Rectangles[1].Size.X.Should().BeApproximately(renderer.Rectangles[0].Size.X * 0.5f, 0.001f, "half of the bar is filled at a share of one half");
+        renderer.Rectangles[1].Position.Should().Be(renderer.Rectangles[0].Position, "the fill grows from the left of the track");
+        renderer.Rectangles[0].Position.Y.Should().BeGreaterThan(renderer.LastPosition.Y + renderer.LastSize.Y, "the bar hangs under the logo");
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_AShareOfZero_DrawsTheTrackAlone()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Progress = 0f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().ContainSingle("a bar that has not filled yet is the track");
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_AShareOfOneOrMore_HidesTheBar()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { Progress = 1f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().BeEmpty("a full bar is nothing left to load, so the logo stands alone");
+
+        var above = new FakeRenderer();
+        var splashAbove = new SplashScreen { Progress = 2f };
+
+        splashAbove.Draw(above, new GameTime(0.016, 0));
+
+        above.Rectangles.Should().BeEmpty("a share above one is a full bar as well");
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_AShortWindow_KeepsTheBarInsideTheViewport()
+    {
+        var renderer = new FakeRenderer { ViewportSize = new Vector2(320f, 200f) };
+        var splash = new SplashScreen { Progress = 0.5f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().HaveCount(2, "the bar is a track with the filled part over it");
+        renderer.Rectangles[0].Position.Y.Should().BeLessThan(renderer.ViewportSize.Y, "the bar hangs under the logo without falling off the bottom of a short window");
+        renderer.Rectangles[0].Position.Y.Should().BeGreaterThanOrEqualTo(0f);
+    }
+
+    [Fact]
+    public void SplashScreen_Draw_TheProgressBarCanBeTurnedOff()
+    {
+        var renderer = new FakeRenderer();
+        var splash = new SplashScreen { ShowProgress = false, Progress = 0.5f };
+
+        splash.Draw(renderer, new GameTime(0.016, 0));
+
+        renderer.Rectangles.Should().BeEmpty("a splash without a bar draws the logo alone");
+        renderer.Drawn.Should().HaveCount(1);
+    }
+
+    [Fact]
     public void SplashScreen_End_EndsTheSplashBeforeTheDurationRanOut()
     {
         var renderer = new FakeRenderer();
-        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(10) };
+        var splash = new SplashScreen { Duration = TimeSpan.FromSeconds(10), MinimumDuration = TimeSpan.FromSeconds(0.5) };
         splash.Draw(renderer, new GameTime(0.016, 0));
 
         splash.End();
 
-        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeFalse();
-        renderer.Drawn.Should().HaveCount(1);
+        splash.Draw(renderer, new GameTime(0.016, 0.25)).Should().BeTrue("the shortest time of the logo has not passed");
+        splash.Draw(renderer, new GameTime(0.016, 0.5)).Should().BeFalse("the end of the loading ends the logo before the duration");
+        renderer.Drawn.Should().HaveCount(2);
     }
 
     [Fact]
@@ -175,6 +282,7 @@ public sealed class SplashScreenTests
         public List<int> Created { get; } = [];
         public List<int> Released { get; } = [];
         public List<int> Drawn { get; } = [];
+        public List<Rect> Rectangles { get; } = [];
         public int LastWidth { get; private set; }
         public int LastHeight { get; private set; }
         public int LastPixelCount { get; private set; }
@@ -215,6 +323,7 @@ public sealed class SplashScreenTests
 
         public void DrawRectangle(Rect rect, Color color)
         {
+            Rectangles.Add(rect);
         }
 
         public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color)
@@ -259,5 +368,7 @@ public sealed class SplashScreenTests
         public bool IsMouseButtonDown(MouseButton button) => false;
 
         public bool IsMouseButtonPressed(MouseButton button) => PressedButtons.Contains(button);
+
+        public float MouseWheel => 0f;
     }
 }

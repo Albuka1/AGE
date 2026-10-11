@@ -75,15 +75,135 @@ public sealed class UILayoutSystem : IFrameSystem
 
         var area = new Rect(Vector2.Zero, resolution);
 
+        // The tree is walked from its roots downwards, so a parent is resolved before its children are: a child that is laid out needs
+        // the rectangle its parent ended up with, and a parent that is still waiting for one would lay its child out against the
+        // canvas. An element that names no parent is a root and is laid out against the canvas; an element whose parent is not in the
+        // world, or whose parent is not an element, is a root too rather than standing nowhere. Every element is visited once, so a
+        // cycle in the tree does not walk forever.
+        var visited = new HashSet<Entity>();
+
+        // A child names its parent in `ParentComponent`, which is what makes the link, and a parent lists its children in
+        // `ChildrenComponent`, which is what makes the walk downwards quick. A game writes the two together, but only the name of the
+        // parent is what the tree is: an element whose parent does not list it is still an element that stands inside that parent, so
+        // the children that no list named are gathered here and laid out with the rest rather than left as orphans of the canvas.
+        var listed = new HashSet<Entity>();
+
         foreach (Entity entity in world.Enumerate<RectTransformComponent>())
         {
-            ref RectTransformComponent rect = ref world.GetRef<RectTransformComponent>(entity);
-
-            // An element that is not anchored is a rectangle a game wrote down, and the layout leaves it alone.
-            if (rect.Anchored)
+            if (world.Has<ChildrenComponent>(entity))
             {
-                rect.Resolve(area, scale);
+                foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
+                {
+                    listed.Add(world.Resolve(reference));
+                }
             }
         }
+
+        // The elements that name a parent which does not list them, grouped by the parent they name, so a parent can lay them out
+        // after its own rectangle is known. Only an element whose parent is itself an element belongs here: one whose parent is a
+        // canvas, or is not in the world, is a root and is handled below.
+        var unlisted = new Dictionary<Entity, List<Entity>>();
+
+        foreach (Entity entity in world.Enumerate<RectTransformComponent>())
+        {
+            Entity parent = ParentOf(world, entity);
+
+            if (listed.Contains(entity) || !world.IsAlive(parent) || !world.Has<RectTransformComponent>(parent))
+            {
+                continue;
+            }
+
+            if (!unlisted.TryGetValue(parent, out List<Entity>? children))
+            {
+                children = [];
+                unlisted[parent] = children;
+            }
+
+            children.Add(entity);
+        }
+
+        foreach (Entity entity in world.Enumerate<RectTransformComponent>())
+        {
+            Entity parent = ParentOf(world, entity);
+
+            // An element is a root when it names no parent, when the parent is not in the world, or when the parent is not itself an
+            // element: a canvas is what a tree of the interface hangs from, and it is placed by the scaler rather than by an anchor, so
+            // its children are laid out against the canvas rather than against a rectangle it does not have.
+            if (!world.IsAlive(parent) || !world.Has<RectTransformComponent>(parent))
+            {
+                Layout(world, entity, area, scale, visited, unlisted);
+            }
+        }
+
+        // An element that no root reached — it is part of a cycle — is laid out against the canvas, so it is in a sensible place
+        // rather than left where a previous frame put it.
+        foreach (Entity entity in world.Enumerate<RectTransformComponent>())
+        {
+            if (visited.Add(entity))
+            {
+                Resolve(world, entity, area, scale);
+            }
+        }
+    }
+
+    /// <summary>Returns the element that an element stands inside, or the default entity when it is a root or names none.</summary>
+    private static Entity ParentOf(World world, Entity entity) =>
+        world.Has<ParentComponent>(entity) ? world.Resolve(world.Get<ParentComponent>(entity).Parent) : default;
+
+    /// <summary>Resolves an element and then the elements that stand inside it, which is what a parent-first walk is.</summary>
+    /// <param name="world">The world that holds the tree.</param>
+    /// <param name="entity">The element to resolve.</param>
+    /// <param name="parent">The rectangle the element is placed in, in design units: the canvas for a root, the parent for a child.</param>
+    /// <param name="scale">The scale of the canvas, which is how many pixels of the screen a design unit is.</param>
+    /// <param name="visited">The elements that were resolved, which is what keeps a cycle from walking forever.</param>
+    /// <param name="unlisted">The children that name a parent which does not list them, grouped by the parent they name.</param>
+    private static void Layout(World world, Entity entity, Rect parent, float scale, HashSet<Entity> visited, Dictionary<Entity, List<Entity>> unlisted)
+    {
+        if (!world.IsAlive(entity) || !visited.Add(entity))
+        {
+            return;
+        }
+
+        Rect rect = Resolve(world, entity, parent, scale);
+
+        // A child is placed in the rectangle of its parent, and that rectangle is what the anchors of the child are a fraction of:
+        // the child's own Resolve takes design units and multiplies them by the scale, so the rectangle of the parent is divided by
+        // the scale here. Without that the two units would be mixed, and a child of a scaled canvas would jump by the scale of it as
+        // soon as it stopped being a root.
+        var inside = new Rect(
+            new Vector2(rect.Position.X / scale, rect.Position.Y / scale),
+            new Vector2(rect.Size.X / scale, rect.Size.Y / scale));
+
+        // The children the parent listed, and then the children that named it without being listed: both stand inside this element, so
+        // both are placed in its rectangle rather than one of them being left against the canvas.
+        if (world.Has<ChildrenComponent>(entity))
+        {
+            foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
+            {
+                Layout(world, world.Resolve(reference), inside, scale, visited, unlisted);
+            }
+        }
+
+        if (unlisted.TryGetValue(entity, out List<Entity>? children))
+        {
+            foreach (Entity child in children)
+            {
+                Layout(world, child, inside, scale, visited, unlisted);
+            }
+        }
+    }
+
+    /// <summary>Resolves the rectangle of one element inside the rectangle it is placed in, and answers the rectangle it ended up with.</summary>
+    private static Rect Resolve(World world, Entity entity, Rect parent, float scale)
+    {
+        ref RectTransformComponent rect = ref world.GetRef<RectTransformComponent>(entity);
+
+        // An element that is not anchored is a rectangle a game wrote down, and the layout leaves it alone.
+        if (rect.Anchored)
+        {
+            rect.Resolve(parent, scale);
+        }
+
+        return new Rect(rect.Position, rect.Size);
     }
 }

@@ -40,7 +40,7 @@
 
 "Area: Docs":
   - changed-files:
-      - any-glob-to-any-file: ['docs/**', '*.md']
+      - any-glob-to-any-file: ['*.md', 'Resources/Textures/Logo/**']
 
 "T: Bug":
   - head-branch: ['^fix/', '^bugfix/']
