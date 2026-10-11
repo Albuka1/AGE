@@ -18,11 +18,6 @@
       ],
       "dest": "api",
       "outputFormat": "mref",
-
-      // The metadata step compiles the projects it is given against everything they reference, so a project that
-      // declares no XML documentation still contributes its public types to the reference: `Age.Content.Lint` is a
-      // tool of the build and not part of the engine, and `Age.Sample` is a game rather than an assembly of it. The
-      // filter is what keeps a type out of the site, by its name.
       "filter": "tools/docfx/filter.yml"
     }
   ],
