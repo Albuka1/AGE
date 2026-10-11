@@ -5,9 +5,9 @@ Silk.NET window and an OpenGL 3.3 core renderer.
 
 ## Start here
 
-- [Quickstart](../QUICKSTART.md) — build a window, a world and a loop, then draw with
+- [Quickstart](QUICKSTART.md) — build a window, a world and a loop, then draw with
   the controls of the interface and read the content of a game.
-- [API reference](../api/toc.yml) — every public type of every assembly of the engine,
+- [API reference](xref:Age.Core) — every public type of every assembly of the engine,
   read from the XML documentation the build writes beside each one.
 
 ## What the engine is made of

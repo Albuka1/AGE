@@ -46,9 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   click never reaches two controls.
 - The documentation is published again: `docfx.json` builds a site with the API reference of every assembly of the engine — read from
   the XML documentation the build writes beside each one, so a type that is documented in the code is documented on the site — and
-  `docs/` holds its home page and its table of contents. `.github/workflows/docs.yml` builds and deploys it to GitHub Pages on every
-  push to `main`, and `QUICKSTART.md` is a page of the site as well, so the two articles a person actually reads are next to the
-  reference rather than only in the repository.
+  the root `index.md` and `toc.yml` are its home page and its navigation. `.github/workflows/docs.yml` builds and deploys it to GitHub
+  Pages on every push to `main`, and `QUICKSTART.md` is a page of the site as well, so the two articles a person actually reads are next
+  to the reference rather than only in the repository. The reference keeps the shape docfx gives an API: the tree of the namespaces and
+  their types in the navigation, the contents of the page on the right of it, and `/api/` is the address of the folder rather than of a
+  file.
 
 - `IClipboardService` is the clipboard of the machine, which `SilkInputService` reads from the keyboard and `NullInputService` keeps
   in memory for a run with no window. The console uses it: Control and A, C, X and V select, copy, cut and paste, the caret is where

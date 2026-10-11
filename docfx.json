@@ -23,8 +23,7 @@
   ],
   "build": {
     "content": [
-      { "src": "docs", "files": ["**/*.md", "toc.yml"] },
-      { "files": ["QUICKSTART.md"] },
+      { "files": ["index.md", "QUICKSTART.md", "toc.yml"] },
       { "files": ["api/**/*.yml"] }
     ],
     "resource": [

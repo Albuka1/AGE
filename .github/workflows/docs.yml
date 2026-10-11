@@ -4,7 +4,10 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'index.md'
+      - 'toc.yml'
       - 'docfx.json'
+      - 'tools/docfx/**'
       - 'QUICKSTART.md'
       - 'README.md'
       - 'CHANGELOG.md'
@@ -35,6 +38,12 @@ jobs:
       - run: dotnet build Age.slnx -c Release
       - run: dotnet tool install -g docfx
       - run: docfx docfx.json
+
+      # docfx writes the page of a table of contents as `toc.html`, so the folder a person types — `/api/` — would have no
+      # document to serve and GitHub Pages would answer 404. The page is copied to the name a folder is served by, which is
+      # what makes the address of the reference the address of its folder.
+      - run: cp _site/api/toc.html _site/api/index.html
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

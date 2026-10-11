@@ -1,8 +1,8 @@
 - name: Home
   href: index.md
 - name: Quickstart
-  href: ../QUICKSTART.md
+  href: QUICKSTART.md
 - name: API Reference
-  href: ../api/toc.yml
+  href: api/
 - name: Repository
   href: https://github.com/Albuka1/Age
