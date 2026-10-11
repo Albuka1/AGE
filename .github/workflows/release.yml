@@ -46,6 +46,9 @@ jobs:
           # A tag with a suffix such as v0.3.0-alpha.1 is a prerelease, which is what a version that is not ready for a
           # player is: the workflow then marks the release as one rather than offering it as the latest.
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: |
-            Age.Sample-${{ github.ref_name }}.zip
-            publish/Resources/**
+          # The archive of the published sample is the asset of a release, and the notes of the release are the section of
+          # the changelog that names it. The files of `Resources` are inside the archive rather than beside it: they are what
+          # the sample reads, and a hundred of them loose on a release page is a page nobody can find anything on — two of
+          # them are even named the same, which is what a release page cannot hold and what the upload refused over.
+          body_path: ${{ github.workspace }}/CHANGELOG.md
+          files: Age.Sample-${{ github.ref_name }}.zip
