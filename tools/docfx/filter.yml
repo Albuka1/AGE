@@ -1,0 +1,18 @@
+# What the metadata step of docfx keeps, by the name of a type.
+#
+# The step compiles the projects it is given *against everything they reference*, and a referenced project contributes its
+# public types even when it declares no XML documentation of its own. Two of the projects of this repository are not
+# assemblies of the engine, so they are taken out here rather than left to grow the reference with the parts of the build:
+#
+#   * `Age.Content.Lint` is the linter a build runs over the content, a tool rather than something a game links against.
+#   * `Age.Sample` is the game the repository ships as an example, which is a game that uses the engine and not a part of it.
+#
+# Everything else is kept, including a type that the documentation does not describe: a public type is API whether or not a
+# person wrote a comment about it, and hiding one would make the reference disagree with the assembly it is a reference to.
+apiRules:
+  - exclude:
+      uidRegex: ^Age\.Content\.Lint
+      type: Namespace
+  - exclude:
+      uidRegex: ^Age\.Sample
+      type: Namespace
