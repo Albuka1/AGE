@@ -36,7 +36,7 @@ jobs:
         run: |
           cd publish
           zip -r "../Age.Sample-${{ github.ref_name }}.zip" .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Age.Sample-${{ github.ref_name }}
           path: publish/
