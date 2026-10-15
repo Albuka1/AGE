@@ -309,8 +309,19 @@ public sealed unsafe class OpenALAudioService : IAudioService, IDisposable
 
         if (stolen is ResourceHandle taken && _voices.TryGet(taken, out Voice? found) && found is not null)
         {
-            _al.SourceStop(found.Source);
-            return found;
+            // The slot of the voice that is taken is released before a replacement is added, so the handle that named the
+            // playback which was stopped stops resolving: a game that kept it does not write the volume or stop the
+            // playback that took its voice. The source itself is reused, so the pool never grows past the limit a game
+            // asked for, and the new slot carries a new generation because the pool hands one out on every add.
+            uint source = found.Source;
+            _al.SourceStop(source);
+            _voices.Release(taken);
+
+            var replacement = new Voice(source);
+            ResourceHandle slot = _voices.Add(replacement);
+            replacement.Resource = slot;
+
+            return replacement;
         }
 
         return null;

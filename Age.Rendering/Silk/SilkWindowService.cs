@@ -45,6 +45,13 @@ public sealed class SilkWindowService : IWindowService
         get => _fullscreen;
         set
         {
+            // A value that is what the field already holds is written nowhere: a game that reads its settings on every frame and
+            // writes them back must not reset a Maximized or Minimized state that the window manager put the window in.
+            if (_fullscreen == value)
+            {
+                return;
+            }
+
             _fullscreen = value;
 
             if (_window is not null)
@@ -105,8 +112,16 @@ public sealed class SilkWindowService : IWindowService
         }
 
         _window.Title = _title;
-        _window.WindowState = _fullscreen ? WindowState.Fullscreen : WindowState.Normal;
         _window.VSync = _vsync;
+
+        // The window state is written only when the window is not already fullscreen in the way the setting says, which keeps a
+        // native Maximized or Minimized state from being reset by a call that did not change the setting.
+        bool isFullscreen = _window.WindowState == WindowState.Fullscreen;
+
+        if (isFullscreen != _fullscreen)
+        {
+            _window.WindowState = _fullscreen ? WindowState.Fullscreen : WindowState.Normal;
+        }
     }
 
     /// <inheritdoc />
