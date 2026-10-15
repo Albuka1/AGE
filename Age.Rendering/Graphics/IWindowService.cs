@@ -61,17 +61,21 @@ public interface IWindowService
 
     /// <summary>Gets or sets the frame rate limit, where zero is unlimited.</summary>
     /// <remarks>
-    /// A limit of zero means that the loop is limited only by <see cref="VSync"/>: when vertical sync is on and no limit was
-    /// asked for, <see cref="RefreshRate"/> is used. A game that limits the frame rate itself leaves this at zero and turns
-    /// vertical sync off, because the two would fight over the pace of the frame.
+    /// A limit of zero is a loop that limits nothing of its own: when vertical sync is on the loop falls back to
+    /// <see cref="RefreshRate"/>, and when the sync is off the loop does not limit at all and runs as fast as the device
+    /// answers. A positive value is what the loop keeps the pace of the frames to, with the sync on or off. So a game that
+    /// limits the frame rate itself writes a positive value here, and a game that is paced by the vertical sync of the device
+    /// leaves this at zero and turns the sync on; a game that writes zero and turns the sync off has a loop that runs as fast
+    /// as the platform allows.
     /// </remarks>
     int FpsLimit { get; set; }
 
     /// <summary>Gets the refresh rate of the monitor the window is on, in hertz, or zero when it cannot be read.</summary>
     /// <remarks>
     /// The rate is asked of the window manager rather than remembered, because a window that was moved to another display has
-    /// another one. A window that is not on a monitor yet — because it was created but not shown — answers zero, which is what
-    /// the frame rate limit reads as "no limit".
+    /// another one. A window that is not on a monitor yet — because it was created but not shown — answers zero, and so does a
+    /// platform that does not report a rate: a loop with vertical sync on is then paced by the device alone, and one with the
+    /// sync off and no <see cref="FpsLimit"/> written runs as fast as the platform allows.
     /// </remarks>
     int RefreshRate { get; }
 

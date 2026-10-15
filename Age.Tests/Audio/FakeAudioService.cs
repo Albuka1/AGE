@@ -5,14 +5,15 @@ using Age.Core;
 namespace Age.Tests;
 
 /// <summary>
-/// The audio device of the tests: a pool of voices that records what it was asked to do and answers the volume of
-/// a channel and of a playback from what the calls left behind.
+/// The audio device of the tests: a pool of voices that records what it was asked to do and answers the volume of a
+/// channel and of a playback from what the calls left behind.
 /// </summary>
 /// <remarks>
 /// It plays the role of <see cref="IAudioService"/> the way a real device does: a play returns a handle that names a
 /// voice, a stop returns the voice to the pool, and the two questions that a fader asks — whether a voice is still
-/// there and what its volume is — answer what the calls wrote. It plays nothing, because a test does not listen to
-/// sound: it reads what the calls were.
+/// there and what its volume is — answer what the calls wrote. The pool has a limit and takes the voice of the
+/// playback of the lowest priority when every voice is busy, which is what makes the handle of the playback that was
+/// displaced stop resolving. It plays nothing, because a test does not listen to sound: it reads what the calls were.
 /// </remarks>
 internal sealed class FakeAudioService : IAudioService
 {
@@ -37,7 +38,7 @@ internal sealed class FakeAudioService : IAudioService
     /// <summary>Gets what every play of the device was asked for, in the order the calls asked for it.</summary>
     public List<(int SoundId, AudioPlaybackSettings Settings)> Played { get; } = [];
 
-    /// <summary>Gets the identifiers of the sounds whose voices the device stopped.</summary>
+    /// <summary>Gets the identifiers of the sounds whose voices the device stopped, whether the game asked it to or a higher priority took the voice.</summary>
     public List<int> Stopped { get; } = [];
 
     /// <summary>Gets the identifiers of the sounds whose voices the device paused.</summary>
@@ -87,10 +88,51 @@ internal sealed class FakeAudioService : IAudioService
     /// <inheritdoc />
     public PlaybackHandle Play(int soundId, in AudioPlaybackSettings settings)
     {
-        var voice = new Voice(soundId, settings);
-        ResourceHandle slot = _voices.Add(voice);
-        Played.Add((soundId, settings));
-        return new PlaybackHandle(slot);
+        if (soundId == 0)
+        {
+            return PlaybackHandle.None;
+        }
+
+        if (_voices.Count < VoiceLimit)
+        {
+            var voice = new Voice(soundId, settings);
+            ResourceHandle slot = _voices.Add(voice);
+            Played.Add((soundId, settings));
+            return new PlaybackHandle(slot);
+        }
+
+        // Every voice is busy, so the voice of the playback of the lowest priority is taken when the playback that is
+        // starting is of a higher priority, which is what a real device does. The slot of the displaced playback is
+        // released before the replacement is added, so the handle that named it stops resolving: a game that kept it
+        // does not write the volume of the playback that took its voice, and a fade that was scheduled for it does not
+        // stop it. The voice itself is reused, which is what keeps the pool within the limit a game asked for, and the
+        // pool hands a new generation out on the add, so the two handles are not the same.
+        ResourceHandle? stolen = null;
+        int lowest = int.MaxValue;
+
+        foreach (ResourceHandle slot in _voices.GetHandles())
+        {
+            if (_voices.TryGet(slot, out Voice? held) && held is not null && held.Priority < lowest && held.Priority < settings.Priority)
+            {
+                lowest = held.Priority;
+                stolen = slot;
+            }
+        }
+
+        if (stolen is ResourceHandle taken && _voices.TryGet(taken, out Voice? found) && found is not null)
+        {
+            Stopped.Add(found.SoundId);
+            _voices.Release(taken);
+
+            var replacement = new Voice(soundId, settings);
+            ResourceHandle slot = _voices.Add(replacement);
+            Played.Add((soundId, settings));
+            return new PlaybackHandle(slot);
+        }
+
+        // No running playback is of a lower priority than this one, so the request is dropped rather than a sound of
+        // the game being stopped to make room for it.
+        return PlaybackHandle.None;
     }
 
     /// <inheritdoc />
