@@ -7,6 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The display settings of a run are the window's own: `IWindowService` gained `Title`, `Fullscreen`, `VSync`, `FpsLimit`,
+  `RefreshRate` and `Apply`, so a game changes how its window is shown rather than reaching past the abstraction to Silk.NET.
+  The setter of a setting writes the window on the frame it changes rather than on every frame, which is what makes a call
+  that reads a setting and writes it back safe to run per frame, and `Apply` writes the title, the sync and the fullscreen
+  state together, which is what a game that read several settings and would rather apply them once calls. `RefreshRate`
+  reports what the monitor of the window says, so the frame rate limit has a value to fall back to when the device is paced
+  by the vertical blank.
+- `WindowCVars` registers the display settings of a window as console variables: `fullscreen`, `vsync` and `fps` are the names
+  a person types in the console, each of them starting with the value the window already carries, and `Pull` writes what the
+  settings say back to the window. A settings file that a game writes and a person edits is therefore what the window obeys,
+  and `cvars set fullscreen true` reaches the window on the frame it was typed rather than on the next run.
+- `SilkGameLoop` limits the frame rate itself, from the value the window reports on the frame it changed: a positive
+  `FpsLimit` is the pace the loop keeps the frames to, and a limit of zero with vertical sync on falls back to the refresh
+  rate of the monitor, so a game that is paced by the device writes zero and a game that measures its own frame time writes
+  the rate it wants. The pace is measured in ticks of the stopwatch rather than in milliseconds, with the last of the wait
+  spent in a spin, which is what keeps a rate such as 144 hertz from being rounded to whole milliseconds and the pace from
+  drifting on a display whose refresh rate is not a whole number of frames per second.
+- `AudioChannel` names the groups a game mixes its sounds through — `Master`, `Music`, `Effects`, `Voice`, `Ui` and
+  `Ambient` — and every playback is heard in one of them: the volume it ends up at is its own, times the volume of its
+  channel, times the volume of the master, which is what a settings menu turns down without touching the volume of every
+  sound. `IAudioService.SetChannelVolume` and `GetChannelVolume` read and write one channel, and a channel that is written
+  is heard on every voice of it on the frame it changes.
+- `AudioPlaybackSettings` is how one playback is heard: the volume, the pitch, the pan, whether it loops, the channel it is
+  mixed into and how important it is. It is a value a game writes where it plays a sound, so nothing of it is a mutable
+  state a game has to hold, and `Default(channel)` is the settings of a sound that plays once, at the recorded level, in
+  the middle of the field.
+- `PlaybackHandle` names one playback of a sound, which is what a game stops, pauses, resumes, changes the volume, the
+  pitch and the pan of while the sound plays. `IAudioService.Play`, `Stop`, `Pause`, `Resume`, `SetVolume`, `GetVolume`,
+  `SetPitch`, `SetPan` and `IsAlive` are the ones that take it, and a handle that the device no longer holds — because the
+  sound reached its end, because the voice was returned to the pool, or because the voice was taken by a playback of a
+  higher priority — answers `IsAlive(false)` and writes nothing of the voice that took its number.
+- `IAudioFader` and `AudioFader` fade the volume of a channel or of one playback over a duration, one frame at a time, on
+  the clock of the display: a game asks for a fade and forgets it, and the frame system that owns the clock advances what
+  is scheduled. `Fade` changes the volume of a channel or of a playback and leaves it playing, which is what turning the
+  score down and back up asks for, and `FadeAndStop` fades a playback to silence and returns its voice to the device on
+  the frame it reaches the end, which is what a sound that has to go away rather than stay silent asks for. A second
+  `Fade` of the same channel or of the same playback replaces the first, and `Cancel` stops one where it stands and leaves
+  the volume at what it reached.
+- `IAudioService.VoiceLimit` bounds how many sounds the device plays at once: a playback that starts when every voice is
+  busy takes the voice of the playback of the lowest priority when it is of a higher priority, and one that no running
+  playback is of a lower priority than is dropped rather than a sound of the game being stopped to make room for it.
+  Lowering the limit releases the voices that are over it, oldest first, and `PlayingCount` reports how many the device is
+  running at this moment.
+- A playback that took the voice of another starts with a new identity: the slot of the voice that was displaced is
+  released before the replacement is added, so the `PlaybackHandle` that named the stopped playback stops resolving and a
+  game that kept it does not write the volume of a sound that is not heard, nor stop the sound that took its voice. The
+  native source of the voice itself is reused, so the pool never grows past the limit a game asked for, and the pool hands
+  a new generation out on the add, which is what makes the two handles different.
+
+### Changed
+
+- **Breaking:** `IAudioService.Play` replaces `PlaySound`: it takes the identifier of a sound and an
+  `AudioPlaybackSettings` and answers the `PlaybackHandle` of the playback it started, which is what a game uses to change
+  a sound while it is heard. `StopAll` stops every playback, and the per-sound controls are the ones that take a handle.
+- **Breaking:** `IAudioService.SetMasterVolume` is gone in favour of `SetChannelVolume(AudioChannel.Master, volume)`, so
+  the master is one channel among the others and a game that reads it back reads it through the same call as any other
+  channel.
+- **Breaking:** `ISoundService.Play` takes an `AudioPlaybackSettings` rather than a volume and a loop flag: the volume and
+  the loop are two of the six values of a playback, and a game that changes the pitch, the pan, the channel or the
+  priority of a sound writes them where it plays it rather than needing a second call.
+- **Breaking:** `IWindowService` gained the display settings of a window, so an implementation of the interface that a game
+  or a test writes has to answer `Title`, `Fullscreen`, `VSync`, `FpsLimit`, `RefreshRate` and `Apply` as well.
+  `SilkWindowService` implements them against the window of the operating system, `HostWindowService` of the developer
+  window answers the ones of a window that has no settings of its own, and the fake window of the tests answers what a
+  test reads.
+- **Breaking:** `SoundCache.Play` of a game's own cache takes an `AudioPlaybackSettings` rather than a volume and a loop
+  flag, and a second overload that takes the channel, the volume, the pitch, the pan, the loop and the priority is what a
+  game that does not want to spell out the six values uses. The old shape that took a path and a volume and a loop flag is
+  kept as the shape a fight was written against, because a hit of a fight is a sound through the effects channel with a
+  volume and nothing else.
+- `SilkWindowService.Fullscreen` writes the state of the window only when the value changed, which is what makes a settings
+  read that writes its own value back leave a window that the window manager had `Maximized` or `Minimized` alone.
+  `SilkWindowService.Apply` follows the same rule, so a call that puts the display settings of a game together does not
+  reset a state that the window manager set.
+- `SoundService` holds a sound by path and plays it through the device with the settings a caller writes, and the handle
+  of a sound that was unloaded or of a sound that the device does not hold is answered with a default `PlaybackHandle`
+  rather than a call to a voice that the device does not have, which is what keeps a path whose file is not there from
+  costing a call on every frame that plays it.
+- `FakeAudioService` of the tests plays the role of the device the way a real one does, with a pool of voices, a limit and
+  the priority stealing that a device of the engine has: a test that plays a sound against a pool that holds one voice
+  reads what the handle of the sound that was displaced answers, which is what makes the identity of a playback that took
+  a voice something the tests can pin down without a device.
+
+### Fixed
+
+- A playback that took the voice of a playback of a lower priority carried the slot of the one it stopped, so a
+  `PlaybackHandle` that a game kept for the stopped sound went on resolving: a game that wrote the volume of a hit after
+  its voice was taken wrote the volume of the sound that took its place, and a fade that was scheduled for the stopped
+  sound stopped the one that replaced it, even across the channels of the mixer. The slot of the displaced playback is
+  released before the replacement is added now, which gives the reused voice a new generation and makes the handle of the
+  stopped playback stale, while the source of the voice itself is reused so the pool never grows past `VoiceLimit`.
+- The `Fullscreen` setter of `SilkWindowService` wrote `WindowState` on every write, and `WindowCVars.Pull` writes the
+  setting on every frame: a window that the window manager had `Maximized` was reset to `Normal` by the next frame that
+  read the setting and wrote it back without it having changed. The setter now writes only when the value changed, and
+  `Apply` writes the state only when the window is not already fullscreen in the way the setting says, which is what keeps
+  the native state of a window that a person moved.
+- `IWindowService.FpsLimit` and `RefreshRate` said what a positive limit and a rate of zero do without saying what a limit
+  of zero with the sync off does: the two members state that a limit of zero is a loop that limits nothing of its own when
+  vertical sync is off, and that a positive value is what the loop keeps the pace of the frames to whether the sync is on
+  or off. What `WindowCVars` writes to the window from the settings and what `SilkGameLoop` reads from the window on every
+  frame is what the two documents now say in one place.
+- `AudioFader_Fade_TheSameChannelFromSeveralFrames_KeepsOneSchedule` of the tests asked a channel to reach a volume it
+  does not reach: a second `Fade` of a channel replaces the first and takes the volume the channel holds at that moment as
+  the base of the new schedule, so a `Fade` asked for again on every frame is not the same schedule that was asked for
+  once. What the test meant to check — that a second fade replaces the first — is what
+  `AudioFader_Fade_TheSecondOneOfAChannel_ReplacesTheFirst` already checks, and the test that expected the volume of a
+  schedule that was never kept is gone.
+- `SoundService_APlaybackThatTookTheVoiceOfAnother_DoesNotResolveTheHandleOfIt` built both playbacks of the pool with the
+  default of `AudioPlaybackSettings`, which is a `Volume` of zero: the second playback was silent before the old handle
+  was told anything, and the volume the test read back would have been zero whatever the old handle did. The two playbacks
+  are of the recorded level now, so a write that reached the wrong voice is something the test sees rather than something
+  it passes.
+
 ## [0.4.0] - 2026-10-11
 
 ### Added
