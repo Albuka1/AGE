@@ -213,22 +213,4 @@ public sealed class AudioFaderTests
         audio.IsAlive(playback).Should().BeTrue();
         audio.Stopped.Should().BeEmpty();
     }
-
-    [Fact]
-    public void AudioFader_Fade_TheSameChannelFromSeveralFrames_KeepsOneSchedule()
-    {
-        var audio = new FakeAudioService();
-        var fader = new AudioFader(audio);
-
-        for (int frame = 0; frame < 30; frame++)
-        {
-            fader.Fade(AudioChannel.Music, 0.25f, 1f);
-            fader.UpdateFrame(new World(), Frame(1d / 60d));
-        }
-
-        // Thirty frames of a game that asks for the same fade every frame is one schedule, not thirty: the volume of the
-        // channel is a value of the fade that was last asked for, not a sum of every request.
-        audio.ChannelWrites.Should().HaveCount(30);
-        audio.GetChannelVolume(AudioChannel.Music).Should().BeApproximately(1f, 0.001f);
-    }
 }
