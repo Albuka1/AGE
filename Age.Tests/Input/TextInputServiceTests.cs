@@ -74,15 +74,32 @@ public sealed class TextInputServiceTests
         input.TypedCharacters.Should().BeEmpty();
     }
 
-    /// <summary>The window the test never opens, which is what the Silk.NET input service would read.</summary>
+    /// <summary>
+    /// The window of the tests: it holds the display settings a game would write to it and refuses everything that needs
+    /// a window of the operating system, because a test does not open one.
+    /// </summary>
     private sealed class FakeWindowService : IWindowService
     {
-        public IWindow Window => throw new NotSupportedException("the test does not open a window");
+        public IWindow Window => throw new NotSupportedException("A test does not open a window of the operating system.");
 
-        public void Create(int width, int height, string title) => throw new NotSupportedException();
+        public string Title { get; set; } = string.Empty;
 
-        public void SetIcon(ReadOnlySpan<byte> pixels, int width, int height) => throw new NotSupportedException();
+        public bool Fullscreen { get; set; }
 
-        public void Close() => throw new NotSupportedException();
+        public bool VSync { get; set; }
+
+        public int FpsLimit { get; set; }
+
+        public int RefreshRate => 60;
+
+        public void Create(int width, int height, string title) => throw new NotSupportedException("A test does not open a window of the operating system.");
+
+        public void SetIcon(ReadOnlySpan<byte> pixels, int width, int height) => throw new NotSupportedException("A test does not set an icon of a window of the operating system.");
+
+        public void Close() => throw new NotSupportedException("A test does not close a window of the operating system.");
+
+        public void Apply()
+        {
+        }
     }
 }
