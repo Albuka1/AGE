@@ -102,7 +102,7 @@ props="$(< Directory.Build.props)"
 # The version the build already reports. A release that names the version the build already reports is not a mistake — the
 # property is often bumped while a version is being finished — so what is checked is that there is a version at all, and
 # the substitution below is what writes the one that was asked for.
-current="$(printf '%s' "$props" | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | head -n1)"
+current="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n1 || true)"
 if [ -z "$current" ]; then
     die 'Directory.Build.props holds no <Version>...</Version>, so there is nothing to bump.'
 fi
@@ -115,16 +115,16 @@ for f in engine.version.json Age.Sample/game.version.json; do
     fi
 done
 
-changelog="$(< CHANGELOG.md)"
-
 # The changelog closes by writing the section of the version under the unreleased one. A newline is written under it so
 # the next release starts on an empty section of its own, which is what a version that was cut leaves behind. The search
-# is anchored at the beginning of a line, because '## [Unreleased]' appears in the notes of some versions as well.
-if ! printf '%s\n' "$changelog" | grep -q '^## \[Unreleased\]$'; then
+# and the substitution both read the file directly, rather than a variable that is piped into a reader: a reader that
+# stops early closes the pipe, the writer takes a SIGPIPE, and pipefail turns that into a failure of a command that
+# actually succeeded.
+if ! grep -q '^## \[Unreleased\]$' CHANGELOG.md; then
     die "CHANGELOG.md holds no '## [Unreleased]' section to close, so nothing says what this release brings."
 fi
 
-closed="$(printf '%s' "$changelog" | awk -v ver="$version" -v day="$date_str" '
+closed="$(awk -v ver="$version" -v day="$date_str" '
     /^## \[Unreleased\]$/ && !done {
         print
         print ""
@@ -133,7 +133,7 @@ closed="$(printf '%s' "$changelog" | awk -v ver="$version" -v day="$date_str" '
         next
     }
     { print }
-')"
+' CHANGELOG.md)"
 
 step "Version $version on the branch '$branch', tagged $tag, dated $date_str"
 
