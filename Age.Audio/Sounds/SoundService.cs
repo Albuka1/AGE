@@ -66,14 +66,14 @@ public sealed class SoundService : ISoundService, IDisposable
     public bool IsAlive(SoundHandle sound) => sound.Resource.IsValid && _loaded.TryGet(sound.Resource, out _);
 
     /// <inheritdoc />
-    public void Play(SoundHandle sound, float volume = 1f, bool loop = false)
+    public PlaybackHandle Play(SoundHandle sound, in AudioPlaybackSettings settings)
     {
-        if (!_loaded.TryGet(sound.Resource, out int id))
+        if (!_loaded.TryGet(sound.Resource, out int id) || id == 0)
         {
-            return;
+            return PlaybackHandle.None;
         }
 
-        _audio.PlaySound(id, volume, loop);
+        return _audio.Play(id, settings);
     }
 
     /// <inheritdoc />

@@ -7,7 +7,7 @@ namespace Age.Audio;
 /// <example>
 /// <code>
 /// SoundHandle click = sounds.Load("Audio/Effects/click.wav");
-/// sounds.Play(click);
+/// sounds.Play(click, AudioPlaybackSettings.Default(AudioChannel.Ui));
 ///
 /// sounds.Unload(click);
 /// </code>
@@ -34,15 +34,11 @@ public interface ISoundService
     /// <returns><see langword="true"/> while the sound is loaded. A handle the device made itself, and a handle from before an unload, both return <see langword="false"/>.</returns>
     bool IsAlive(SoundHandle sound);
 
-    /// <summary>Plays a loaded sound through the device.</summary>
+    /// <summary>Starts a playback of a loaded sound.</summary>
     /// <param name="sound">The sound to play.</param>
-    /// <param name="volume">The volume of this playback, where one is the recorded level and zero is silent.</param>
-    /// <param name="loop">Whether the sound repeats until <see cref="IAudioService.StopAll"/> is called.</param>
-    /// <remarks>
-    /// A handle that this service does not own, or one from before an unload, plays nothing. The playback mixes on top
-    /// of the master volume that <see cref="IAudioService.SetMasterVolume"/> sets.
-    /// </remarks>
-    void Play(SoundHandle sound, float volume = 1f, bool loop = false);
+    /// <param name="settings">How the playback is heard.</param>
+    /// <returns>The handle of the playback, or <see cref="PlaybackHandle.None"/> when the sound is not one of this service or the device discarded it.</returns>
+    PlaybackHandle Play(SoundHandle sound, in AudioPlaybackSettings settings);
 
     /// <summary>Deletes the sound behind the handle and forgets its path, so loading the path again decodes it anew.</summary>
     /// <param name="sound">The handle of the sound to delete.</param>

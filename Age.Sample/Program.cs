@@ -87,6 +87,12 @@ pipeline.Add(provider.GetRequiredService<SpriteAnimationSystem>());
 pipeline.AddFrame(provider.GetRequiredService<UILayoutSystem>());
 pipeline.AddFrame(provider.GetRequiredService<UIUpdateSystem>());
 
+// The fader of the audio is a frame system of its own: a fade of the score outlasts a pause of the simulation, which is
+// what a menu that holds the game and keeps the music playing asks for. It is added here rather than by the audio
+// assembly, because a game that never fades a channel never pays for the frame that advances one.
+AudioFader fader = provider.GetRequiredService<AudioFader>();
+pipeline.AddFrame(fader);
+
 IWindowService windowService = provider.GetRequiredService<IWindowService>();
 windowService.Create(1280, 720, "AGE Sample");
 
@@ -117,6 +123,11 @@ const string TilePath = "Textures/Tiles/tiles.bmp";
 FontHandle font = default;
 ShaderHandle vignette = default;
 SoundHandle click = default;
+
+// What the music of the sample is heard through, which is `None` until the loading starts it. The sample ships no track of its own,
+// so a build that has no file under `Audio/Music/` starts in silence and says so once: the two commands that fade it read a handle
+// that is not valid and leave it alone, rather than a game that cannot start.
+PlaybackHandle music = PlaybackHandle.None;
 
 Entity first = default;
 Entity second = default;
@@ -239,6 +250,9 @@ loading.Add(() => font = fonts.Load("Fonts/Cousine-Regular.ttf", 24f, ' ', '\u04
 // with the vertex stage of the engine, which places the quad. This one is drawn over the frame at the end of it, which is what a
 // pass of a game adds of its own.
 loading.Add(() => vignette = shaders.Load("Shaders/vignette.frag"));
+
+// The click of a button, which the sample ships with: it is decoded and uploaded once, and every press of a button of the interface
+// asks the device for a voice. The file is one of the resources of the repository, so it is one of the things a build always carries.
 loading.Add(() => click = sounds.Load("Audio/Effects/click.wav"));
 
 // The area of the world that this game is authored against, in world units, which is also the resolution that its interface
@@ -409,6 +423,41 @@ loading.Add(() =>
     // before the first key press. It belongs to the world that is there now, which is the scene when there is one.
     lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime"));
 });
+
+// The music of the sample is asked for once, and a build that ships no track is a build that plays in silence rather than a
+// build that fails to start: the loader reports the file that is not there, and the handle stays `None`, which every fade below
+// reads as "nothing to fade" and leaves alone. The file is not one of the resources the repository ships, so a person who wants
+// to hear a track drops one into `Resources/Audio/Music/` with the name below.
+loading.Add(() =>
+{
+    SoundHandle track;
+
+    try
+    {
+        track = sounds.Load("Audio/Music/theme.ogg");
+    }
+    catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
+    {
+        console.WriteWarning($"the music 'Audio/Music/theme.ogg' is not there, so the sample has no score: {exception.Message}");
+        return;
+    }
+
+    // The track starts at silence and is brought up by the fader, which is the one place of the sample that shows what a fade of
+    // a playback is for: the play answers a handle before the sound is heard, and the fade is what makes it arrive rather than
+    // appear. The handle is kept, so the pause of the sample below has the one value it needs to turn it down.
+    music = sounds.Play(
+        track,
+        new AudioPlaybackSettings
+        {
+            Volume = 0f,
+            Loop = true,
+            Channel = AudioChannel.Music,
+            Priority = 100,
+        });
+
+    fader.Fade(music, 0.55f, 2f, TweenEasing.EaseOut);
+});
+
 IInputService input = provider.GetRequiredService<IInputService>();
 IGameLoop gameLoop = provider.GetRequiredService<IGameLoop>();
 SplashScreen splash = provider.GetRequiredService<SplashScreen>();
@@ -425,7 +474,17 @@ timestep.Paused = true;
 void SubscribeEvents(World subscribed)
 {
     subscribed.Events.Subscribe<CollisionEvent>((_, collision) => TintByCollision(subscribed, collision.First, collision.Second));
-    subscribed.Events.Subscribe<ButtonPressedEvent>((_, _) => sounds.Play(click));
+
+    // The click of a button is heard through the UI channel, and the fade below is what makes it end rather than cut off: a
+    // click that is stopped on the same frame it starts is a click that ends with a snap, and one that is faded over a tenth
+    // of a second is what a person hears as a click rather than as a pop. The handle that the play answers is the one value
+    // the fade needs, which is what keeps the two lines together rather than a game holding a volume to set later.
+    subscribed.Events.Subscribe<ButtonPressedEvent>((_, _) =>
+    {
+        PlaybackHandle playback = sounds.Play(click, AudioPlaybackSettings.Default(AudioChannel.Ui));
+        fader.FadeAndStop(playback, 0.15f, TweenEasing.EaseOut);
+    });
+
     subscribed.Events.Subscribe<TimerElapsedEvent>((_, timer) => subscribed.RequestDestroy(timer.Entity));
 
     // The entity of an event is the one the event carries, because the world raises these without naming one to the
@@ -457,6 +516,17 @@ cvars.Register("spawnLifetime", 2f, "How long a sprite that E puts on screen liv
 // the system is set to, when the game ships that language, and as the base language otherwise, and a choice that was written
 // to the settings file wins over both.
 cvars.Register("locale", locale.Language, "The language the strings of the game are read in, such as en or ru.");
+
+// The mix of the sample is a set of channels, and the settings file is where a person's choices live: each channel is a
+// setting of its own, and `mix` of the console is the way to write one while the game runs. The values are read back below,
+// when the mixer is told what the settings file said, so a person who turned the score down keeps it down across a restart.
+AudioChannel[] channels = Enum.GetValues<AudioChannel>();
+
+foreach (AudioChannel channel in channels)
+{
+    string name = channel.ToString().ToLowerInvariant();
+    cvars.Register($"mix.{name}", 1f, $"The volume of the {name} channel, from zero to one.");
+}
 
 // The levels of the command after the name: `cvars` lists the settings (registered by the service itself), `cvars get <name>`
 // answers one, and `cvars set <name> <value>` writes it. The words are levels of a tree rather than parts of one name, so each of
@@ -493,10 +563,32 @@ console.Register("cvars set", "Writes a setting. Usage: cvars set spawnLifetime 
             locale.Language = cvars.Get<string>("locale");
         }
 
+        // A setting that describes a channel of the mixer reaches it here rather than on the frame that follows, which is what a
+        // person who types `cvars set mix.music 0.3` reads the answer of: the fade of a tenth of a second is what keeps a change
+        // of a volume from clicking rather than arriving.
+        ApplyMix();
+
         console.Write($"{name} = {cvars.GetText(name)}");
         SaveSettings();
     }
 });
+
+// The mixer is told what the settings file said once the settings are read, which is what makes the volume of a channel a
+// choice of a person rather than a value the game was built with. It is called here as well as from `cvars set` above, so
+// the two ways of writing one say the same thing: a channel that a game sets while it runs is faded into rather than
+// applied at once, and a channel that a person wrote in the file is applied on the frame the game starts.
+void ApplyMix()
+{
+    IAudioService device = provider.GetRequiredService<IAudioService>();
+
+    foreach (AudioChannel channel in channels)
+    {
+        string name = channel.ToString().ToLowerInvariant();
+        device.SetChannelVolume(channel, Math.Clamp(cvars.Get<float>($"mix.{name}"), 0f, 1f));
+    }
+}
+
+ApplyMix();
 
 // The values the panel offers while a line of the console is being typed: a line that has reached `cvars set` or `cvars get` lists
 // the settings, and a line that has named one lists the values that setting takes. This is what a developer reads at every level of
@@ -511,7 +603,7 @@ consoleOverlay.SetValues(line =>
         return cvars.Values.Select(cvar => cvar.Name);
     }
 
-    // A setting that was named takes a value, and the value of the language is chosen from the languages the game ships.
+    // A setting that was named takes a value, and the value of a channel is one of the volumes a person reaches for.
     if (words.Length == 3 && line[^1] == ' ' && words[0].Equals("cvars", StringComparison.OrdinalIgnoreCase) && words[1].Equals("set", StringComparison.OrdinalIgnoreCase))
     {
         return ValuesOf(words[2]);
@@ -524,6 +616,7 @@ IEnumerable<string> ValuesOf(string name) => name.ToLowerInvariant() switch
 {
     "locale" => ["en", "ru"],
     "spawnlifetime" => ["0.5", "1", "2", "4"],
+    "mix.master" or "mix.music" or "mix.effects" or "mix.voice" or "mix.ui" or "mix.ambient" => ["0", "0.25", "0.5", "0.75", "1"],
     _ => [],
 };
 
@@ -532,6 +625,54 @@ IEnumerable<string> ValuesOf(string name) => name.ToLowerInvariant() switch
 // looking through when the command runs.
 Camera2D drawnThrough = new() { Zoom = 1f };
 string version = EngineVersion.Value;
+
+// The mix of the sample is a set of channels, and the console is where a developer turns one down while it runs: the
+// volume of a channel is what every playback of it is multiplied by, so `mix music 0.3` is the whole score at a third
+// of its level rather than a value of every sound. `mix` with no argument reports what each channel holds.
+console.Register("mix", "Reports or writes the volume of a channel. Usage: mix music 0.3, mix master 1.", arguments =>
+{
+    if (arguments.Count == 0)
+    {
+        foreach (AudioChannel channel in channels)
+        {
+            string name = channel.ToString().ToLowerInvariant();
+            console.Write($"{name} = {cvars.Get<float>($"mix.{name}"):0.##}");
+        }
+
+        return;
+    }
+
+    if (arguments.Count < 2)
+    {
+        console.WriteError("usage: mix <channel> <volume>");
+        return;
+    }
+
+    if (!Enum.TryParse(arguments[0], ignoreCase: true, out AudioChannel named))
+    {
+        console.WriteError($"'{arguments[0]}' is not a channel; use {string.Join(", ", channels.Select(c => c.ToString().ToLowerInvariant()))}");
+        return;
+    }
+
+    if (!float.TryParse(arguments[1], CultureInfo.InvariantCulture, out float volume))
+    {
+        console.WriteError($"'{arguments[1]}' is not a number");
+        return;
+    }
+
+    string setting = $"mix.{named.ToString().ToLowerInvariant()}";
+
+    if (!cvars.SetFromText(setting, volume.ToString(CultureInfo.InvariantCulture)))
+    {
+        return;
+    }
+
+    // The channel is a setting as well as a value of the device, so what a person chose is what the game starts with the
+    // next time rather than something that is lost on the way out. The fade is of a tenth of a second, which is what keeps
+    // a change from clicking rather than arriving.
+    fader.Fade(named, Math.Clamp(volume, 0f, 1f), 0.1f);
+    SaveSettings();
+});
 
 console.Register("spawn", "Puts a sprite on screen, the same as pressing E.", _ => lastSpawned = Spawn(world, cvars.Get<float>("spawnLifetime")));
 console.Register("broken", "Puts a sprite whose image is not there on screen, which is what the ERROR placeholder is for.", _ => lastSpawned = SpawnMissing(world));
@@ -717,7 +858,8 @@ gameLoop.Run(
         timestep.Paused = false;
 
         // The frame systems run on the time of this frame, whether or not the simulation advanced, so the interface and
-        // the overlays of this game keep working while the clock is paused.
+        // the overlays of this game keep working while the clock is paused. The fader of the audio is one of them: a fade
+        // that was asked for while the game was paused still runs, because the music is heard whether or not the world moves.
         world.UpdateFrame(time, pipeline);
 
         // The console reads the keys of this frame before the passes draw, and the numbers of a frame are read beside it. The
@@ -744,6 +886,14 @@ gameLoop.Run(
             if (input.IsKeyPressed(Key.Q))
             {
                 timestep.Paused = !timestep.Paused;
+
+                // The music keeps its pace whether the world runs or not, so the pause is heard rather than watched: the
+                // track is turned down while the game is paused and brought back when it resumes, which is what a game
+                // that stops the world but not the score does.
+                if (music.IsValid)
+                {
+                    fader.Fade(music, timestep.Paused ? 0.15f : 0.55f, 0.4f, TweenEasing.EaseInOut);
+                }
             }
 
             // Held rather than pressed: the factor is a live state of the clock, so holding the key slows the world down and
@@ -826,7 +976,7 @@ gameLoop.Run(
             (locale.Get("ui-entities", ("count", world.Enumerate().Count())), Color.White),
             ($"language {locale.Language} of {string.Join(", ", locale.Languages)}, {locale.Count} strings, {locale.Missing.Count()} that did not resolve", new Color(255, 220, 120)),
             ($"window {renderer.ViewportSize.X:0}x{renderer.ViewportSize.Y:0}, UI scale {canvasState.Scale:0.###} of {design.X:0}x{design.Y:0}, world {(fitWorld ? "fitted to the design area" : "one unit per pixel")}, canvas {canvasState.Resolution.X:0}x{canvasState.Resolution.Y:0} design units", new Color(255, 220, 120)),
-            ($"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, {clockText}, {spawnText}", Color.White),
+            ($"entities {world.Enumerate().Count()}, contacts {collisions.LastPairs.Count}, prototypes {prototypes.Count}, missing images {textures.MissingCount}, music {(music.IsValid ? "on" : "off")}, {clockText}, {spawnText}", Color.White),
         };
 
         // The lines of every entry are built first, because the whole block is drawn from its bottom line up: an entry that wraps
