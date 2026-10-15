@@ -244,6 +244,12 @@ public sealed class SilkDevWindowHost : IDevWindowHost
     }
 
     /// <summary>Presents a window of the operating system as the <see cref="IWindowService"/> the renderer attaches to, so the renderer makes its context current and measures the right surface.</summary>
+    /// <remarks>
+    /// The developer window is a second window and not the one a game plays in: it is never full screen, its vertical sync is off
+    /// because it is drawn on the frame the game pumps it rather than on a loop of its own, and it limits no frame rate because
+    /// the pace of its frames is the pace of the game. Its title is the one the window was created with, and the icon is the one
+    /// the window manager gives it.
+    /// </remarks>
     private sealed class HostWindowService(IWindow window) : IWindowService
     {
         public IWindow Window { get; } = window;
@@ -253,5 +259,35 @@ public sealed class SilkDevWindowHost : IDevWindowHost
         public void SetIcon(ReadOnlySpan<byte> pixels, int width, int height) => throw new NotSupportedException("This window service presents a window that already exists.");
 
         public void Close() => Window.Close();
+
+        public string Title
+        {
+            get => Window.Title;
+            set => Window.Title = value ?? string.Empty;
+        }
+
+        public bool Fullscreen
+        {
+            get => false;
+            set { }
+        }
+
+        public bool VSync
+        {
+            get => false;
+            set { }
+        }
+
+        public int FpsLimit
+        {
+            get => 0;
+            set { }
+        }
+
+        public int RefreshRate => 0;
+
+        public void Apply()
+        {
+        }
     }
 }

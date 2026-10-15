@@ -37,18 +37,45 @@ public sealed class SoundServiceTests
     }
 
     [Fact]
-    public void SoundService_Play_SendsTheSoundToTheDevice()
+    public void SoundService_Play_SendsTheSettingsToTheDevice()
     {
         var audio = new FakeAudioService();
         var sounds = new SoundService(new FakeSoundLoader(), audio);
         SoundHandle handle = sounds.Load("sfx/click.wav");
 
-        sounds.Play(handle, volume: 0.5f, loop: true);
+        var settings = new AudioPlaybackSettings
+        {
+            Volume = 0.5f,
+            Pitch = 1.25f,
+            Pan = -0.5f,
+            Loop = true,
+            Channel = AudioChannel.Music,
+            Priority = 7,
+        };
 
+        PlaybackHandle playback = sounds.Play(handle, settings);
+
+        playback.IsValid.Should().BeTrue();
         audio.Played.Should().HaveCount(1);
-        audio.Played[0].Id.Should().Be(handle.Id);
-        audio.Played[0].Volume.Should().Be(0.5f);
-        audio.Played[0].Loop.Should().BeTrue();
+        audio.Played[0].SoundId.Should().Be(handle.Id);
+        audio.Played[0].Settings.Volume.Should().Be(0.5f);
+        audio.Played[0].Settings.Pitch.Should().Be(1.25f);
+        audio.Played[0].Settings.Pan.Should().Be(-0.5f);
+        audio.Played[0].Settings.Loop.Should().BeTrue();
+        audio.Played[0].Settings.Channel.Should().Be(AudioChannel.Music);
+        audio.Played[0].Settings.Priority.Should().Be(7);
+    }
+
+    [Fact]
+    public void SoundService_Play_AnEmptyHandle_PlaysNothing()
+    {
+        var audio = new FakeAudioService();
+        var sounds = new SoundService(new FakeSoundLoader(), audio);
+
+        PlaybackHandle playback = sounds.Play(default, AudioPlaybackSettings.Default(AudioChannel.Effects));
+
+        playback.IsValid.Should().BeFalse();
+        audio.Played.Should().BeEmpty();
     }
 
     [Fact]
@@ -57,9 +84,61 @@ public sealed class SoundServiceTests
         var audio = new FakeAudioService();
         var sounds = new SoundService(new FakeSoundLoader(), audio);
 
-        sounds.Play(new SoundHandle(7));
+        // The number of a sound the device knows and no slot of this service: it plays nothing rather than reaching the
+        // device with a voice of its own.
+        var external = new SoundHandle(7);
 
+        PlaybackHandle playback = sounds.Play(external, AudioPlaybackSettings.Default(AudioChannel.Effects));
+
+        playback.IsValid.Should().BeFalse();
         audio.Played.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SoundService_APlaybackThatTookTheVoiceOfAnother_DoesNotResolveTheHandleOfIt()
+    {
+        // The pool holds one voice, so the second play takes the voice of the first, which is what the device does when
+        // every voice is busy and a playback of a higher priority is starting. The handle of the playback that was
+        // displaced does not resolve any more: a game that kept it writes nothing of the sound that took its voice, and
+        // a fade that was scheduled for it does not stop it.
+        var audio = new FakeAudioService { VoiceLimit = 1 };
+        var sounds = new SoundService(new FakeSoundLoader(), audio);
+
+        SoundHandle quiet = sounds.Load("sfx/quiet.wav");
+        SoundHandle loud = sounds.Load("sfx/loud.wav");
+
+        PlaybackHandle first = sounds.Play(quiet, new AudioPlaybackSettings { Volume = 1f, Channel = AudioChannel.Effects, Priority = 0 });
+        PlaybackHandle second = sounds.Play(loud, new AudioPlaybackSettings { Volume = 1f, Channel = AudioChannel.Music, Priority = 10 });
+
+        audio.IsAlive(first).Should().BeFalse("the voice of the quiet playback was taken, so its handle names no voice of the device");
+        audio.IsAlive(second).Should().BeTrue("the playback that took the voice is the one the device still holds");
+        audio.Stopped.Should().Contain(quiet.Id, "the displaced playback was stopped rather than left to be heard over the one that took its voice");
+
+        // What a game that kept the old handle does is nothing, rather than reaching the sound that took its voice.
+        audio.SetVolume(first, 0f);
+        audio.GetVolume(second).Should().Be(1f, "the volume of the playback that took the voice is not the one the old handle was told");
+
+        audio.Stop(first);
+        audio.IsAlive(second).Should().BeTrue("the old handle does not stop the playback that took its voice");
+    }
+
+    [Fact]
+    public void SoundService_APlaybackOfNoLowerPriorityThanEveryRunningOne_IsDropped()
+    {
+        // The pool holds one voice and the running playback is of a higher priority than the one that is starting, so no
+        // voice is taken and the request is dropped rather than a sound of the game being stopped to make room for it.
+        var audio = new FakeAudioService { VoiceLimit = 1 };
+        var sounds = new SoundService(new FakeSoundLoader(), audio);
+
+        SoundHandle loud = sounds.Load("sfx/loud.wav");
+        SoundHandle quiet = sounds.Load("sfx/quiet.wav");
+
+        PlaybackHandle kept = sounds.Play(loud, new AudioPlaybackSettings { Volume = 1f, Channel = AudioChannel.Music, Priority = 10 });
+        PlaybackHandle dropped = sounds.Play(quiet, new AudioPlaybackSettings { Volume = 1f, Channel = AudioChannel.Effects, Priority = 0 });
+
+        dropped.IsValid.Should().BeFalse("no running playback is of a lower priority, so there is no voice to take");
+        audio.IsAlive(kept).Should().BeTrue("the playback that was heard is not stopped for the one that was dropped");
+        audio.Stopped.Should().BeEmpty();
     }
 
     [Fact]
@@ -76,8 +155,9 @@ public sealed class SoundServiceTests
         sounds.IsAlive(handle).Should().BeFalse();
         sounds.Count.Should().Be(0);
         sounds.Unload(handle).Should().BeFalse();
-        Action play = () => sounds.Play(handle);
-        play.Should().NotThrow();
+
+        PlaybackHandle playback = sounds.Play(handle, AudioPlaybackSettings.Default(AudioChannel.Effects));
+        playback.IsValid.Should().BeFalse();
     }
 
     [Fact]
@@ -156,15 +236,19 @@ public sealed class SoundServiceTests
     [Fact]
     public void SoundService_WithTheNullDevice_LoadsAndPlaysWithoutADevice()
     {
-        // The null device reports no sound, which is the identifier that playing ignores.
+        // The null device reports no sound, which is the handle that every play of it ignores.
         var sounds = new SoundService(new FakeSoundLoader(), new NullAudioService());
 
         SoundHandle handle = sounds.Load("sfx/click.wav");
 
         handle.Id.Should().Be(0);
         sounds.IsAlive(handle).Should().BeTrue();
-        Action play = () => sounds.Play(handle);
-        play.Should().NotThrow();
+
+        // A device that discards every playback answers a handle that names none of its voices, which is what a fade of
+        // a sound that is not heard reads as "nothing to do".
+        PlaybackHandle playback = sounds.Play(handle, AudioPlaybackSettings.Default(AudioChannel.Effects));
+        playback.IsValid.Should().BeFalse();
+
         sounds.Unload(handle).Should().BeTrue();
     }
 
@@ -176,44 +260,6 @@ public sealed class SoundServiceTests
         {
             Calls++;
             return new SoundData(8000, 1, [1, 2, 3, 4]);
-        }
-    }
-
-    private sealed class FakeAudioService : IAudioService
-    {
-        public List<int> Created { get; } = [];
-        public List<int> Deleted { get; } = [];
-        public List<(int Id, float Volume, bool Loop)> Played { get; } = [];
-        public SoundData? LastSound { get; private set; }
-        public Func<int, bool>? FailDelete { get; set; }
-
-        public int CreateSound(SoundData sound)
-        {
-            LastSound = sound;
-
-            int id = Created.Count + 1;
-            Created.Add(id);
-            return id;
-        }
-
-        public void DeleteSound(int soundId)
-        {
-            Deleted.Add(soundId);
-
-            if (FailDelete?.Invoke(soundId) == true)
-            {
-                throw new InvalidOperationException($"The device refused to delete sound {soundId}.");
-            }
-        }
-
-        public void PlaySound(int soundId, float volume = 1f, bool loop = false) => Played.Add((soundId, volume, loop));
-
-        public void StopAll()
-        {
-        }
-
-        public void SetMasterVolume(float volume)
-        {
         }
     }
 }

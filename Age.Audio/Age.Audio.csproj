@@ -15,4 +15,8 @@
     <ProjectReference Include="..\Age.Core\Age.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Age.Tests" />
+  </ItemGroup>
+
 </Project>
