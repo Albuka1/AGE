@@ -33,6 +33,11 @@ public static class SystemRegistrationExtensions
     /// different call, and registering one twice would hand the registry the same components a second time.
     /// </para>
     /// <para>
+    /// A type that the container already holds is left alone, so a host that names an assembly twice, or that calls
+    /// this one method from two of its own, does not hand the container the same system a second time: a second
+    /// descriptor of one type is what makes every <c>IEnumerable&lt;ISystem&gt;</c> of it hold the same object twice.
+    /// </para>
+    /// <para>
     /// An assembly that cannot be read whole is read as far as it can be: a type that failed to load is a type that no
     /// system of a game names, and reading the rest of them is what keeps a broken reference in one assembly from
     /// taking the systems of another with it.
@@ -48,6 +53,11 @@ public static class SystemRegistrationExtensions
             foreach (Type type in Types(assembly))
             {
                 if (!IsSystem(type, out SystemAttribute? attribute, out List<Type> interfaces))
+                {
+                    continue;
+                }
+
+                if (services.Any(descriptor => descriptor.ServiceType == type))
                 {
                     continue;
                 }
@@ -73,9 +83,15 @@ public static class SystemRegistrationExtensions
     /// <returns>The services, so that several calls are one line.</returns>
     /// <exception cref="ArgumentNullException">The services or the assemblies are null.</exception>
     /// <remarks>
+    /// <para>
     /// A class that implements <see cref="IComponentRegistrations"/> is registered when it carries
     /// <see cref="ComponentRegistrationAttribute"/>, because the interface alone is what a test implements to pin a
     /// component down, and a scan has no way to tell the two apart.
+    /// </para>
+    /// <para>
+    /// A registration that is already there is not added again, because the same set of registrations run twice is what
+    /// makes a component appear under one name twice in the registry of a scene.
+    /// </para>
     /// </remarks>
     public static IServiceCollection AddAgeComponentRegistrations(this IServiceCollection services, params Assembly[] assemblies)
     {
@@ -97,6 +113,11 @@ public static class SystemRegistrationExtensions
                 }
 
                 if (!typeof(IComponentRegistrations).IsAssignableFrom(type))
+                {
+                    continue;
+                }
+
+                if (services.Any(descriptor => descriptor.ServiceType == typeof(IComponentRegistrations) && descriptor.ImplementationType == type))
                 {
                     continue;
                 }
