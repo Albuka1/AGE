@@ -18,6 +18,7 @@ namespace Age.Core;
 /// and not the systems.
 /// </para>
 /// </remarks>
+[SystemInterface]
 public interface ISystem
 {
     /// <summary>Gets or sets a value indicating whether the pipeline runs the system.</summary>

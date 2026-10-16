@@ -20,6 +20,7 @@ namespace Age.Core;
 /// and serializes whatever touches the same world from another thread.
 /// </para>
 /// </remarks>
+[System]
 public sealed class SystemPipeline
 {
     private readonly List<ISystem> _systems = new();
@@ -59,8 +60,6 @@ public sealed class SystemPipeline
 
         foreach (ISystem system in _systems)
         {
-            // A system that is switched off is skipped rather than called and ignored: a paused menu and a developer overlay
-            // turn a rule off with this, and a rule that is off should cost a property read and nothing else.
             if (!system.Enabled)
             {
                 continue;
@@ -74,8 +73,6 @@ public sealed class SystemPipeline
             }
             finally
             {
-                // The time is recorded even when the system throws: a system that failed still spent time, and the
-                // overlay of a developer is exactly where that has to be visible.
                 _stepTimings.Add(new SystemTiming(system.GetType().Name, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
             }
         }
@@ -91,7 +88,6 @@ public sealed class SystemPipeline
 
         foreach (IFrameSystem system in _frameSystems)
         {
-            // A frame system is switched off the same way a step system is, so an interface that is hidden does not draw itself.
             if (!system.Enabled)
             {
                 continue;

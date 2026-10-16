@@ -33,6 +33,7 @@ namespace Age.Content.Prototypes;
 ///       value: 4.0
 /// </code>
 /// </example>
+[PrototypeKind(MaterialPrototype.Kind)]
 public sealed class MaterialPrototype : IPrototype
 {
     /// <summary>The word that a document writes in its <c>type</c> field to declare a material.</summary>

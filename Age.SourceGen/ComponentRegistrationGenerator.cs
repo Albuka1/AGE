@@ -199,6 +199,7 @@ public sealed class ComponentRegistrationGenerator : IIncrementalGenerator
         registrations.AppendLine();
         registrations.Append("namespace ").AppendLine(options.Namespace);
         registrations.AppendLine("{");
+        registrations.AppendLine("    [global::Age.Core.ComponentRegistration]");
         registrations.Append("    internal sealed class ").Append(options.RegistrationsName).AppendLine(" : global::Age.Core.IComponentRegistrations");
         registrations.AppendLine("    {");
         registrations.AppendLine("        public void Register(global::Age.Core.ComponentRegistry registry)");

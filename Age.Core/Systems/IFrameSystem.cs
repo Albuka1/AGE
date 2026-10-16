@@ -25,6 +25,7 @@ namespace Age.Core;
 ///     render: frame => world.UpdateFrame(frame, pipeline));
 /// </code>
 /// </example>
+[SystemInterface]
 public interface IFrameSystem
 {
     /// <summary>Gets or sets a value indicating whether the pipeline runs the system.</summary>

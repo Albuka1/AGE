@@ -3,6 +3,7 @@ namespace Age.Core;
 /// <summary>
 /// Sorts lists by an integer key while preserving the relative order of equal keys.
 /// </summary>
+[System]
 public sealed class SpriteSorter
 {
     /// <summary>

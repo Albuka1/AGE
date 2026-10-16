@@ -25,13 +25,20 @@ public static class ContentServiceCollectionExtensions
     public static IServiceCollection AddAgeContent(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // The manager is registered once as the concrete type, because its constructor takes the registry and a game
+        // fills it in a loading step. The interface is a factory over that registration, so a system that reads the
+        // content and a host that loads it reach the same manager without the container holding two of them.
         services.AddSingleton(provider => new PrototypeManager(provider.GetRequiredService<ComponentRegistry>()));
+        services.AddSingleton<IPrototypeManager>(provider => provider.GetRequiredService<PrototypeManager>());
+
         services.AddSingleton(provider => new SpawnService(provider.GetRequiredService<PrototypeManager>(), provider.GetRequiredService<ComponentRegistry>()));
         services.AddSingleton<IPrototypeSource>(provider => provider.GetRequiredService<SpawnService>());
         services.AddSingleton<ILocaleService>(provider => new LocaleService(
             provider.GetRequiredService<Age.Assets.IAssetLoader>(),
             provider.GetService<Microsoft.Extensions.Logging.ILogger<LocaleService>>()));
         services.AddSingleton<ITextSource>(provider => new LocaleTextSource(provider.GetRequiredService<ILocaleService>()));
+
         return services;
     }
 }
