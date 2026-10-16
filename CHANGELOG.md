@@ -47,6 +47,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to a contact reads the world as the step left it rather than as the pair was built. `CollisionEvent` gained
   `IsTrigger`, which says whether the pair holds a zone or a body.
 
+- A window of a game can be a picture of its own with zones over it: `UiBuilder.Zone` builds a rectangle that
+  answers the pointer and draws nothing, `UiBuilder.Group` builds a rectangle that holds elements and is not
+  drawn at all, and a panel and a button carry the colour and the thickness of a frame of their own
+  (`PanelComponent.BorderColor` and `BorderThickness`, `ButtonComponent.BorderColor` and `BorderThickness`,
+  written through `PanelHandle.Border(...)` and `ButtonHandle.Border(...)`). The caption of a label and of a
+  button takes a size, a colour, a font, an alignment and a wrapping through the handle that built it, and
+  `UIRenderSystem` skips a rectangle of no alpha, so what a game that draws its own art writes of an element
+  is what the pass of the interface does not draw: a zone over a picture costs nothing of the frame beyond
+  the walk over the elements it is not drawn for.
+
+- `ScrollState` is the bar of a page of the developer window, and it answers whether it took the pointer of
+  the frame: a drag of the thumb follows the pointer whatever the button does between them, a press on the
+  track beside the thumb centres it under the pointer, and the drag ends on the frame the button comes up. The
+  four pages of the window that hold a list of rows — the tree of the interface, the images, the prototypes and
+  the console — read and draw through it, and the tree page folds a row with the markers a person reads a tree
+  with: a tee for the last of the branches, an elbow for the rest, and a marker of the colour of an accent for
+  the rows that open.
+
+- `Age.Roguelike.Battle.Ui.BattleHudWindow` is the HUD of a battle as a window of the interface: the card of
+  the player at the top of the left column, the list of weapons under it, the button that ends their turn at
+  the bottom of that column and the queue of turns at the right edge of the frame stand in one window and read
+  the fight on every frame, in place of the four hand-drawn passes that drew them before. A click on a slot of
+  the queue asks the camera to look at the unit through `BattleView.FocusRequest`, and the frame of a slot is
+  the frame of its button, which is what tells a player from an enemy and shows whose turn it is.
+
 ### Changed
 
 - Every extension of an engine assembly reads its own assembly: `AddAgeCore`, `AddAgeRendering`, `AddAgePhysics`
@@ -80,6 +105,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CollisionComponent` is no longer a component a document writes: it is what a step left on an entity, and a
   scene that wrote one would be writing the contact of a frame that has passed. What a document names is
   `ColliderComponent`, which says where a box is and what it does with the world.
+
+- **Breaking:** the wheel is gone from the interface of a developer window. `WindowPointer` no longer carries
+  it, `IDevWindowHost.Wheel` is removed with the property of every host that answered it, and `ScrollState`
+  reads a drag of its bar rather than a wheel: what a device reports in whatever unit it likes — Windows in
+  hundreds, X11 in ones, Wayland and a touchpad in fractions of one — is not what a list of rows wants, and a
+  page that read the fraction of a single frame scrolled nothing until a person turned the wheel hard enough
+  for the fraction to reach a whole row. A list of a thousand rows is dragged by the bar beside it, and a
+  person who is reading further back is not carried away from the row they are on by a line the game writes in
+  the meantime.
+
+- **Breaking:** `UiWindowService` belongs to one world. Every map of it is a set of entity identifiers that
+  name nothing outside the world that created them, so a window that a service of a world is asked to open in
+  another one is refused rather than read through, which is what a game that keeps its windows across a scene
+  load needs to hear before its buttons reach the wrong entities. A game that runs two worlds at once creates
+  a service of its own for the world that is there now.
+
+- The panel and the button of the engine read the alpha of their own colour, and a rectangle of no alpha is
+  not drawn at all: a picture that a game draws by hand is not covered by the faces of the zones that stand
+  over it, and what a person sees of such a window is what the picture shows. The frame of an element is a
+  colour and a thickness of its own, so a slot of a card that is drawn by the game is a zone that writes
+  where its edge is rather than a second panel that draws the whole of its rectangle.
+
+- `UIUpdateSystem` reports through `UIInputFrame` the press that the buttons and the check boxes take, and the
+  controls that follow in the same frame read what it says rather than the pointer: one press does one thing,
+  and a press that reached a control is not a press that reaches the controls behind it. A drag of a slider
+  that is already under way is still followed on a frame that another control took a click on, because what a
+  frame says is whether an interaction begins rather than whether the pointer is read.
+
+### Fixed
+
+- A press that reached one control of the interface reached the ones behind it as well: a check box that a
+  click ticked also began a drag of a slider it covered, and a button that a click pressed was read by the
+  controls that follow it in the same frame, so one click did three things. What the frame says through
+  `UIInputFrame.Consumed` is what the controls after the one that took the click read now, and the controls
+  that did not take the press report hover without beginning an interaction of their own.
+
+- The drop-downs of a window read a list that was open and whose root was hidden as though a person were
+  looking at it: a press on a visible button behind such a list was read as a press on the list rather than on
+  the button, and a list that the pass of the interface drew nothing of took the click of the frame. What a
+  frame reads against a press is the drop-down that the pass of the interface drew, which is what
+  `IsEffectivelyVisible` answers for every other control of the frame.
+
+- The hit test of the interface read an element whose root was hidden as one the pointer is over, so the
+  buttons of a window that was closed won the tie of two ZOrders against the buttons of the one in front of
+  it — a hidden window that was built later is the window that takes the tie — and a hover was reported on a
+  button that the pass of the interface drew nothing of. A walk up the tree of the element is what says
+  whether a control is under the pointer, which is what the pass of the interface draws.
+
+- The click-routing of the developer window read the cursor of the frame that read the events rather than the
+  click that arrived in it, so a press that landed on a tab and moved the mouse away before the frame read
+  the pointer fell through to the page under it, and a press that landed on the page and moved the cursor over
+  the title bar by the time the frame read the pointer was handled as a press on the window. What tells a
+  click of the page from a click of the window is where the click landed, and where the cursor stands is what
+  the drag of a selection is read with.
+
+- The bar of a page of the developer window answered nothing, so a drag of it also chose the row that stood
+  under the pointer: a console copied a line to the clipboard and a tree folded a row, both on the same press,
+  and a person who began a drag of the bar dragged the list and chose a row at once. The bar says what it took
+  of the frame now, and a page that reads the return ends its read on that answer before it acts on the row
+  under the pointer.
+
+- A window of the interface whose root a scene destroyed left the elements it built behind it, because the map
+  of the window was forgotten with the root: the elements stayed in the world and named a window that no longer
+  held them, and a window that was opened again built a second tree beside the first. What a close walks is the
+  map of the window, whether the root is alive or not, so a window that a scene took apart is closed the way a
+  window whose root is there is closed.
+
+- A window of a battle was four hand-drawn passes that drew what the interface of the game already knew how to
+  draw in a tree — the status panel, the weapon panel, the button of the turn and the queue of turns — and
+  every one of them drew in the pixels of the frame what a window of the interface draws through a component.
+  The four panels stand in one window now, and what the pass of the battle drew is what the pass of the
+  interface draws for every window of the game.
 
 ## [0.5.0] - 2026-10-15
 
