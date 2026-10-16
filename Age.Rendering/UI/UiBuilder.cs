@@ -26,6 +26,12 @@ namespace Age.Rendering;
 /// group is not an element of the pass at all, so a window that only wants to place elements against a rectangle uses
 /// the group and keeps the pass from drawing a rectangle of no colour.
 /// </para>
+/// <para>
+/// A zone is what a game reaches for when the interface of a window is a picture of its own: it is an element that is
+/// laid out and takes the pointer like every other one, and the frame that draws it draws nothing, because the face of a
+/// button with no alpha and the frame of one with no colour are the two that a pass skips. What a person sees of such a
+/// window is the picture under the zones rather than the faces of them.
+/// </para>
 /// </remarks>
 public sealed class UiBuilder
 {
@@ -178,6 +184,54 @@ public sealed class UiBuilder
     {
         ArgumentNullException.ThrowIfNull(configure);
         ButtonHandle handle = Button(id);
+        configure(handle);
+        return handle;
+    }
+
+    /// <summary>Creates a rectangle that answers the pointer and draws nothing, which is what a zone over a picture of the interface is.</summary>
+    /// <param name="id">The name of the element inside the window.</param>
+    /// <returns>The handle of the zone.</returns>
+    /// <exception cref="ArgumentException">The name is null, empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The window already holds an element of that name.</exception>
+    /// <remarks>
+    /// A zone is what a game reaches for when the interface of a window is a picture of its own: an image, a card, a portrait
+    /// drawn as a sprite of the world rather than as a rectangle of the interface, and the zones stand over it to say what a
+    /// click on each part of it is. The element is laid out and takes the pointer like every other one of the interface, and
+    /// the frame that draws it draws nothing, because the face of a button with no alpha and the frame of one with no colour
+    /// are the two that a pass skips.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // The card of a character is a picture of its own, and the three zones over it are what a person presses:
+    /// ui.Image("character").Source("Textures/Ui/character-card.png").At(0f, 0f).Size(400f, 200f);
+    ///
+    /// ui.Zone("head").At(20f, 20f).Size(80f, 80f).OnClick(() => Select(Slot.Head));
+    /// ui.Zone("hands").At(20f, 100f).Size(80f, 40f).OnClick(() => Select(Slot.Hands));
+    /// ui.Zone("belt").At(300f, 100f).Size(80f, 40f).OnClick(() => Select(Slot.Belt));
+    /// </code>
+    /// </example>
+    public ButtonHandle Zone(string id)
+    {
+        Entity entity = Add(id, Parent);
+        _world.Set(entity, new ButtonComponent
+        {
+            BaseColor = new Color(0, 0, 0) { A = 0 },
+            BorderColor = new Color(0, 0, 0) { A = 0 },
+            BorderThickness = 0,
+            Interactable = true,
+        });
+
+        return new ButtonHandle(this, _world, entity);
+    }
+
+    /// <summary>Creates a zone under the current parent, configured by the caller.</summary>
+    /// <param name="id">The name of the element inside the window.</param>
+    /// <param name="configure">The moves that place the zone and set what a press of it does.</param>
+    /// <returns>The handle of the zone.</returns>
+    public ButtonHandle Zone(string id, Action<ButtonHandle> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        ButtonHandle handle = Zone(id);
         configure(handle);
         return handle;
     }

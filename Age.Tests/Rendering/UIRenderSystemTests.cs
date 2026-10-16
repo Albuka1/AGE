@@ -77,6 +77,88 @@ public sealed class UIRenderSystemTests
         renderer.Rectangles.Should().BeEmpty();
     }
 
+    [Fact]
+    public void UIRenderSystem_APanelOfNoAlpha_IsNotDrawn()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var system = new UIRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer));
+        Entity panel = world.CreateEntity();
+        world.Set(panel, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(100f, 50f), Visible = true });
+        world.Set(panel, new PanelComponent { Color = new Color(0, 0, 0) { A = 0 } });
+
+        system.Render(world, Camera());
+
+        renderer.Rectangles.Should().BeEmpty("a rectangle of no alpha is nothing a person sees, which is what a zone is");
+    }
+
+    [Fact]
+    public void UIRenderSystem_AButtonOfNoAlpha_IsNotDrawn()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var system = new UIRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer));
+        Entity zone = world.CreateEntity();
+        world.Set(zone, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(100f, 100f), Visible = true });
+        world.Set(zone, new ButtonComponent
+        {
+            BaseColor = new Color(0, 0, 0) { A = 0 },
+            BorderColor = new Color(0, 0, 0) { A = 0 },
+            BorderThickness = 0,
+            Interactable = true,
+        });
+
+        system.Render(world, Camera());
+
+        renderer.Rectangles.Should().BeEmpty("the face of a zone and the frame of it are both nothing to draw");
+        renderer.BuiltIn.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void UIRenderSystem_APanelWithAFrameAndNoFill_DrawsTheFrameAlone()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var system = new UIRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer));
+        Entity panel = world.CreateEntity();
+        world.Set(panel, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(100f, 50f), Visible = true });
+        world.Set(panel, new PanelComponent
+        {
+            Color = new Color(0, 0, 0) { A = 0 },
+            BorderColor = Color.White,
+            BorderThickness = 1,
+        });
+
+        system.Render(world, Camera());
+
+        // The fill is skipped, and the frame is what is left: a panel that draws an edge over the picture under it, which is
+        // what a slot of a card that is drawn by the game is.
+        renderer.Rectangles.Should().HaveCount(4, "a frame is four rectangles and there is no fill behind them");
+    }
+
+    [Fact]
+    public void UIRenderSystem_AButtonOfNoAlphaWithAFrame_DrawsTheFrameAlone()
+    {
+        var world = new World();
+        var renderer = new RecordingRenderer();
+        var system = new UIRenderSystem(renderer, new SpriteSorter(), new TextRenderer(renderer));
+        Entity slot = world.CreateEntity();
+        world.Set(slot, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(64f, 64f), Visible = true });
+        world.Set(slot, new ButtonComponent
+        {
+            BaseColor = new Color(0, 0, 0) { A = 0 },
+            BorderColor = Color.White,
+            BorderThickness = 2,
+            Interactable = true,
+        });
+
+        system.Render(world, Camera());
+
+        // A slot of a card is a zone that says where its edge is: the face of it draws nothing, and what a person sees of the
+        // slot is the frame over the picture under it.
+        renderer.Rectangles.Should().HaveCount(4);
+    }
+
     private static Entity CreateLabel(World world, string text, Vector2 size, TextStyle style = default, Vector2 box = default, bool visible = true)
     {
         Entity entity = world.CreateEntity();

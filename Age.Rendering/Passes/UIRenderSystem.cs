@@ -8,11 +8,19 @@ namespace Age.Rendering;
 /// <see cref="ISystem"/>; a <see cref="RenderPipeline"/> runs it as a pass, after the pass of the world.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Elements come from every entity that has a <see cref="RectTransformComponent"/> together with a component of the
 /// interface. They are sorted by <see cref="RectTransformComponent.ZOrder"/> with a stable sort, so elements that share
 /// a ZOrder keep their entity order. An element is drawn only when it and every ancestor of it are visible, which is what
 /// a window hides a whole tree with. Add this pass after the pass of the world, because the system installs a
 /// screen-space camera of its own and ignores the camera it is handed: the UI does not move with the world camera.
+/// </para>
+/// <para>
+/// A rectangle of no alpha is a rectangle that nothing is drawn for, which is what a zone is: an element that stands in the
+/// tree of the interface, is laid out and takes the pointer, and draws nothing of its own. What a person sees of such a
+/// window is the picture under the zones rather than the faces of them, and the pass costs nothing of the zones but the
+/// walk over the elements it does not draw.
+/// </para>
 /// </remarks>
 public sealed class UIRenderSystem : IRenderPass
 {
@@ -83,7 +91,14 @@ public sealed class UIRenderSystem : IRenderPass
             {
                 PanelComponent panel = world.Get<PanelComponent>(item.Entity);
 
-                _renderer.DrawRectangle(box, panel.Color);
+                // A rectangle of no alpha is what a zone is: an element that stands in the tree of the interface, is laid out
+                // and takes the pointer, but is nothing a person sees. The draw is skipped rather than handed a transparent
+                // colour, which is what a zone costs over a card that has nothing behind it.
+                if (panel.Color.A != 0)
+                {
+                    _renderer.DrawRectangle(box, panel.Color);
+                }
+
                 DrawBorder(box, panel.BorderColor, panel.BorderThickness);
             }
 
@@ -102,7 +117,13 @@ public sealed class UIRenderSystem : IRenderPass
             {
                 ButtonComponent button = world.Get<ButtonComponent>(item.Entity);
 
-                _renderer.DrawRectangle(box, button.BaseColor);
+                // The face of a button is what a card draws, and a zone that draws nothing is a button whose face has no alpha:
+                // the element stays in the tree, the pointer is what it answers, and the frame that draws it has nothing to draw.
+                if (button.BaseColor.A != 0)
+                {
+                    _renderer.DrawRectangle(box, button.BaseColor);
+                }
+
                 DrawBorder(box, button.BorderColor, button.BorderThickness);
             }
 
@@ -163,7 +184,8 @@ public sealed class UIRenderSystem : IRenderPass
     /// <remarks>
     /// The frame is four rectangles rather than a rounded rectangle or a picture, because the rectangle is what the
     /// renderer draws and the interface of the engine is drawn from rectangles alone. It is drawn inside the box of the
-    /// element rather than beside it, so an element that grows a frame keeps the room it was given.
+    /// element rather than beside it, so an element that grows a frame keeps the room it was given. A frame of no alpha
+    /// is not drawn at all, which is what a zone that has no edge of its own costs.
     /// </remarks>
     private void DrawBorder(Rect box, Color color, int thickness)
     {

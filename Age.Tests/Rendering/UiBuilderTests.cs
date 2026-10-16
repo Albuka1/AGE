@@ -178,6 +178,40 @@ public sealed class UiBuilderTests
         rect.Visible.Should().BeFalse("a window that hides a piece of itself reads that back from the element");
     }
 
+    [Fact]
+    public void UiBuilder_AZone_AnswersThePointerAndDrawsNothing()
+    {
+        var world = new World();
+        var ui = new UiBuilder(world, CreateCanvas(world));
+        Entity zone = ui.Zone("head").At(20f, 30f).Size(80f, 60f).Entity;
+
+        // A zone is a button whose face and frame have no alpha, which is what a pass of the interface skips: the element is
+        // laid out and takes the pointer like every other one, and the frame that draws it draws nothing of its own.
+        world.Has<ButtonComponent>(zone).Should().BeTrue();
+        world.Get<ButtonComponent>(zone).Interactable.Should().BeTrue("a zone takes the pointer like every other button of the interface");
+        world.Get<ButtonComponent>(zone).BaseColor.A.Should().Be(0, "the face of a zone draws nothing");
+        world.Get<ButtonComponent>(zone).BorderColor.A.Should().Be(0, "the frame of a zone draws nothing");
+        world.Get<ButtonComponent>(zone).BorderThickness.Should().Be(0, "a zone has no frame at all");
+        world.Has<TextComponent>(zone).Should().BeFalse("a zone carries no words of its own");
+        world.Get<RectTransformComponent>(zone).AnchoredPosition.Should().Be(new Vector2(20f, 30f));
+        world.Get<RectTransformComponent>(zone).SizeDelta.Should().Be(new Vector2(80f, 60f));
+    }
+
+    [Fact]
+    public void UiBuilder_AZone_RemembersWhatAPressDoes()
+    {
+        var world = new World();
+        var ui = new UiBuilder(world, CreateCanvas(world));
+        var pressed = 0;
+        ButtonHandle zone = ui.Zone("head").At(0f, 0f).Size(80f, 60f).OnClick(() => pressed++);
+
+        // What a press of a zone does is what a press of a button does: the handle that answers is the same one.
+        ui.Clicks.Should().ContainKey(zone.Entity);
+        ui.Clicks[zone.Entity]();
+
+        pressed.Should().Be(1);
+    }
+
     private static Entity CreateCanvas(World world)
     {
         Entity canvas = world.CreateEntity();
