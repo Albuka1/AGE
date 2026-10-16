@@ -64,16 +64,29 @@ public sealed class UiWindowService : IFrameSystem
     /// <exception cref="InvalidOperationException">No window of the game names that identifier, or the world is not the one this service belongs to.</exception>
     /// <remarks>
     /// A window that is already open is left alone, so a game that opens the window it holds does not build it twice. A
-    /// window whose description throws is taken back out of the canvas here rather than being left as a root that no map
-    /// names, so a failed open leaves nothing behind for the next frame to draw.
+    /// window whose root is gone — one a scene replaced, or one a game destroyed without closing it — is closed here
+    /// first: what a window leaves behind is the map of its elements and the handlers of its buttons, and the map is about
+    /// to be written with the elements of the new window, so a handler of the window before would be reached by a press
+    /// that no window answers and would never be removed by anything. A window whose description throws is taken back out
+    /// of the canvas here rather than being left as a root that no map names, so a failed open leaves nothing behind for
+    /// the next frame to draw.
     /// </remarks>
     public Entity Open(World world, string id)
     {
         world = Own(world);
 
-        if (_open.TryGetValue(id, out Entity existing) && world.IsAlive(existing))
+        if (_open.TryGetValue(id, out Entity existing))
         {
-            return existing;
+            if (world.IsAlive(existing))
+            {
+                return existing;
+            }
+
+            // The root of the window that was open is gone, and the id is about to name a root of its own: the window
+            // of the frame before is closed here rather than overwritten, which is what takes its element map and its
+            // click handlers away with it. `Close` finds the entry it reads in `_open`, so it does the cleanup and skips
+            // the destroy, because there is no entity left to destroy.
+            Close(world, id);
         }
 
         IUiWindow? window = Find(id)
