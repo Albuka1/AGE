@@ -108,12 +108,18 @@ public sealed class UiBuilder
     /// <remarks>
     /// A button carries a text of its own, centred in the box of its rectangle, which is what <see cref="ButtonHandle.Text"/>
     /// writes: a button that names no text of its own is drawn as a face of a colour, and one that writes a caption draws
-    /// the caption over that face.
+    /// the caption over that face. The face is given a visible colour here, because the default of the structure is
+    /// transparent and a button that never writes one would be drawn as nothing: a window that wants another colour
+    /// changes it with <see cref="ButtonHandle.Color"/>.
     /// </remarks>
     public ButtonHandle Button(string id)
     {
         Entity entity = Add(id, Parent);
-        _world.Set(entity, new ButtonComponent { Interactable = true });
+        _world.Set(entity, new ButtonComponent
+        {
+            BaseColor = new Color(44, 48, 60),
+            Interactable = true,
+        });
         _world.Set(entity, new TextComponent
         {
             Style = new TextStyle

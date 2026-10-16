@@ -19,6 +19,11 @@ namespace Age.Rendering;
 /// the boundary of the step, and a window that is opened again builds its elements again. What a window keeps between
 /// two opens is what a game puts on the class of the window itself, which is what a class with an interface is for.
 /// </para>
+/// <para>
+/// The service belongs to the first world it is handed, because every map it holds is a set of entity identifiers that
+/// name nothing outside the world that created them: another world is refused rather than read through, which is what a
+/// game that keeps its windows across a scene load needs to hear about before its buttons reach the wrong entities.
+/// </para>
 /// </remarks>
 [System]
 public sealed class UiWindowService : IFrameSystem
@@ -30,6 +35,9 @@ public sealed class UiWindowService : IFrameSystem
 
     private Entity _canvas;
     private World? _subscribed;
+
+    /// <summary>Gets the world this service belongs to, which is the first one it was called with, or null before any call.</summary>
+    private World? _owner;
 
     /// <summary>Initializes the service with every window the container holds.</summary>
     /// <param name="windows">The windows, which a scan of an assembly fills from what its classes say.</param>
@@ -53,11 +61,15 @@ public sealed class UiWindowService : IFrameSystem
     /// <param name="id">The identifier of the window, as the class of it says.</param>
     /// <returns>The entity of the root panel of the window.</returns>
     /// <exception cref="ArgumentNullException">The world is null.</exception>
-    /// <exception cref="InvalidOperationException">No window of the game names that identifier.</exception>
-    /// <remarks>A window that is already open is left alone, so a game that opens the window it holds does not build it twice.</remarks>
+    /// <exception cref="InvalidOperationException">No window of the game names that identifier, or the world is not the one this service belongs to.</exception>
+    /// <remarks>
+    /// A window that is already open is left alone, so a game that opens the window it holds does not build it twice. A
+    /// window whose description throws is taken back out of the canvas here rather than being left as a root that no map
+    /// names, so a failed open leaves nothing behind for the next frame to draw.
+    /// </remarks>
     public Entity Open(World world, string id)
     {
-        ArgumentNullException.ThrowIfNull(world);
+        world = Own(world);
 
         if (_open.TryGetValue(id, out Entity existing) && world.IsAlive(existing))
         {
@@ -71,7 +83,25 @@ public sealed class UiWindowService : IFrameSystem
         Subscribe(world);
 
         var builder = new UiBuilder(world, canvas);
-        window.Build(builder);
+
+        try
+        {
+            window.Build(builder);
+        }
+        catch
+        {
+            // The root of the builder is linked into the canvas before the window describes anything, so a window that
+            // threw halfway through would leave a root that no `_open` entry names: the canvas would then hold a piece of
+            // an interface with no window behind it. The two calls below are the ones a close makes, so the failed build
+            // leaves exactly what a window that was never opened leaves.
+            if (world.IsAlive(builder.Root.Entity))
+            {
+                Detach(world, builder.Root.Entity);
+                DestroyTree(world, builder.Root.Entity);
+            }
+
+            throw;
+        }
 
         _open[id] = builder.Root.Entity;
         _elements[id] = new Dictionary<string, Entity>(builder.Elements, StringComparer.Ordinal);
@@ -88,10 +118,16 @@ public sealed class UiWindowService : IFrameSystem
     /// <param name="world">The world the window stands in.</param>
     /// <param name="id">The identifier of the window.</param>
     /// <exception cref="ArgumentNullException">The world is null.</exception>
-    /// <remarks>A window that is not open is left alone, so a game that closes the window it does not hold writes nothing.</remarks>
+    /// <exception cref="InvalidOperationException">The world is not the one this service belongs to.</exception>
+    /// <remarks>
+    /// A window that is not open is left alone, so a game that closes the window it does not hold writes nothing. The
+    /// root of a window that is closed is taken out of the list of its parent before it is destroyed, because a parent
+    /// that still lists it would keep a name that resolves to nothing: a window that is toggled in a loop would then
+    /// grow one such entry on the canvas on every close.
+    /// </remarks>
     public void Close(World world, string id)
     {
-        ArgumentNullException.ThrowIfNull(world);
+        world = Own(world);
 
         if (!_open.TryGetValue(id, out Entity root))
         {
@@ -110,6 +146,7 @@ public sealed class UiWindowService : IFrameSystem
 
         if (world.IsAlive(root))
         {
+            Detach(world, root);
             DestroyTree(world, root);
         }
     }
@@ -118,8 +155,11 @@ public sealed class UiWindowService : IFrameSystem
     /// <param name="world">The world the window stands in.</param>
     /// <param name="id">The identifier of the window.</param>
     /// <exception cref="ArgumentNullException">The world is null.</exception>
+    /// <exception cref="InvalidOperationException">The world is not the one this service belongs to.</exception>
     public void Toggle(World world, string id)
     {
+        world = Own(world);
+
         if (IsOpen(id))
         {
             Close(world, id);
@@ -133,9 +173,10 @@ public sealed class UiWindowService : IFrameSystem
     /// <summary>Closes every window that is open.</summary>
     /// <param name="world">The world the windows stand in.</param>
     /// <exception cref="ArgumentNullException">The world is null.</exception>
+    /// <exception cref="InvalidOperationException">The world is not the one this service belongs to.</exception>
     public void CloseAll(World world)
     {
-        ArgumentNullException.ThrowIfNull(world);
+        world = Own(world);
 
         foreach (string id in _open.Keys.ToArray())
         {
@@ -148,9 +189,11 @@ public sealed class UiWindowService : IFrameSystem
     /// <param name="windowId">The identifier of the window.</param>
     /// <param name="elementId">The name the element was built under.</param>
     /// <returns>The entity of the element, or null.</returns>
+    /// <exception cref="ArgumentNullException">The world is null.</exception>
+    /// <exception cref="InvalidOperationException">The world is not the one this service belongs to.</exception>
     public Entity? Find(World world, string windowId, string elementId)
     {
-        ArgumentNullException.ThrowIfNull(world);
+        world = Own(world);
 
         if (!_elements.TryGetValue(windowId, out Dictionary<string, Entity>? map))
         {
@@ -167,7 +210,7 @@ public sealed class UiWindowService : IFrameSystem
     /// </remarks>
     public void UpdateFrame(World world, in GameTime frame)
     {
-        ArgumentNullException.ThrowIfNull(world);
+        world = Own(world);
 
         if (_open.Count == 0)
         {
@@ -188,6 +231,37 @@ public sealed class UiWindowService : IFrameSystem
                 window.Update(new UiWindowContext(world, this, id, canvas));
             }
         }
+    }
+
+    /// <summary>Returns the world this service belongs to, recording it on the first call and refusing any other one.</summary>
+    /// <param name="world">The world a caller is about to read or write through.</param>
+    /// <returns>The world, which is the one the service was first called with.</returns>
+    /// <exception cref="ArgumentNullException">The world is null.</exception>
+    /// <exception cref="InvalidOperationException">The world is not the one this service belongs to.</exception>
+    /// <remarks>
+    /// Every map of this service holds entity identifiers, and an identifier names an entity of the world that created
+    /// it and nothing of another one: a service that read a second world through the same maps would open its windows
+    /// on the canvas of the first and find the buttons of entities that a scene was built without. The world is
+    /// therefore kept apart from the maps, as the one world the service was made for, and a caller that reaches it with
+    /// another one hears about it here rather than two frames later in a window that does not react.
+    /// </remarks>
+    private World Own(World? world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        if (_owner is null)
+        {
+            _owner = world;
+            return world;
+        }
+
+        if (!ReferenceEquals(_owner, world))
+        {
+            throw new InvalidOperationException(
+                "This window service belongs to the world it was first called with, and it cannot read the elements of another one: a service of its own is what another world needs.");
+        }
+
+        return world;
     }
 
     private IUiWindow? Find(string id)
@@ -248,6 +322,68 @@ public sealed class UiWindowService : IFrameSystem
         });
 
         return _canvas;
+    }
+
+    /// <summary>Takes an element out of the list of the parent it stands inside.</summary>
+    /// <param name="world">The world the element lives in.</param>
+    /// <param name="entity">The element to take out.</param>
+    /// <remarks>
+    /// A child names its parent and a parent lists its children, and only the list is read by the walk of the interface:
+    /// an element that was taken out of the world but is still listed is a name that resolves to nothing, which every
+    /// walk then has to skip and which nothing ever removes. A window that is closed takes its root out of the canvas
+    /// here, so a window that is toggled in a loop leaves the canvas with the entries of the windows that are open and
+    /// nothing else.
+    /// </remarks>
+    private static void Detach(World world, Entity entity)
+    {
+        if (!world.Has<ParentComponent>(entity))
+        {
+            return;
+        }
+
+        Entity parent = world.Resolve(world.Get<ParentComponent>(entity).Parent);
+
+        if (!world.IsAlive(parent) || !world.Has<ChildrenComponent>(parent))
+        {
+            return;
+        }
+
+        ref ChildrenComponent children = ref world.GetRef<ChildrenComponent>(parent);
+
+        if (children.Children is not { Length: > 0 } current)
+        {
+            return;
+        }
+
+        // The entries that are kept are counted before the array is built, so a list that holds the element once is left
+        // exactly as it was and a list that holds it more than once loses every one of them.
+        int kept = 0;
+
+        foreach (EntityRef reference in current)
+        {
+            if (world.Resolve(reference) != entity)
+            {
+                kept++;
+            }
+        }
+
+        if (kept == current.Length)
+        {
+            return;
+        }
+
+        EntityRef[] updated = new EntityRef[kept];
+        var index = 0;
+
+        foreach (EntityRef reference in current)
+        {
+            if (world.Resolve(reference) != entity)
+            {
+                updated[index++] = reference;
+            }
+        }
+
+        children.Children = updated;
     }
 
     private static void DestroyTree(World world, Entity entity)
