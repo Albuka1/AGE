@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Systems, prototype kinds and component registrations are declared once, with an attribute, and the container
+  finds them: `[System]` marks a class the container registers under itself and under every interface of it that
+  carries `[SystemInterface]`, `[ComponentRegistration]` marks the set of component registrations of an
+  assembly, and `[PrototypeKind("word")]` marks the data of one kind of prototype. A class of a game that answers
+  a marked interface is registered without an attribute of its own, so a new system is a class that is compiled
+  rather than a line that is written down, and a new kind of content is a class of a host rather than a line in
+  the program of every host that reads it.
+
+- `AddAgeSystems`, `AddAgeComponentRegistrations` and `AddAgeContentKinds`: three calls that read an assembly
+  for what its classes say about themselves. A host — the game, the linter, a test — names an assembly once and
+  the container holds its systems and its component registrations, in place of a page that listed every class of
+  a game and every kind of its content. The two calls are the seam between what a class says about itself and
+  what the container holds, and everything else about a game stays what the game registers by hand, because the
+  order of a pipeline and the values of a factory are decisions of the game rather than of a class.
+
+### Changed
+
+- Every extension of an engine assembly reads its own assembly: `AddAgeCore`, `AddAgeRendering`, `AddAgePhysics`
+  and `AddAgeUI` call `AddAgeSystems` and `AddAgeComponentRegistrations` over the assembly that declares them,
+  so a host that calls the four of them reads every system and every component of the engine without naming one
+  type of it. The assembly of a game reads itself the same way, and its `Program.cs` names its own assembly and
+  the two kinds of the content of the engine rather than a page of registrations. The class that the source
+  generator writes carries `[ComponentRegistration]` as well, so the scan of an assembly finds the registrations
+  of an engine assembly the way it finds one written by hand.
+
+- **Breaking:** a class of a game that answers a system interface, or that carries an attribute of the engine,
+  is registered by the container when the container is built, so a game that also registered that class by hand
+  has two descriptors of it: one that the game wrote and one that the scan wrote. A game that keeps a manual
+  registration for a class it has marked removes the manual one, and a game that does not want a system to be
+  found by the scan leaves the class unmarked. A type that the container already holds when the scan reaches it
+  is left alone, so a host that names an assembly twice — or a call of `AddAgeSystems` that follows one of
+  `AddAgeCore` for the same assembly — hands the container one descriptor of that type rather than two, and the
+  same set of component registrations is not added twice, which is what keeps a component from being registered
+  under one name twice in the registry of a scene.
+
 ## [0.5.0] - 2026-10-15
 
 ### Added
