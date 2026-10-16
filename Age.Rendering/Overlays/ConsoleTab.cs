@@ -14,9 +14,11 @@ namespace Age.Rendering;
 /// anything. The tab is read only here: a line is typed in the console, which is a pass of its own.
 /// </para>
 /// <para>
-/// The lines are drawn from the bottom up, so a page that is shorter than the output shows the newest lines rather than the oldest
-/// ones, which is where the answer to what was just done is. A wheel over the body scrolls the output: a person scrolls up to read
-/// what happened before, and the newest line is drawn again when the scroll is brought back to zero.
+/// The rows are built on the frame that draws them, because what a page shows is the output of the run as it stands and the output
+/// of a frame is what the frame before it wrote: a page that built its rows on a frame it did not draw would be a page a frame
+/// behind the console it reports. The newest rows are the ones in view, so a page that is shorter than the output reads the answer
+/// to what was just done rather than the beginning of the run; the rows move when the number of lines in the console changes, and a
+/// person who is reading further back is not moved away from the row they are on.
 /// </para>
 /// </remarks>
 public sealed class ConsoleTab : IDevWindowTab
@@ -35,6 +37,7 @@ public sealed class ConsoleTab : IDevWindowTab
     private readonly List<ConsoleRow> _rows = [];
 
     private int _selected = -1;
+    private int _lastLineCount;
     private ScrollState _scroll;
 
     /// <summary>Initializes the page from the console whose output it shows and the clipboard a line is copied to.</summary>
@@ -57,9 +60,14 @@ public sealed class ConsoleTab : IDevWindowTab
     public bool Closable { get; set; }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The rows are the ones the last frame drew, which is what a person clicked on: a click is turned into a row by the same
+    /// rectangle the row was drawn in, so the line a person reaches for is the line they saw. The rows are rebuilt by
+    /// <see cref="Render"/> on the frame that draws them, which is what keeps the output of a frame and the click of the next one
+    /// in step.
+    /// </remarks>
     public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
     {
-        Layout(body);
         _scroll.Update(pointer, body, _rows.Count, _line);
 
         if (!pointer.Pressed || !Contains(body, pointer.Position))
@@ -67,9 +75,6 @@ public sealed class ConsoleTab : IDevWindowTab
             return;
         }
 
-        // A press on a row is a press on the line that row came from, which is what the click selects and the clipboard is
-        // written with. The rows of one line are counted with the row a person sees, so a wrapped line is a single line of the
-        // console that a click on any of its rows reaches.
         int row = _scroll.First + (int)((pointer.Position.Y - body.Y) / _line);
 
         if (row < 0 || row >= _rows.Count)
@@ -97,6 +102,18 @@ public sealed class ConsoleTab : IDevWindowTab
     public void Render(IRenderer renderer, Rect body)
     {
         ArgumentNullException.ThrowIfNull(renderer);
+
+        Layout(body);
+
+        // The rows move to the end of the output when the console wrote a line the frame before, which is where the answer to what
+        // was just done is. A drag of the bar is not moved: a person who is reading further back is not carried away from the row
+        // they are on by a line the game wrote in the meantime.
+        if (_lastLineCount != _console.Lines.Count && !_scroll.Dragging)
+        {
+            _scroll.ToEnd(body, _rows.Count, _line);
+        }
+
+        _lastLineCount = _console.Lines.Count;
 
         int visible = ScrollState.Visible(body, _line);
         int count = Math.Min(_rows.Count, visible);
@@ -140,10 +157,10 @@ public sealed class ConsoleTab : IDevWindowTab
     /// <summary>Fills <see cref="_rows"/> with every wrapped row of the output, oldest first.</summary>
     /// <param name="body">The rectangle the page owns.</param>
     /// <remarks>
-    /// Every line is wrapped here rather than only the newest ones, because a wheel over the body is what turns the page into one
-    /// that reads back: a page that built only the rows that fit its body would have nothing to scroll through when a person looks
+    /// Every line is wrapped here rather than only the newest ones, because the bar of the page is what turns the page into one
+    /// that reads back: a page that built only the rows that fit its body would have nothing to drag through when a person looks
     /// for what happened before the last frame. The rows of one line are pushed in the order they are read, so a wrapped line that
-    /// fills three rows is three rows of the page that a person scrolls through as one.
+    /// fills three rows is three rows of the page that a person reads as one.
     /// </remarks>
     private void Layout(Rect body)
     {
@@ -160,15 +177,6 @@ public sealed class ConsoleTab : IDevWindowTab
             {
                 _rows.Add(new ConsoleRow(index, wrapped[row], line.Level));
             }
-        }
-
-        // The scroll is brought back to the newest line when the page is drawn for the first time, which is what a console that
-        // has just been opened reads: a page that started at the oldest line would show the beginning of the run rather than what
-        // the game just wrote. A person who scrolls the page away from the end keeps the row they are reading, and the newest line
-        // is drawn again when they bring the scroll back to it.
-        if (lines.Count > 0)
-        {
-            _scroll.ToEnd(body, _rows.Count, _line);
         }
     }
 
