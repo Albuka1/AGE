@@ -11,11 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Systems, prototype kinds and component registrations are declared once, with an attribute, and the container
   finds them: `[System]` marks a class the container registers under itself and under every interface of it that
-  carries `[SystemInterface]`, `[ComponentRegistration]` marks the set of component registrations of an
-  assembly, and `[PrototypeKind("word")]` marks the data of one kind of prototype. A class of a game that answers
-  a marked interface is registered without an attribute of its own, so a new system is a class that is compiled
-  rather than a line that is written down, and a new kind of content is a class of a host rather than a line in
-  the program of every host that reads it.
+  carries `[SystemInterface]`, `[ComponentRegistration]` marks a class that registers the components of an
+  assembly, and `[PrototypeKind("word")]` marks the data of one kind of prototype. A class of a game that
+  answers a marked interface is registered without an attribute of its own, so a new system is a class that is
+  compiled rather than a line that is written down, and a new kind of content is a class of a host rather than a
+  line in the program of every host that reads it.
 
 - `AddAgeSystems`, `AddAgeComponentRegistrations` and `AddAgeContentKinds`: three calls that read an assembly
   for what its classes say about themselves. A host — the game, the linter, a test — names an assembly once and
@@ -23,6 +23,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a game and every kind of its content. The two calls are the seam between what a class says about itself and
   what the container holds, and everything else about a game stays what the game registers by hand, because the
   order of a pipeline and the values of a factory are decisions of the game rather than of a class.
+
+- `ColliderComponent` says what a box of an entity is for: the `Layer` it belongs to, the `Mask` of layers it
+  answers, whether it is a `Trigger` that a body walks through rather than into, and whether it is `Immovable`
+  and stands where it is when a resolution would move it. Two colliders answer each other when the layer of one
+  is in the mask of the other, so a shot that a wall stops and a wall that the shot does not move are two rules
+  rather than one, and a shield that is also a weapon is two flags rather than two colliders. `CollisionLayer`
+  is a set of flags rather than a number, and `ColliderComponent.Of` builds a collider that answers the layer it
+  belongs to, which is the shape most of the content of a game is.
+
+- A solid pair is moved out of its overlap: `CollisionSystem` takes the shortest of the four ways out of the
+  two boxes, moves the body that is not immovable by the whole of it, and moves both by half of it when neither
+  of the two stands still. The resolution runs a fixed number of times rather than until nothing moves, because
+  a room of three bodies that all press on each other has no place to put them: the last step reports the
+  overlap it could not close rather than a loop that never ends. A pair of two immovable colliders and a pair
+  that holds a trigger are reported and left where they stand, which is what a body of a battle on a grid of
+  cells is: the cell of the grid is what decides where a body stands, and a box of it is a zone that a shot and
+  a zone of effect read.
+
+- The pairs of a step are read as three events rather than one: `CollisionEnterEvent` for the step the contact
+  began, `CollisionEvent` for every step it stands, and `CollisionExitEvent` for the step it is over. The
+  events are raised at the boundary of the step like every other event of the world, so a handler that reacts
+  to a contact reads the world as the step left it rather than as the pair was built. `CollisionEvent` gained
+  `IsTrigger`, which says whether the pair holds a zone or a body.
 
 ### Changed
 
@@ -38,11 +61,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is registered by the container when the container is built, so a game that also registered that class by hand
   has two descriptors of it: one that the game wrote and one that the scan wrote. A game that keeps a manual
   registration for a class it has marked removes the manual one, and a game that does not want a system to be
-  found by the scan leaves the class unmarked. A type that the container already holds when the scan reaches it
-  is left alone, so a host that names an assembly twice — or a call of `AddAgeSystems` that follows one of
-  `AddAgeCore` for the same assembly — hands the container one descriptor of that type rather than two, and the
-  same set of component registrations is not added twice, which is what keeps a component from being registered
-  under one name twice in the registry of a scene.
+  found by the scan leaves the class unmarked. A scan of an assembly skips a concrete type the container already
+  holds, so a host that names an assembly twice — or a call of `AddAgeSystems` that follows one of `AddAgeCore`
+  for the same assembly — hands the container one descriptor of that type rather than two. What the check looks
+  at is the concrete type alone: a game that registered a class under its interface and left the concrete type
+  unregistered still gets the scan's descriptor for the class, next to the one it wrote for the interface. The
+  same set of component registrations is not added twice when the class that carries it is already under
+  `IComponentRegistrations`, which is what keeps a component from being registered under one name twice in the
+  registry of a scene.
+
+- **Breaking:** `CollisionSystem` resolves a solid pair by default, so the world after an update is not the world
+  that was handed to it: a body that was standing in another one is moved out of it, and a game that reads the
+  pairs of a step to place its own bodies reads a world that has already been adjusted. A game that wants the
+  pairs of a step as they were before any body moved sets `CollisionSystem.Resolve` to `false`, which is what a
+  system of detection alone is. A `CollisionPair` gained `IsTrigger`, so a game that reads the pairs of a step
+  can tell a zone from a body without reading the components of the two entities.
+
+- `CollisionComponent` is no longer a component a document writes: it is what a step left on an entity, and a
+  scene that wrote one would be writing the contact of a frame that has passed. What a document names is
+  `ColliderComponent`, which says where a box is and what it does with the world.
 
 ## [0.5.0] - 2026-10-15
 
