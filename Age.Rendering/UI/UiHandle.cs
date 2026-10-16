@@ -19,8 +19,8 @@ namespace Age.Rendering;
 /// The moves place the element from the top-left corner of its parent and give it a size in pixels of the design area
 /// of the canvas, which is what the <see cref="RectTransformComponent"/> reads: <see cref="At"/> anchors the element to
 /// the top-left corner of its parent, <see cref="Center"/> anchors it to the middle of the parent, and
-/// <see cref="AnchoredBottom"/> anchors it to the bottom of it with a margin of its own. None of them moves the element
-/// inside the parent by the whole of its own size.
+/// <see cref="AnchoredBottom(float, float, float)"/> anchors it to the bottom of it with a margin of its own. None of
+/// them moves the element inside the parent by the whole of its own size.
 /// </para>
 /// </remarks>
 public abstract class UiHandle<TSelf> where TSelf : UiHandle<TSelf>
@@ -94,14 +94,29 @@ public abstract class UiHandle<TSelf> where TSelf : UiHandle<TSelf>
     /// parent, which is what a bar at the bottom of a window needs: the distance to the bottom holds whatever the shape
     /// of the window is, and a resolution of another size does not move the bar off the frame.
     /// </remarks>
-    public TSelf AnchoredBottom(float width, float height, float margin)
+    public TSelf AnchoredBottom(float width, float height, float margin) =>
+        AnchoredBottom(width, height, margin, horizontalMargin: 0f);
+
+    /// <summary>Anchors the element to the bottom of its parent with a margin of its own on both axes.</summary>
+    /// <param name="width">The width of the element, in pixels of the design area.</param>
+    /// <param name="height">The height of the element, in pixels of the design area.</param>
+    /// <param name="margin">The distance from the bottom edge of the parent, in pixels.</param>
+    /// <param name="horizontalMargin">The distance from the left edge of the parent, in pixels. Zero stands the element at the edge itself.</param>
+    /// <returns>The handle, so that a chain reads as one line.</returns>
+    /// <remarks>
+    /// A horizontal margin is what an element that shares a column with another reads, so that the two stand at the same
+    /// distance from the left edge of the frame rather than one of them standing at the edge itself. The two axes are
+    /// told apart by name rather than by position, because a bar that says a margin of its own is read by a person rather
+    /// than by a compiler that would take the wrong one for the bottom.
+    /// </remarks>
+    public TSelf AnchoredBottom(float width, float height, float margin, float horizontalMargin)
     {
         ref RectTransformComponent rect = ref World.GetRef<RectTransformComponent>(Entity);
         rect.Anchored = true;
         rect.AnchorMin = new Vector2(0f, 1f);
         rect.AnchorMax = new Vector2(0f, 1f);
         rect.Pivot = new Vector2(0f, 1f);
-        rect.AnchoredPosition = new Vector2(0f, -margin);
+        rect.AnchoredPosition = new Vector2(horizontalMargin, -margin);
         rect.SizeDelta = new Vector2(width, height);
         return (TSelf)this;
     }

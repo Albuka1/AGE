@@ -13,7 +13,8 @@ namespace Age.UI;
 /// </para>
 /// <para>
 /// The component is the shape of a background rather than a sprite: what is drawn is the colour alone, and a rectangle
-/// that is not there is one whose alpha is zero.
+/// that is not there is one whose alpha is zero. A frame of a colour and a thickness is drawn inside the rectangle,
+/// which is what a window of a game says about the edge of a card and of a slot without a second element for it.
 /// </para>
 /// </remarks>
 [Component("Panel")]
@@ -21,4 +22,12 @@ public struct PanelComponent : IComponent
 {
     /// <summary>Gets or sets the colour the rectangle is filled with.</summary>
     public Color Color;
+
+    /// <summary>Gets or sets the colour of the frame drawn inside the rectangle.</summary>
+    /// <remarks>A transparent colour, which is the default of the field, draws no frame: a panel that says nothing about its edge is a rectangle of colour alone.</remarks>
+    public Color BorderColor;
+
+    /// <summary>Gets or sets how many pixels thick the frame is, where zero draws none.</summary>
+    /// <remarks>The frame is drawn inside the rectangle rather than beside it, so a panel that grows a frame keeps the room it was given.</remarks>
+    public int BorderThickness;
 }

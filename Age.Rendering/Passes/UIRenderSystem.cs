@@ -81,7 +81,10 @@ public sealed class UIRenderSystem : IRenderPass
 
             if (item.HasPanel)
             {
-                _renderer.DrawRectangle(box, world.Get<PanelComponent>(item.Entity).Color);
+                PanelComponent panel = world.Get<PanelComponent>(item.Entity);
+
+                _renderer.DrawRectangle(box, panel.Color);
+                DrawBorder(box, panel.BorderColor, panel.BorderThickness);
             }
 
             if (item.HasImage && _textures is not null)
@@ -97,7 +100,10 @@ public sealed class UIRenderSystem : IRenderPass
 
             if (item.HasButton)
             {
-                _renderer.DrawRectangle(box, world.Get<ButtonComponent>(item.Entity).BaseColor);
+                ButtonComponent button = world.Get<ButtonComponent>(item.Entity);
+
+                _renderer.DrawRectangle(box, button.BaseColor);
+                DrawBorder(box, button.BorderColor, button.BorderThickness);
             }
 
             if (item.HasSlider)
@@ -148,6 +154,35 @@ public sealed class UIRenderSystem : IRenderPass
         }
 
         _renderer.EndFrame();
+    }
+
+    /// <summary>Draws the frame of a rectangle, which is what a panel and a button say about their edge.</summary>
+    /// <param name="box">The rectangle the frame is drawn inside.</param>
+    /// <param name="color">The colour of the frame, where a transparent colour draws nothing.</param>
+    /// <param name="thickness">How many pixels thick the frame is, where zero draws nothing.</param>
+    /// <remarks>
+    /// The frame is four rectangles rather than a rounded rectangle or a picture, because the rectangle is what the
+    /// renderer draws and the interface of the engine is drawn from rectangles alone. It is drawn inside the box of the
+    /// element rather than beside it, so an element that grows a frame keeps the room it was given.
+    /// </remarks>
+    private void DrawBorder(Rect box, Color color, int thickness)
+    {
+        if (thickness <= 0 || color.A == 0 || box.Width <= 0f || box.Height <= 0f)
+        {
+            return;
+        }
+
+        int edge = Math.Min(thickness, (int)MathF.Min(box.Width, box.Height));
+
+        if (edge <= 0)
+        {
+            return;
+        }
+
+        _renderer.DrawRectangle(new Rect(box.Position, new Vector2(box.Width, edge)), color);
+        _renderer.DrawRectangle(new Rect(box.Position + new Vector2(0f, box.Height - edge), new Vector2(box.Width, edge)), color);
+        _renderer.DrawRectangle(new Rect(box.Position, new Vector2(edge, box.Height)), color);
+        _renderer.DrawRectangle(new Rect(box.Position + new Vector2(box.Width - edge, 0f), new Vector2(edge, box.Height)), color);
     }
 
     /// <summary>Draws the image of an element inside its rectangle, or its placeholder when the image is not there.</summary>

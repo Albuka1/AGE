@@ -20,6 +20,12 @@ namespace Age.Rendering;
 /// which is what a nested description reads like. A panel built without a block leaves the stack where it was, so a game
 /// that writes its elements one after another does not need to nest them.
 /// </para>
+/// <para>
+/// A group is what a window reaches for when the elements of a card or a list are arranged inside a rectangle that
+/// nothing is drawn in: a panel whose colour is transparent draws nothing but is still an element of the pass, and a
+/// group is not an element of the pass at all, so a window that only wants to place elements against a rectangle uses
+/// the group and keeps the pass from drawing a rectangle of no colour.
+/// </para>
 /// </remarks>
 public sealed class UiBuilder
 {
@@ -79,6 +85,38 @@ public sealed class UiBuilder
         ArgumentNullException.ThrowIfNull(configure);
 
         PanelHandle handle = Panel(id);
+        configure(handle);
+        _parents.Push(handle.Entity);
+
+        return new PanelScope(this);
+    }
+
+    /// <summary>Creates a container that holds other elements and draws nothing.</summary>
+    /// <param name="id">The name of the element inside the window.</param>
+    /// <returns>The handle of the group.</returns>
+    /// <exception cref="ArgumentException">The name is null, empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The window already holds an element of that name.</exception>
+    /// <remarks>
+    /// A group is a rectangle that no pass of the interface reads: what the elements under it are laid out against is
+    /// its room, and what a person sees is the elements themselves and nothing of the group. A window that wants the
+    /// frame of a card behind a list of rows puts a panel and a group over each other, rather than a panel behind a
+    /// panel whose inside is a second frame.
+    /// </remarks>
+    public GroupHandle Group(string id)
+    {
+        Entity entity = Add(id, Parent);
+        return new GroupHandle(_world, entity);
+    }
+
+    /// <summary>Creates a group under the current parent, configures it, and makes it the parent of the elements of the block.</summary>
+    /// <param name="id">The name of the element inside the window.</param>
+    /// <param name="configure">The moves that place the group and size it.</param>
+    /// <returns>A scope that returns the parent of the builder to what it was when the block ends.</returns>
+    public PanelScope Group(string id, Action<GroupHandle> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        GroupHandle handle = Group(id);
         configure(handle);
         _parents.Push(handle.Entity);
 
