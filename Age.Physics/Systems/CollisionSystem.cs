@@ -39,9 +39,9 @@ public sealed class CollisionSystem : ISystem
     private readonly Dictionary<Entity, bool> _triggers = new();
     private readonly Dictionary<Entity, bool> _immovable = new();
     private readonly Dictionary<(int X, int Y), List<Entity>> _cells = new();
-    private readonly HashSet<(int A, int B)> _seen = new();
-    private readonly HashSet<(int A, int B)> _previous = new();
-    private readonly HashSet<(int A, int B)> _current = new();
+    private readonly HashSet<(Entity A, Entity B)> _seen = new();
+    private readonly HashSet<(Entity A, Entity B)> _previous = new();
+    private readonly HashSet<(Entity A, Entity B)> _current = new();
 
     /// <summary>Gets or sets a value indicating whether a solid pair is moved out of its overlap.</summary>
     /// <remarks>
@@ -251,7 +251,7 @@ public sealed class CollisionSystem : ISystem
                         (a, b) = (b, a);
                     }
 
-                    if (!_seen.Add((a.Id, b.Id)))
+                    if (!_seen.Add((a, b)))
                     {
                         continue;
                     }
@@ -268,7 +268,7 @@ public sealed class CollisionSystem : ISystem
 
                     bool trigger = _triggers[a] || _triggers[b];
                     _pairs.Add(new CollisionPair(a, b, trigger));
-                    _current.Add((a.Id, b.Id));
+                    _current.Add((a, b));
                     Attach(world, a, b);
                     Attach(world, b, a);
                 }
@@ -277,6 +277,12 @@ public sealed class CollisionSystem : ISystem
     }
 
     /// <summary>Returns a value indicating whether the collider of the first entity answers the layer of the second.</summary>
+    /// <remarks>
+    /// A collider that was never given a layer is in <see cref="CollisionLayer.Default"/>, because a document that says
+    /// nothing about the layer of a box asks for the box that a game of collisions had before layers existed. A mask that
+    /// was never given is every layer, which is what the scan of the world reads when it fills
+    /// <see cref="_masks"/> rather than answering a document.
+    /// </remarks>
     private bool Answers(World world, Entity entity, Entity other)
     {
         if (!world.Has<ColliderComponent>(other))
@@ -285,9 +291,15 @@ public sealed class CollisionSystem : ISystem
         }
 
         CollisionLayer layer = world.Get<ColliderComponent>(other).Layer;
+
+        if (layer == CollisionLayer.None)
+        {
+            layer = CollisionLayer.Default;
+        }
+
         CollisionLayer mask = _masks.TryGetValue(entity, out CollisionLayer known) ? known : CollisionLayer.Everything;
 
-        return (mask & layer) != CollisionLayer.None || (mask == CollisionLayer.Everything && layer == CollisionLayer.None);
+        return (mask & layer) != CollisionLayer.None;
     }
 
     /// <summary>Moves the bodies of a solid pair out of each other, unless both stand still.</summary>
@@ -389,13 +401,18 @@ public sealed class CollisionSystem : ISystem
     }
 
     /// <summary>Compares the pairs of the step with the pairs of the step before and raises the three events for what changed.</summary>
+    /// <remarks>
+    /// The pairs are remembered as the two entities themselves rather than as the identifiers of their slots, so a slot
+    /// that was handed out again names another entity than the one the contact was about: a pair of a destroyed entity
+    /// and the entity that took its slot are two different pairs, and the one that is over is announced as it was rather
+    /// than as the pair it became. A handler that reads an entity of an exit event reads the one the contact was about,
+    /// which a world that no longer holds it reports as not alive, rather than a different entity that shares its slot.
+    /// </remarks>
     private void Report(World world)
     {
         foreach (CollisionPair pair in _pairs)
         {
-            var key = (pair.A.Id, pair.B.Id);
-
-            if (!_previous.Contains(key))
+            if (!_previous.Contains((pair.A, pair.B)))
             {
                 world.Events.Raise(new CollisionEnterEvent(pair.A, pair.B, pair.IsTrigger));
             }
@@ -403,42 +420,18 @@ public sealed class CollisionSystem : ISystem
             world.Events.Raise(new CollisionEvent(pair.A, pair.B, pair.IsTrigger));
         }
 
-        foreach ((int a, int b) in _previous)
+        foreach ((Entity a, Entity b) in _previous)
         {
             if (_current.Contains((a, b)))
             {
                 continue;
             }
 
-            world.Events.Raise(new CollisionExitEvent(IdentifierOf(world, a), IdentifierOf(world, b)));
+            world.Events.Raise(new CollisionExitEvent(a, b));
         }
 
         _previous.Clear();
-
-        foreach ((int a, int b) in _current)
-        {
-            _previous.Add((a, b));
-        }
-    }
-
-    /// <summary>Returns the live entity of an identifier of the pair sets, or the default one when the slot was handed out again.</summary>
-    /// <remarks>
-    /// A pair of the step before is remembered by the identifiers of its two entities, and a slot that was handed out
-    /// again names another entity than the one the pair was about: an exit of such a pair is raised with the default
-    /// entity rather than with the one that holds the slot now, because the entity it was about is gone and a handler
-    /// that reads it reads a thing that does not exist rather than a wrong one.
-    /// </remarks>
-    private static Entity IdentifierOf(World world, int id)
-    {
-        foreach (Entity entity in world.Enumerate())
-        {
-            if (entity.Id == id)
-            {
-                return entity;
-            }
-        }
-
-        return default;
+        _previous.UnionWith(_current);
     }
 
     private static void Attach(World world, Entity entity, Entity other)
