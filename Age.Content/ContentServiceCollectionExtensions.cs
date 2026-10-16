@@ -17,10 +17,19 @@ public static class ContentServiceCollectionExtensions
     /// <see cref="ITextSource"/> that answers the text of a component from it.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Both are built over the <see cref="ComponentRegistry"/> of the container, so a game registers the kinds it reads,
     /// loads its content, and spawns what the content holds. Register the content <em>before</em> the first scene is
     /// loaded, because a scene that names a prototype needs the content that holds it. Call it after <c>AddAgeCore</c>,
     /// which registers that registry, and after <c>AddAgeAssets</c>, which the strings are read through.
+    /// </para>
+    /// <para>
+    /// The kinds of a content are not read here: <c>AddAgeContentKinds</c> of the assembly that declares them is what
+    /// reads a class with <see cref="PrototypeKindAttribute"/>, because a kind is a word of a document and the assembly
+    /// that says it is the host of a game rather than the engine of a content. The engine declares the first two kinds
+    /// itself, and a game that names its own reads them from its own assembly with one call, which is why the tool that
+    /// reads the content of the engine — <c>Age.Content.Lint</c> — names the two kinds it knows by hand.
+    /// </para>
     /// </remarks>
     public static IServiceCollection AddAgeContent(this IServiceCollection services)
     {
