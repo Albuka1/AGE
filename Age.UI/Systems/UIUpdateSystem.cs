@@ -110,7 +110,12 @@ public sealed class UIUpdateSystem : IFrameSystem
         if (!consumed)
         {
             UpdateCheckBoxes(world);
-            UpdateSliders(world);
+
+            // The check boxes read the pointer after the buttons, and a box that took the click of this frame is what the
+            // sliders that follow read: a press that ticked a box is not a press that begins a drag of a slider the box
+            // covered. A slider whose drag is already under way still follows the pointer, because what `pressed` decides
+            // is whether a drag begins rather than whether the pointer is read.
+            UpdateSliders(world, pressed: !_frame.Consumed);
         }
         else
         {
@@ -248,7 +253,7 @@ public sealed class UIUpdateSystem : IFrameSystem
 
     /// <summary>Reads the pointer for every slider, beginning, following and ending a drag, and reporting the number it moved to.</summary>
     /// <param name="world">The world to read the sliders from.</param>
-    /// <param name="pressed">Whether a press of this frame may begin a drag, which a frame that a control took the click of does not.</param>
+    /// <param name="pressed">Whether a press of this frame may begin a drag, which a frame that another control took the click of does not.</param>
     /// <remarks>
     /// A drag begins on a press inside the track and follows the pointer wherever it goes until the button comes up, so a
     /// pointer that slips off the slider still moves the number, which is what a person dragging a handle expects. The
