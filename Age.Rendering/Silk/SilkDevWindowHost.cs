@@ -1,5 +1,6 @@
 using Age.Core;
-using Silk.NET.Input;
+using Age.Input;
+using Silk.NET.GLFW;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
@@ -16,34 +17,47 @@ namespace Age.Rendering;
 /// passthrough — the rectangle and the text a page asks for are drawn here — rather than a second renderer of the world.
 /// </para>
 /// <para>
-/// The pointer and the clicks come from the input context of this window, which is opened here and closed with it, so a click on a tab
-/// is a click in this window and never one the game reads. The two windows have their own input, which is what a window of the
-/// operating system is: the backend of the windowing library delivers an event to the window it happened in.
+/// The pointer and the click are read through GLFW directly rather than through the input context of Silk.NET, because the platform
+/// of the engine answers the input of one window and a second context on the same thread collides with it. The button is the one
+/// state that is asked of the input of the game when the game has one: a release that lands outside this window is an event this
+/// window never receives, and a state that read its own events alone would hold the button down for the rest of the run. The API is
+/// the one Silk.NET itself holds — <c>GlfwProvider.GLFW.Value</c> — because a second call to <c>Glfw.GetApi</c> hands back an object
+/// that is not the one the window was created with, and a callback set through it is never invoked.
 /// </para>
 /// </remarks>
-public sealed class SilkDevWindowHost : IDevWindowHost
+public sealed unsafe class SilkDevWindowHost : IDevWindowHost
 {
     private readonly IWindowService? _game;
+    private readonly IInputService? _input;
 
     private IWindow? _window;
     private SilkRenderer? _renderer;
-    private IInputContext? _input;
-    private IMouse? _mouse;
+    private Glfw? _glfw;
+    private WindowHandle* _handle;
+    private GlfwCallbacks.MouseButtonCallback? _mouseButtonCallback;
+    private GlfwCallbacks.CursorEnterCallback? _cursorEnterCallback;
     private Vector2? _clicked;
     private bool _clickReported;
     private Vector2 _cursor;
     private bool _down;
     private bool _focused;
 
-    /// <summary>Initializes the host with the window of the game, which its context is handed back to after every frame.</summary>
+    /// <summary>Initializes the host with the window of the game and the input of the game, which its button state is read from.</summary>
     /// <param name="game">
     /// The window of the game, which this window borrows the current context from: the two windows share one thread, so a frame of
     /// this window makes its context current and the window of the game is made current again afterwards. A host with no game window
     /// leaves whatever context was current alone, which is what a headless run and a test have.
     /// </param>
-    public SilkDevWindowHost(IWindowService? game = null)
+    /// <param name="input">
+    /// The input of the game, whose mouse is bound to the window of the game and answers the physical state of the pointer: a
+    /// release that lands outside this window is a release this window never hears about, and a state that read its own events
+    /// alone would hold the button down for the rest of the run. A host that was handed none falls back to what its own handle
+    /// reports, which is what a headless run and a test have.
+    /// </param>
+    public SilkDevWindowHost(IWindowService? game = null, IInputService? input = null)
     {
         _game = game;
+        _input = input;
     }
 
     /// <inheritdoc />
@@ -93,26 +107,36 @@ public sealed class SilkDevWindowHost : IDevWindowHost
         _window = Window.Create(options);
         _window.Initialize();
 
-        // The focus of this window is what tells a game that the keys are being typed elsewhere, so it is tracked from the event the
-        // window manager sends rather than guessed: the window that took a click is the one whose focus changed.
         _window.FocusChanged += OnFocusChanged;
 
         _renderer = new SilkRenderer();
         _renderer.Attach(new HostWindowService(_window));
 
-        // The input of this window is opened here rather than shared with the game, so a click on a tab is a click in this window:
-        // the backend delivers an event to the window it happened in, and each window answers for the pointer that is over it.
-        _input = _window.CreateInput();
-        _mouse = _input.Mice.Count > 0 ? _input.Mice[0] : null;
+        // The API of the platform is the one Silk.NET itself created the window with: a second call to `Glfw.GetApi` hands back
+        // an object of its own, and a callback set through it names a handle the platform has never seen. The provider holds the
+        // instance that was used to create this window, so a callback set through it is the callback of this window.
+        _glfw = GlfwProvider.GLFW.Value;
 
-        if (_mouse is not null)
+        nint native = _window.Native?.Glfw ?? 0;
+
+        if (native != 0)
         {
-            _mouse.MouseDown += OnMouseDown;
-            _mouse.MouseUp += OnMouseUp;
+            _handle = (WindowHandle*)native;
+            _mouseButtonCallback = OnMouseButton;
+            _cursorEnterCallback = OnCursorEnter;
+
+            _glfw.SetMouseButtonCallback(_handle, _mouseButtonCallback);
+            _glfw.SetCursorEnterCallback(_handle, _cursorEnterCallback);
         }
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The cursor is asked of this window on every frame, which is what the position of the pointer is. The button is asked of the
+    /// input of the game when there is one, because the physical state of a button is what a drag of a scrollbar reads: a release
+    /// that lands outside this window never reaches it as an event, and the window would hold the button down for the rest of the
+    /// run.
+    /// </remarks>
     public bool Pump(out Vector2? clicked)
     {
         if (_window is not IWindow window || window.IsClosing)
@@ -121,13 +145,29 @@ public sealed class SilkDevWindowHost : IDevWindowHost
             return false;
         }
 
-        // The events of this window are read here rather than by the loop of the game, because it is a window of its own: what the
-        // window manager sends it, such as a move or a close, arrives while the game runs its frame.
         window.DoEvents();
 
-        if (_mouse is not null)
+        if (_glfw is not null && _handle is not null)
         {
-            _cursor = new Vector2(_mouse.Position.X, _mouse.Position.Y);
+            _glfw.GetCursorPos(_handle, out double x, out double y);
+            _cursor = new Vector2((float)x, (float)y);
+        }
+
+        // The input of the game is the one place that answers the physical state of the pointer for the whole process: a release
+        // that lands outside this window is a release this window never hears about, and a state that read its own events alone
+        // would hold the button down for the rest of the run. A host that was handed no input falls back to its own handle, which
+        // is what a headless run and a test have.
+        if (_input is not null)
+        {
+            _down = _input.IsMouseButtonDown(Silk.NET.Input.MouseButton.Left);
+        }
+        else if (_glfw is not null && _handle is not null)
+        {
+            _down = _glfw.GetMouseButton(_handle, (int)Silk.NET.GLFW.MouseButton.Left) == (int)InputAction.Press;
+        }
+        else
+        {
+            _down = false;
         }
 
         clicked = _clickReported ? _clicked : null;
@@ -182,24 +222,25 @@ public sealed class SilkDevWindowHost : IDevWindowHost
         IWindow? window = _window;
         window?.GLContext?.MakeCurrent();
 
+        // The callbacks of this window are handed back to the platform with it, so what was installed for a window that is gone does
+        // not outlive it: the handle the callback would be called with is one the platform is about to forget.
+        if (_glfw is not null && _handle is not null)
+        {
+            _glfw.SetMouseButtonCallback(_handle, null);
+            _glfw.SetCursorEnterCallback(_handle, null);
+        }
+
+        _mouseButtonCallback = null;
+        _cursorEnterCallback = null;
+        _glfw = null;
+        _handle = null;
+
         if (window is not null)
         {
             window.FocusChanged -= OnFocusChanged;
         }
 
         _focused = false;
-
-        if (_mouse is not null)
-        {
-            _mouse.MouseDown -= OnMouseDown;
-            _mouse.MouseUp -= OnMouseUp;
-        }
-
-        // The input of this window goes with it: the context was opened for this window alone, and the devices of a window that is
-        // gone are not the devices of the game.
-        _input?.Dispose();
-        _input = null;
-        _mouse = null;
         _down = false;
 
         _renderer?.Dispose();
@@ -219,28 +260,40 @@ public sealed class SilkDevWindowHost : IDevWindowHost
     /// <param name="focused">Whether the window now has the keyboard focus.</param>
     private void OnFocusChanged(bool focused) => _focused = focused;
 
-    /// <summary>Records that the left button of this window went down, which is what a click on a tab or a cross is.</summary>
-    /// <param name="mouse">The mouse of this window, which reports the position of the click.</param>
-    /// <param name="button">The button that went down.</param>
-    private void OnMouseDown(IMouse mouse, MouseButton button)
+    /// <summary>Asks the window manager for the focus when the pointer enters the window, which is what sends this window the keys of the keyboard.</summary>
+    /// <param name="window">The window the event belongs to.</param>
+    /// <param name="entered">Whether the pointer entered the window.</param>
+    private void OnCursorEnter(WindowHandle* window, bool entered)
     {
-        if (button == MouseButton.Left)
+        if (entered)
         {
-            _clicked = new Vector2(mouse.Position.X, mouse.Position.Y);
-            _clickReported = true;
-            _down = true;
+            _window?.Focus();
         }
     }
 
-    /// <summary>Records that the left button of this window came up, which is what the end of a drag of a selection is.</summary>
-    /// <param name="mouse">The mouse of this window.</param>
-    /// <param name="button">The button that came up.</param>
-    private void OnMouseUp(IMouse mouse, MouseButton button)
+    /// <summary>Records that a button of this window went down, which is what a click on a tab or a cross is.</summary>
+    /// <param name="window">The window the event belongs to.</param>
+    /// <param name="button">The button that changed state.</param>
+    /// <param name="action">Whether the button went down, came up or is repeating.</param>
+    /// <param name="mods">The modifiers of the keyboard, which this host does not read.</param>
+    /// <remarks>
+    /// The release of a button is not read here, because the state of the button is asked of the input of the game on every frame:
+    /// a release that lands outside the window is a release this window never hears about, and a state that read the events alone
+    /// would hold the button down for the rest of the run. What the press carries that the poll of the next frame would not is the
+    /// position of the click, which is what a page is handed once.
+    /// </remarks>
+    private void OnMouseButton(WindowHandle* window, Silk.NET.GLFW.MouseButton button, InputAction action, KeyModifiers mods)
     {
-        if (button == MouseButton.Left)
+        if (button != Silk.NET.GLFW.MouseButton.Left || action != InputAction.Press)
         {
-            _down = false;
+            return;
         }
+
+        double x = 0;
+        double y = 0;
+        _glfw?.GetCursorPos(window, out x, out y);
+        _clicked = new Vector2((float)x, (float)y);
+        _clickReported = true;
     }
 
     /// <summary>Presents a window of the operating system as the <see cref="IWindowService"/> the renderer attaches to, so the renderer makes its context current and measures the right surface.</summary>

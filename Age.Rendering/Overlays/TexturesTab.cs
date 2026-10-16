@@ -14,7 +14,8 @@ namespace Age.Rendering;
 /// </para>
 /// <para>
 /// The world is read through a delegate rather than held, because a game replaces its world when it loads a scene, and the count of
-/// sprites that name a path is what says which image is worth looking at.
+/// sprites that name a path is what says which image is worth looking at. The list is longer than the body of the page in a run of any
+/// length, so a wheel over the body scrolls it and a bar at the right edge says where a person stands in it.
 /// </para>
 /// </remarks>
 public sealed class TexturesTab : IDevWindowTab
@@ -26,6 +27,9 @@ public sealed class TexturesTab : IDevWindowTab
     private readonly ITextureService _textures;
     private readonly Func<World> _world;
     private readonly float _line = BitmapFontMetrics.GlyphHeight + 4f;
+    private readonly List<(string Path, Vector2 Size)> _rows = [];
+
+    private ScrollState _scroll;
 
     /// <summary>Initializes the page with the textures it reports and the world whose sprites name them.</summary>
     /// <param name="textures">The service that answers the images the run resolved.</param>
@@ -49,6 +53,17 @@ public sealed class TexturesTab : IDevWindowTab
     /// <inheritdoc />
     public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
     {
+        _rows.Clear();
+
+        foreach ((string path, TextureHandle _, Vector2 size) in _textures.Textures)
+        {
+            _rows.Add((path, size));
+        }
+
+        // The header of the page takes a row of its own, so the scroll is measured over the rows of images plus that one:
+        // a page that counted only the images would draw its last ones past the body and have them cut off by the clip of the
+        // window, which is what a scroll that is one row short looks like.
+        _scroll.Update(pointer, body, _rows.Count + 1, _line);
     }
 
     /// <inheritdoc />
@@ -56,41 +71,51 @@ public sealed class TexturesTab : IDevWindowTab
     {
         ArgumentNullException.ThrowIfNull(renderer);
 
-        List<(string Path, Vector2 Size)> rows = _textures.Textures.Select(entry => (entry.Path, entry.Size)).ToList();
+        int visible = ScrollState.Visible(body, _line);
+        int total = _rows.Count + 1;
+        int count = Math.Min(total, visible);
+        int start = Math.Clamp(_scroll.First, 0, Math.Max(0, total - count));
+
         World world = _world();
 
-        // The header stands above the images and the hint below them, so the room an image row may take is what is left of the body
-        // once those two are accounted for: a page that counted only the image rows would draw its last ones past the body and have
-        // them cut off by the clip of the window.
-        int height = Math.Max(1, (int)(body.Height / _line));
-        int capacity = Math.Max(0, height - 2);
-        int shown = Math.Min(rows.Count, capacity);
-        float y = body.Y;
+        renderer.PushClip(body);
 
-        renderer.DrawText($"{rows.Count} images, {_textures.MissingCount} that did not resolve", new Vector2(body.X, y), HintColour);
-        y += _line;
-
-        for (var index = 0; index < shown; index++)
+        try
         {
-            (string path, Vector2 size) = rows[index];
-            int used = SpritesUsing(world, path);
-            string line = $"{path} {size.X:0}x{size.Y:0} x{used}";
+            float y = body.Y;
 
-            renderer.DrawText(line, new Vector2(body.X, y), used > 0 ? TextColour : CountColour);
-            y += _line;
+            for (var index = 0; index < count; index++)
+            {
+                int row = start + index;
+
+                if (row == 0)
+                {
+                    renderer.DrawText($"{_rows.Count} images, {_textures.MissingCount} that did not resolve", new Vector2(body.X, y), HintColour);
+                    y += _line;
+                    continue;
+                }
+
+                (string path, Vector2 size) = _rows[row - 1];
+                int used = SpritesUsing(world, path);
+                string line = $"{path} {size.X:0}x{size.Y:0} x{used}";
+
+                renderer.DrawText(line, new Vector2(body.X, y), used > 0 ? TextColour : CountColour);
+                y += _line;
+            }
+
+            if (_rows.Count == 0)
+            {
+                renderer.DrawText("(no image was resolved yet)", new Vector2(body.X, y), HintColour);
+            }
+        }
+        finally
+        {
+            renderer.PopClip();
         }
 
-        if (rows.Count == 0)
-        {
-            renderer.DrawText("(no image was resolved yet)", new Vector2(body.X, y), HintColour);
-        }
-        else if (shown < rows.Count)
-        {
-            renderer.DrawText($"... {rows.Count - shown} more", new Vector2(body.X, y), HintColour);
-        }
+        _scroll.DrawBar(renderer, body, total, _line);
     }
 
-    /// <summary>Returns how many sprites of the world draw the image of a path, which is what says which images matter.</summary>
     private static int SpritesUsing(World world, string path)
     {
         var count = 0;

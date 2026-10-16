@@ -15,7 +15,8 @@ namespace Age.Rendering;
 /// <para>
 /// The world is read through a delegate rather than held, because a game replaces its world when it loads a scene, and the list of
 /// prototype identifiers is a delegate too, because the content belongs to the game rather than to the renderer: the page reports
-/// whichever of them are there now.
+/// whichever of them are there now. A run of any length has more prototypes and entities than the body of the page shows, so a wheel
+/// over the body scrolls it and a bar at the right edge says where a person stands in it.
 /// </para>
 /// </remarks>
 public sealed class PrototypesTab : IDevWindowTab
@@ -27,6 +28,9 @@ public sealed class PrototypesTab : IDevWindowTab
     private readonly Func<IEnumerable<string>> _ids;
     private readonly Func<World> _world;
     private readonly float _line = BitmapFontMetrics.GlyphHeight + 4f;
+    private readonly List<(string Text, Color Colour)> _rows = [];
+
+    private ScrollState _scroll;
 
     /// <summary>Initializes the page with the prototypes it reports and the world whose entities came from them.</summary>
     /// <param name="ids">The identifiers of the prototypes the content registered, asked for on every frame.</param>
@@ -50,6 +54,8 @@ public sealed class PrototypesTab : IDevWindowTab
     /// <inheritdoc />
     public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
     {
+        Rows(_world());
+        _scroll.Update(pointer, body, _rows.Count, _line);
     }
 
     /// <inheritdoc />
@@ -57,33 +63,38 @@ public sealed class PrototypesTab : IDevWindowTab
     {
         ArgumentNullException.ThrowIfNull(renderer);
 
-        World world = _world();
-        List<(string Text, Color Colour)> rows = Rows(world);
-        int capacity = Math.Max(1, (int)(body.Height / _line));
-        int shown = Math.Min(rows.Count, capacity);
-        float y = body.Y;
+        int visible = ScrollState.Visible(body, _line);
+        int count = Math.Min(_rows.Count, visible);
+        int start = Math.Clamp(_scroll.First, 0, Math.Max(0, _rows.Count - count));
 
-        for (var index = 0; index < shown; index++)
+        renderer.PushClip(body);
+
+        try
         {
-            (string text, Color colour) = rows[index];
-            renderer.DrawText(text, new Vector2(body.X, y), colour);
-            y += _line;
+            float y = body.Y;
+
+            for (var index = 0; index < count; index++)
+            {
+                (string text, Color colour) = _rows[start + index];
+                renderer.DrawText(text, new Vector2(body.X, y), colour);
+                y += _line;
+            }
+        }
+        finally
+        {
+            renderer.PopClip();
         }
 
-        if (shown < rows.Count)
-        {
-            renderer.DrawText($"... {rows.Count - shown} more", new Vector2(body.X, y), HintColour);
-        }
+        _scroll.DrawBar(renderer, body, _rows.Count, _line);
     }
 
     /// <summary>Builds the lines of the page: a prototype and the entities that came from it, then the entities that came from none.</summary>
-    private List<(string Text, Color Colour)> Rows(World world)
+    private void Rows(World world)
     {
-        var rows = new List<(string Text, Color Colour)>();
+        _rows.Clear();
+
         var ids = _ids().OrderBy(id => id, StringComparer.Ordinal).ToList();
 
-        // The entities of the world are grouped by the prototype they remember, so a prototype with nothing built from it and one with
-        // ten things on screen are both read in one place.
         var placed = new Dictionary<string, List<Entity>>(StringComparer.Ordinal);
         var loose = new List<Entity>();
 
@@ -106,35 +117,31 @@ public sealed class PrototypesTab : IDevWindowTab
             list.Add(entity);
         }
 
-        rows.Add(($"prototypes {ids.Count}, entities {world.Enumerate().Count()}", HintColour));
+        _rows.Add(($"prototypes {ids.Count}, entities {world.Enumerate().Count()}", HintColour));
 
         foreach (string id in ids)
         {
             placed.TryGetValue(id, out List<Entity>? list);
 
-            rows.Add(($"{id} x{list?.Count ?? 0}", TextColour));
+            _rows.Add(($"{id} x{list?.Count ?? 0}", TextColour));
 
             foreach (Entity entity in list ?? [])
             {
-                rows.Add(($"  {Where(world, entity)}", EntityColour));
+                _rows.Add(($"  {Where(world, entity)}", EntityColour));
             }
         }
 
-        // An entity that came from no prototype is one a game made by hand, which is worth seeing apart from the content.
         if (loose.Count > 0)
         {
-            rows.Add(($"(made by hand) x{loose.Count}", TextColour));
+            _rows.Add(($"(made by hand) x{loose.Count}", TextColour));
 
             foreach (Entity entity in loose)
             {
-                rows.Add(($"  {Where(world, entity)}", EntityColour));
+                _rows.Add(($"  {Where(world, entity)}", EntityColour));
             }
         }
-
-        return rows;
     }
 
-    /// <summary>Returns where an entity stands, which is its position for an entity of the world and its rectangle for an element of the interface.</summary>
     private static string Where(World world, Entity entity)
     {
         if (world.Has<TransformComponent>(entity))

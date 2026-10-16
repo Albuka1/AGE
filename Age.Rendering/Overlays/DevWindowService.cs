@@ -10,7 +10,6 @@ namespace Age.Rendering;
 /// <para>
 /// The page of a tab is drawn by the tab itself and the frame of the window — the title bar, the row of tabs, the crosses and the
 /// clip of the body — is drawn here, which is what the window owns and what a page leaves to it.
-/// was written for one works in the other, because the seam is <see cref="IDevWindowTab"/> either way.
 /// </para>
 /// <para>
 /// The window is created the first time it is opened, so a game that never opens it never pays for it, and its size is kept while it
@@ -209,19 +208,29 @@ public sealed class DevWindowService : IDevWindowService
             return;
         }
 
-        // A click on the frame of the window is the window's own — a cross or a tab — and a click inside the body is the page's. The
-        // window reads its own first, so a click that closed a tab never reaches the page below it.
-        bool insideBody = clicked is Vector2 where && Body(_host.Size) is Rect body && Contains(body, where);
+        // The body of the window is what the page of a tab owns. The pointer is read from the host rather than from the click of this
+        // frame, because a page is handed the cursor on every frame and not only on the frame a person pressed a button.
+        Rect body = Body(_host.Size);
+        Vector2 cursor = _host.Pointer;
+        bool insideBody = Contains(body, cursor);
 
-        if (clicked is Vector2 point && !insideBody)
+        // What a page acts on once is a press, and a press is a click that landed inside the body on this frame: the cursor being
+        // inside the body is not a press, and a page that read the one in place of the other would act on every frame the pointer
+        // spent over a row. What a page follows while a person drags is the button itself, which the host reports on every frame
+        // the button is held, inside the body or outside it.
+        bool pressedInsideBody = clicked is Vector2 point && Contains(body, point);
+
+        // A click on the frame of the window is the window's own — a cross or a tab — and a click inside the body is the page's.
+        // The window reads its own first, so a click that closed a tab never reaches the page below it.
+        if (clicked is Vector2 clickedPoint && !insideBody)
         {
-            Clicked(point);
+            Clicked(clickedPoint);
         }
 
         if (_tabs.Count > 0)
         {
-            var pointer = new WindowPointer(_host.Pointer, insideBody, _host.PointerDown);
-            _tabs[_active].Update(frame, Body(_host.Size), pointer);
+            var pointer = new WindowPointer(cursor, pressedInsideBody, _host.PointerDown);
+            _tabs[_active].Update(frame, body, pointer);
         }
     }
 
@@ -350,4 +359,3 @@ public sealed class DevWindowService : IDevWindowService
     /// <summary>Returns the title that the window manager writes on the window.</summary>
     private static string ResolveTitle() => "devwindow";
 }
-
