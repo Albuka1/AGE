@@ -14,9 +14,6 @@ namespace Age.UI;
 /// </remarks>
 public sealed class UIUpdateSystem : IFrameSystem
 {
-    /// <summary>The depth a walk up the tree of the interface takes before it stops, which is what a cycle in a tree cannot walk past.</summary>
-    private const int MaximumTreeDepth = 32;
-
     private readonly IInputService _input;
     private readonly UIInputFrame _frame;
     private readonly List<Entity> _buttons = new();
@@ -366,15 +363,18 @@ public sealed class UIUpdateSystem : IFrameSystem
     /// <param name="entity">The element to test.</param>
     /// <returns><see langword="true"/> when the element is drawn, which is when it and every ancestor of it say so.</returns>
     /// <remarks>
-    /// The walk up the tree stops at <see cref="MaximumTreeDepth"/> levels, so a cycle a game wrote by mistake does not
-    /// walk forever, and an element whose parent is gone is a root of its own: a tree that a scene dropped is a tree whose
-    /// children stand where they are rather than one that is drawn as nothing.
+    /// The walk up the tree stops at an element whose parent is gone, at one that names no parent, and at one the walk has
+    /// already been through, which is what a cycle a game wrote by mistake is. Every element is visited once, so the walk
+    /// is finite without a depth limit that would leave a legitimate tree of a hundred levels unread, and an element whose
+    /// parent is gone is a root of its own: a tree that a scene dropped is a tree whose children stand where they are
+    /// rather than one that is drawn as nothing.
     /// </remarks>
     private static bool IsEffectivelyVisible(World world, Entity entity)
     {
+        var visited = new HashSet<Entity>();
         Entity current = entity;
 
-        for (var depth = 0; depth < MaximumTreeDepth; depth++)
+        while (visited.Add(current))
         {
             if (!world.IsAlive(current) || !world.Has<RectTransformComponent>(current))
             {
@@ -401,6 +401,8 @@ public sealed class UIUpdateSystem : IFrameSystem
             current = parent;
         }
 
+        // The walk reached an element it has already been through, which is what a cycle in the tree is: what has been
+        // checked so far is every element that could have hidden the one the walk began with, and none of them did.
         return true;
     }
 
