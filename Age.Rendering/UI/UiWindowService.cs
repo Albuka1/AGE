@@ -64,28 +64,25 @@ public sealed class UiWindowService : IFrameSystem
     /// <exception cref="InvalidOperationException">No window of the game names that identifier, or the world is not the one this service belongs to.</exception>
     /// <remarks>
     /// A window that is already open is left alone, so a game that opens the window it holds does not build it twice. A
-    /// window whose root is gone — one a scene replaced, or one a game destroyed without closing it — is closed here
-    /// first: what a window leaves behind is the map of its elements and the handlers of its buttons, and the map is about
-    /// to be written with the elements of the new window, so a handler of the window before would be reached by a press
-    /// that no window answers and would never be removed by anything. A window whose description throws is taken back out
-    /// of the canvas here rather than being left as a root that no map names, so a failed open leaves nothing behind for
-    /// the next frame to draw.
+    /// window whose description throws is taken back out of the canvas here rather than being left as a root that no map
+    /// names, so a failed open leaves nothing behind for the next frame to draw. A window that names a root that the world
+    /// no longer holds is opened again rather than refused: the map of the window is what says it is open, and a root that
+    /// a scene destroyed is what a close takes with the elements the map still names.
     /// </remarks>
     public Entity Open(World world, string id)
     {
         world = Own(world);
 
-        if (_open.TryGetValue(id, out Entity existing))
+        if (_open.TryGetValue(id, out Entity existing) && world.IsAlive(existing))
         {
-            if (world.IsAlive(existing))
-            {
-                return existing;
-            }
+            return existing;
+        }
 
-            // The root of the window that was open is gone, and the id is about to name a root of its own: the window
-            // of the frame before is closed here rather than overwritten, which is what takes its element map and its
-            // click handlers away with it. `Close` finds the entry it reads in `_open`, so it does the cleanup and skips
-            // the destroy, because there is no entity left to destroy.
+        // The root of a window that the map names is gone, which is what a scene that destroyed it leaves: what the map holds
+        // is still what the window built, and every element of it that is alive is what a close takes with it before the build
+        // of the window makes the new ones.
+        if (_open.ContainsKey(id))
+        {
             Close(world, id);
         }
 
@@ -135,8 +132,9 @@ public sealed class UiWindowService : IFrameSystem
     /// <remarks>
     /// A window that is not open is left alone, so a game that closes the window it does not hold writes nothing. The
     /// root of a window that is closed is taken out of the list of its parent before it is destroyed, because a parent
-    /// that still lists it would keep a name that resolves to nothing: a window that is toggled in a loop would then
-    /// grow one such entry on the canvas on every close.
+    /// that still lists it would keep a name that resolves to nothing. A root that a scene destroyed before the window
+    /// was closed leaves the elements it built behind it, which the map of the window still names: every one of them that
+    /// is alive is queued for destruction here rather than left in the world with no map to find them by.
     /// </remarks>
     public void Close(World world, string id)
     {
@@ -149,7 +147,10 @@ public sealed class UiWindowService : IFrameSystem
 
         _open.Remove(id);
 
-        if (_elements.Remove(id, out Dictionary<string, Entity>? elements))
+        Dictionary<string, Entity>? elements = null;
+        _elements.Remove(id, out elements);
+
+        if (elements is not null)
         {
             foreach (Entity element in elements.Values)
             {
@@ -161,6 +162,23 @@ public sealed class UiWindowService : IFrameSystem
         {
             Detach(world, root);
             DestroyTree(world, root);
+            return;
+        }
+
+        // The root of the window is already gone, which is what a scene that destroyed it leaves: the map of the window still
+        // names every element it built, and every one of them that is alive is what a close takes with it. What is left in the
+        // world after this is what the scene put there itself, which is what a window that is not open leaves behind.
+        if (elements is null)
+        {
+            return;
+        }
+
+        foreach (Entity element in elements.Values)
+        {
+            if (element != root && world.IsAlive(element))
+            {
+                world.RequestDestroy(element);
+            }
         }
     }
 
@@ -251,13 +269,6 @@ public sealed class UiWindowService : IFrameSystem
     /// <returns>The world, which is the one the service was first called with.</returns>
     /// <exception cref="ArgumentNullException">The world is null.</exception>
     /// <exception cref="InvalidOperationException">The world is not the one this service belongs to.</exception>
-    /// <remarks>
-    /// Every map of this service holds entity identifiers, and an identifier names an entity of the world that created
-    /// it and nothing of another one: a service that read a second world through the same maps would open its windows
-    /// on the canvas of the first and find the buttons of entities that a scene was built without. The world is
-    /// therefore kept apart from the maps, as the one world the service was made for, and a caller that reaches it with
-    /// another one hears about it here rather than two frames later in a window that does not react.
-    /// </remarks>
     private World Own(World? world)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -340,13 +351,6 @@ public sealed class UiWindowService : IFrameSystem
     /// <summary>Takes an element out of the list of the parent it stands inside.</summary>
     /// <param name="world">The world the element lives in.</param>
     /// <param name="entity">The element to take out.</param>
-    /// <remarks>
-    /// A child names its parent and a parent lists its children, and only the list is read by the walk of the interface:
-    /// an element that was taken out of the world but is still listed is a name that resolves to nothing, which every
-    /// walk then has to skip and which nothing ever removes. A window that is closed takes its root out of the canvas
-    /// here, so a window that is toggled in a loop leaves the canvas with the entries of the windows that are open and
-    /// nothing else.
-    /// </remarks>
     private static void Detach(World world, Entity entity)
     {
         if (!world.Has<ParentComponent>(entity))
@@ -368,8 +372,6 @@ public sealed class UiWindowService : IFrameSystem
             return;
         }
 
-        // The entries that are kept are counted before the array is built, so a list that holds the element once is left
-        // exactly as it was and a list that holds it more than once loses every one of them.
         int kept = 0;
 
         foreach (EntityRef reference in current)

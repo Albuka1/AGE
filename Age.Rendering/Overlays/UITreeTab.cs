@@ -19,9 +19,15 @@ namespace Age.Rendering;
 /// person folded away, which is a property of what they are looking at rather than of the world.
 /// </para>
 /// <para>
-/// The rows are longer than the body of the window more often than not, so the page scrolls: a wheel over the body moves
-/// the rows, and a bar at the right edge shows where a person stands in them. A click on a row that has children folds it
-/// away or opens it, which is what a tree is read with when the interface of a window is deeper than the room of the page.
+/// The rows are longer than the body of the window more often than not, so the page scrolls: a drag of the bar at the
+/// right edge moves the rows, and the bar says where a person stands in them. A click on a row that has children folds
+/// it away or opens it, which is what a tree is read with when the interface of a window is deeper than the room of the
+/// page.
+/// </para>
+/// <para>
+/// A press that the bar of the page took is a press of the bar rather than a press of the row that stood under it: the
+/// drag of the list and the fold of a row are the two things one press can do, and the bar is what the pointer reached
+/// when it landed on it.
 /// </para>
 /// </remarks>
 public sealed class UITreeTab : IDevWindowTab
@@ -67,9 +73,13 @@ public sealed class UITreeTab : IDevWindowTab
         }
 
         Build(world);
-        _scroll.Update(pointer, body, _rows.Count, _line);
 
-        if (!pointer.Pressed || !Contains(body, pointer.Position))
+        // A press that the bar of the page took is a press of the bar rather than a press of the row that stood under it: the
+        // drag of the list and the fold of a row are the two things one press can do, and the bar is what the pointer reached
+        // when it landed on it.
+        bool captured = _scroll.Update(pointer, body, _rows.Count, _line);
+
+        if (captured || !pointer.Pressed || !Contains(body, pointer.Position))
         {
             return;
         }

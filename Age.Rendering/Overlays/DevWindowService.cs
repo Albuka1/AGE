@@ -208,11 +208,10 @@ public sealed class DevWindowService : IDevWindowService
             return;
         }
 
-        // The body of the window is what the page of a tab owns. The pointer is read from the host rather than from the click of this
-        // frame, because a page is handed the cursor on every frame and not only on the frame a person pressed a button.
+        // The body of the window is what the page of a tab owns, and the pointer is read from the host rather than from the click of
+        // this frame, because a page is handed the cursor on every frame and not only on the frame a person pressed a button.
         Rect body = Body(_host.Size);
         Vector2 cursor = _host.Pointer;
-        bool insideBody = Contains(body, cursor);
 
         // What a page acts on once is a press, and a press is a click that landed inside the body on this frame: the cursor being
         // inside the body is not a press, and a page that read the one in place of the other would act on every frame the pointer
@@ -221,8 +220,10 @@ public sealed class DevWindowService : IDevWindowService
         bool pressedInsideBody = clicked is Vector2 point && Contains(body, point);
 
         // A click on the frame of the window is the window's own — a cross or a tab — and a click inside the body is the page's.
-        // The window reads its own first, so a click that closed a tab never reaches the page below it.
-        if (clicked is Vector2 clickedPoint && !insideBody)
+        // What tells the two apart is where the click landed rather than where the cursor stands: a click inside the body is the
+        // page's even when the cursor has moved out of it by the time the frame reads the pointer, and a click on the frame is the
+        // window's even when the cursor has moved into the body on the frame that follows it.
+        if (clicked is Vector2 clickedPoint && !pressedInsideBody)
         {
             Clicked(clickedPoint);
         }

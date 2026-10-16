@@ -20,6 +20,10 @@ namespace Age.Rendering;
 /// to what was just done rather than the beginning of the run; the rows move when the number of lines in the console changes, and a
 /// person who is reading further back is not moved away from the row they are on.
 /// </para>
+/// <para>
+/// A press that the bar of the page took is a press of the bar rather than a press of the row that stood under it: the drag of the
+/// list and the choice of a row are the two things one press can do, and the bar is what the pointer reached when it landed on it.
+/// </para>
 /// </remarks>
 public sealed class ConsoleTab : IDevWindowTab
 {
@@ -68,9 +72,12 @@ public sealed class ConsoleTab : IDevWindowTab
     /// </remarks>
     public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
     {
-        _scroll.Update(pointer, body, _rows.Count, _line);
+        // A press that the bar of the page took is a press of the bar rather than a press of the row that stood under it: the
+        // drag of the list and the choice of a row are the two things one press can do, and the bar is what the pointer
+        // reached when it landed on it.
+        bool captured = _scroll.Update(pointer, body, _rows.Count, _line);
 
-        if (!pointer.Pressed || !Contains(body, pointer.Position))
+        if (captured || !pointer.Pressed || !Contains(body, pointer.Position))
         {
             return;
         }

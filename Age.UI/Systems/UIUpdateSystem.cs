@@ -43,8 +43,10 @@ public sealed class UIUpdateSystem : IFrameSystem
     /// so a button that lost the pointer stops reporting a state. Then the buttons that are interactable, visible, and
     /// have a <see cref="RectTransformComponent"/> containing the pointer are considered, and the one with the highest
     /// <see cref="RectTransformComponent.ZOrder"/> wins; when two share a ZOrder the later entity wins, which matches the
-    /// order the UI renderer draws them in. A press that a control of this system took is reported through
-    /// <see cref="UIInputFrame.Consume"/>, which is what a system that reads the same pointer after this one asks.
+    /// order the UI renderer draws them in. A press that any control of this system took is reported through
+    /// <see cref="UIInputFrame.Consume"/>, and the controls that follow are left to read the hover of the frame without
+    /// beginning an interaction of their own: one press does one thing, and a button, a check box or a slider that the
+    /// press did not reach does not answer it.
     /// </remarks>
     public void UpdateFrame(World world, in GameTime frame)
     {
@@ -93,14 +95,18 @@ public sealed class UIUpdateSystem : IFrameSystem
                     world.Events.Raise(new ButtonPressedEvent(topMost.Value));
 
                     // The button took the click of this frame, so a system that reads the same pointer below does not
-                    // also read it.
+                    // also read it, and a control that comes after this one in this frame does not begin an interaction
+                    // of its own on the same press.
                     _frame.Consume();
+                    consumed = true;
                 }
             }
         }
 
-        // The other controls read the same pointer. When a drop-down took the click, they are left as they are for the
-        // frame, so a click that chose a row of a list does not also tick the box that stood under it.
+        // The other controls read the same pointer. When a control of the interface took the click — a drop-down that
+        // opened a list or chose a row of one, a button that was pressed — they are left as they are for the frame, so
+        // a click that reached one control does not also reach another. Hover is still reported, so a control the
+        // pointer is over looks live even on the frame that another control took the click on.
         if (!consumed)
         {
             UpdateCheckBoxes(world);
@@ -108,7 +114,6 @@ public sealed class UIUpdateSystem : IFrameSystem
         }
         else
         {
-            // Hover is still reported, so a control the pointer is over looks live even on the frame a list took the click.
             UpdateCheckBoxes(world, pressed: false);
             UpdateSliders(world, pressed: false);
         }
@@ -120,7 +125,10 @@ public sealed class UIUpdateSystem : IFrameSystem
     /// <remarks>
     /// An open list is drawn over the elements under it and takes the pointer until it is dismissed, so a click inside it
     /// chooses a row and a click outside it closes it without reaching whatever it covered. The list hangs below the
-    /// closed element, so a row is found by the height of a row rather than by an element in the world.
+    /// closed element, so a row is found by the height of a row rather than by an element in the world. A list that is open
+    /// and whose root is hidden is not a list a person sees: the pass of the interface draws nothing of it, so what a
+    /// press that landed on a visible button is read against is the drop-down that is visible rather than the one that is
+    /// only open.
     /// </remarks>
     private bool UpdateDropdowns(World world)
     {
@@ -134,7 +142,11 @@ public sealed class UIUpdateSystem : IFrameSystem
             DropdownComponent dropdown = world.Get<DropdownComponent>(entity);
             dropdown.IsHovered = topMost == entity;
 
-            if (dropdown.Open)
+            // A list that is open and whose root is hidden is not a list a person sees: the elements of a window that is
+            // closed stay in the world and the frame that draws them draws nothing, so what a frame reads of them is the
+            // open flag rather than the list. What a press that landed on a visible button is read against is the drop-down
+            // that is visible, which is what the pass of the interface drew.
+            if (dropdown.Open && IsEffectivelyVisible(world, entity))
             {
                 open = entity;
             }
@@ -202,7 +214,7 @@ public sealed class UIUpdateSystem : IFrameSystem
 
     /// <summary>Reads the pointer for every check box, toggling the state of the one that was pressed and reporting hover.</summary>
     /// <param name="world">The world to read the check boxes from.</param>
-    /// <param name="pressed">Whether a press of this frame may toggle a box, which a frame that a drop-down took the click on does not.</param>
+    /// <param name="pressed">Whether a press of this frame may toggle a box, which a frame that a control took the click of does not.</param>
     /// <remarks>
     /// A press toggles the state and raises <see cref="CheckChangedEvent"/>, so a game reacts to a change rather than
     /// comparing the state with the frame before it. The box that the pointer is over is the one with the highest
@@ -236,13 +248,13 @@ public sealed class UIUpdateSystem : IFrameSystem
 
     /// <summary>Reads the pointer for every slider, beginning, following and ending a drag, and reporting the number it moved to.</summary>
     /// <param name="world">The world to read the sliders from.</param>
-    /// <param name="pressed">Whether a press of this frame may begin a drag, which a frame that a drop-down took the click on does not.</param>
+    /// <param name="pressed">Whether a press of this frame may begin a drag, which a frame that a control took the click of does not.</param>
     /// <remarks>
     /// A drag begins on a press inside the track and follows the pointer wherever it goes until the button comes up, so a
     /// pointer that slips off the slider still moves the number, which is what a person dragging a handle expects. The
     /// number is taken from where the pointer stands along the track, so a click in the middle of the track jumps the
-    /// handle there rather than nudging it. A drag that is already under way is still followed on a frame that a drop-down
-    /// took a click on, so a list that opens over a track the pointer is dragging does not freeze the handle.
+    /// handle there rather than nudging it. A drag that is already under way is still followed on a frame that another
+    /// control took a click on, so a button that the pointer pressed over a track does not freeze the handle.
     /// </remarks>
     private void UpdateSliders(World world, bool pressed = true)
     {

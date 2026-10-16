@@ -17,6 +17,11 @@ namespace Age.Rendering;
 /// person who drags the bar off the top or the bottom of the body keeps the drag rather than losing it, which is what
 /// a scrollbar of a list of a thousand rows needs.
 /// </para>
+/// <para>
+/// What <see cref="Update"/> answers is whether the bar took the pointer of the frame, which is what a page that also
+/// selects a row reads: a press that began a drag of the bar is a press of the bar rather than a press of the row that
+/// stood under the pointer, and a page that ran both would drag the list and choose the row it happened to drag.
+/// </para>
 /// </remarks>
 public struct ScrollState
 {
@@ -42,11 +47,14 @@ public struct ScrollState
     /// <param name="body">The rectangle the page owns, in the pixels of the window.</param>
     /// <param name="rows">The number of rows the page built.</param>
     /// <param name="line">The height of one row, in pixels.</param>
+    /// <returns><see langword="true"/> when the bar took the pointer of this frame, which is what a page that also selects a row reads.</returns>
     /// <remarks>
     /// A drag is followed whether the pointer stays in the body or not, because the button is what the drag follows rather
-    /// than the rectangle it began in.
+    /// than the rectangle it began in. What is answered is whether the bar took the pointer of the frame, which is what a
+    /// page that selects a row reads before it acts on the press: a press on the bar is a press of the bar rather than a
+    /// press of the row that stood under it.
     /// </remarks>
-    public void Update(in WindowPointer pointer, Rect body, int rows, float line)
+    public bool Update(in WindowPointer pointer, Rect body, int rows, float line)
     {
         int visible = Visible(body, line);
         IsActive = rows > visible;
@@ -58,12 +66,16 @@ public struct ScrollState
             _dragging = false;
         }
 
-        if (IsActive)
+        bool captured = false;
+
+        if (IsActive && UpdateDrag(pointer, body, rows, visible))
         {
-            UpdateDrag(pointer, body, rows, visible);
+            captured = true;
         }
 
         _first = Math.Clamp(_first, 0, Math.Max(0, rows - visible));
+
+        return captured;
     }
 
     /// <summary>Returns the number of rows that the body shows.</summary>
@@ -108,29 +120,30 @@ public struct ScrollState
     /// <param name="body">The rectangle the page owns.</param>
     /// <param name="rows">The number of rows the page built.</param>
     /// <param name="visible">The number of rows the body shows.</param>
+    /// <returns><see langword="true"/> when the bar took the pointer of this frame, which is what a page that selects a row reads.</returns>
     /// <remarks>
     /// A press that lands on the bar is a press on the scrollbar, which is what the page reads to begin a drag: a press
     /// that lands on the thumb keeps the offset of the pointer inside it, and one that lands on the track beside it
     /// centres the thumb under the pointer, which is what a scrollbar of an operating system does.
     /// </remarks>
-    private void UpdateDrag(in WindowPointer pointer, Rect body, int rows, int visible)
+    private bool UpdateDrag(in WindowPointer pointer, Rect body, int rows, int visible)
     {
         if (_dragging)
         {
             ApplyDrag(pointer, body, rows, visible);
-            return;
+            return true;
         }
 
         if (!pointer.Pressed)
         {
-            return;
+            return false;
         }
 
         float x = BarX(body);
 
         if (pointer.Position.X < x || pointer.Position.X > x + BarWidth)
         {
-            return;
+            return false;
         }
 
         float height = ThumbHeight(body, rows, visible);
@@ -142,6 +155,7 @@ public struct ScrollState
 
         _dragging = true;
         ApplyDrag(pointer, body, rows, visible);
+        return true;
     }
 
     /// <summary>Writes the row that is drawn first from where the pointer stands, which a drag of the bar is.</summary>
