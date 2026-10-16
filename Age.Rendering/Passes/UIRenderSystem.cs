@@ -205,6 +205,14 @@ public sealed class UIRenderSystem : IRenderPass
     }
 
     /// <summary>Draws the image of an element inside its rectangle, or its placeholder when the image is not there.</summary>
+    /// <param name="image">The image of the element, whose tint is null when a document named none.</param>
+    /// <param name="box">The rectangle the image is drawn in.</param>
+    /// <remarks>
+    /// What a document that names no tint reads is null rather than transparent, which is what makes a transparent tint
+    /// a colour that a person asked for rather than one that stands for the default. The image as the artist drew it is
+    /// what a document that names no colour is drawn as, and an image that asks for a transparent tint is drawn as the
+    /// image it asked for.
+    /// </remarks>
     private void DrawImage(in ImageComponent image, Rect box)
     {
         if (_textures is null || string.IsNullOrEmpty(image.TexturePath))
@@ -213,7 +221,7 @@ public sealed class UIRenderSystem : IRenderPass
         }
 
         TextureHandle texture = _textures.Resolve(image.TexturePath);
-        Color tint = image.Tint.A == 0 ? Color.White : image.Tint;
+        Color tint = image.Tint ?? Color.White;
 
         _renderer.DrawSprite(texture, box.Position, box.Size, tint);
     }
