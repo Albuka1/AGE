@@ -27,11 +27,26 @@ public struct Vector2 : IEquatable<Vector2>
     /// <summary>Subtracts two vectors component by component.</summary>
     public static Vector2 operator -(Vector2 left, Vector2 right) => new(left.X - right.X, left.Y - right.Y);
 
+    /// <summary>Returns the vector that points the other way from this one.</summary>
+    /// <param name="value">The vector to negate.</param>
+    /// <returns>The vector with both of its components negated.</returns>
+    /// <remarks>
+    /// A vector is its own kind of number, so the opposite of one is the opposite of each of its components, which is what
+    /// a resolution of two bodies reads when it moves one of them against the direction of the penetration it was given.
+    /// </remarks>
+    public static Vector2 operator -(Vector2 value) => new(-value.X, -value.Y);
+
     /// <summary>Multiplies two vectors component by component.</summary>
     public static Vector2 operator *(Vector2 left, Vector2 right) => new(left.X * right.X, left.Y * right.Y);
 
     /// <summary>Multiplies a vector by a scalar.</summary>
     public static Vector2 operator *(Vector2 value, float scalar) => new(value.X * scalar, value.Y * scalar);
+
+    /// <summary>Multiplies a scalar by a vector, which is the same as the other way round.</summary>
+    /// <param name="scalar">The number to multiply by.</param>
+    /// <param name="value">The vector to multiply.</param>
+    /// <returns>The vector with every component multiplied by the number.</returns>
+    public static Vector2 operator *(float scalar, Vector2 value) => new(value.X * scalar, value.Y * scalar);
 
     /// <summary>Determines whether two vectors are equal.</summary>
     public static bool operator ==(Vector2 left, Vector2 right) => left.Equals(right);

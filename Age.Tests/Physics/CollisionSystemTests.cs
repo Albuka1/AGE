@@ -13,7 +13,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         Entity first = CreateBox(world, new Vector2(0f, 0f));
         Entity second = CreateBox(world, new Vector2(16f, 16f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
 
         system.Update(world, new GameTime(0d, 0d));
 
@@ -32,7 +32,7 @@ public sealed class CollisionSystemTests
         CreateBox(world, new Vector2(16f, 16f));
         var collisions = new List<CollisionEvent>();
         world.Events.Subscribe<CollisionEvent>((_, collision) => collisions.Add(collision));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
 
         system.Update(world, new GameTime(0d, 0d));
 
@@ -51,7 +51,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         CreateBox(world, new Vector2(0f, 0f));
         CreateBox(world, new Vector2(128f, 128f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
 
         system.Update(world, new GameTime(0d, 0d));
 
@@ -64,7 +64,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         Entity first = CreateBox(world, new Vector2(0f, 0f));
         CreateBox(world, new Vector2(16f, 16f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
 
         system.Update(world, new GameTime(0d, 0d));
         system.LastPairs.Should().HaveCount(1);
@@ -82,7 +82,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         CreateBox(world, new Vector2(0f, 0f));
         CreateBox(world, new Vector2(16f, 16f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
 
         system.Update(world, new GameTime(0d, 0d));
         system.Update(world, new GameTime(0d, 0d));
@@ -96,7 +96,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         Entity first = CreateBox(world, new Vector2(0f, 0f));
         CreateBox(world, new Vector2(16f, 16f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
 
         system.Update(world, new GameTime(0d, 0d));
         world.Set(first, new TransformComponent { Position = new Vector2(1024f, 1024f), Scale = new Vector2(1f, 1f) });
@@ -115,7 +115,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         Entity first = CreateBox(world, new Vector2(0f, 0f));
         CreateBox(world, new Vector2(16f, 16f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
         system.Update(world, new GameTime(0d, 0d));
 
         world.DestroyEntity(first);
@@ -131,7 +131,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         Entity first = CreateBox(world, new Vector2(0f, 0f));
         CreateBox(world, new Vector2(16f, 16f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
         system.Update(world, new GameTime(0d, 0d));
 
         world.Remove<ColliderComponent>(first);
@@ -147,7 +147,7 @@ public sealed class CollisionSystemTests
         CreateBox(world, new Vector2(0f, 0f));
         Entity late = world.CreateEntity();
         world.Set(late, new TransformComponent { Position = new Vector2(16f, 16f), Scale = new Vector2(1f, 1f) });
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
         system.Update(world, new GameTime(0d, 0d));
         system.LastPairs.Should().BeEmpty();
 
@@ -163,7 +163,7 @@ public sealed class CollisionSystemTests
         var world = new World();
         Entity first = CreateBox(world, new Vector2(0f, 0f));
         Entity second = CreateBox(world, new Vector2(900f, 900f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
         system.Update(world, new GameTime(0d, 0d));
         system.LastPairs.Should().BeEmpty();
 
@@ -182,7 +182,7 @@ public sealed class CollisionSystemTests
     {
         var world = new World();
         Entity first = CreateBox(world, new Vector2(0f, 0f));
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
         system.Update(world, new GameTime(0d, 0d));
         system.CellCount.Should().Be(1);
 
@@ -197,7 +197,7 @@ public sealed class CollisionSystemTests
     {
         var world = new World();
         var boxes = new List<Entity>();
-        var system = new CollisionSystem();
+        var system = new CollisionSystem { Resolve = false };
 
         for (int index = 0; index < 8; index++)
         {
