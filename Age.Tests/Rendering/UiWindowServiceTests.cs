@@ -207,7 +207,7 @@ public sealed class UiWindowServiceTests
         service.IsOpen("boom").Should().BeFalse("a window that failed to build is not one the service holds as open");
     }
 
-        /// <summary>A window that builds a label and remembers what its own build and update were asked for.</summary>
+    /// <summary>A window that builds a label and remembers what its own build and update were asked for.</summary>
     private sealed class FakeWindow : IUiWindow
     {
         public FakeWindow(string id) => Id = id;
