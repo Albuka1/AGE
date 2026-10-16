@@ -16,12 +16,12 @@ public static class CoreServiceCollectionExtensions
     /// the console, the settings and the folders of a person, and the steps of a shutdown.
     /// </summary>
     /// <remarks>
-    /// The systems of this assembly are registered by <see cref="SystemRegistrationExtensions.AddAgeSystems"/> and
-    /// <see cref="SystemRegistrationExtensions.AddAgeComponentRegistrations"/>, which a host calls once with the
-    /// assemblies it reads. A logger is available without a logging builder: every service that asks for one gets
-    /// <see cref="NullLogger{T}"/> until a game registers logging of its own, so logging is never required and never
-    /// throws. Register that logging <em>before</em> this call, because the fallback is added only when nothing is
-    /// there yet.
+    /// The systems and the component registrations of this assembly are read by a scan here, so a host that calls this
+    /// one method reads the whole assembly rather than listing what it holds: a second call of the scan for the same
+    /// assembly would register every system a second time. A logger is available without a logging builder: every
+    /// service that asks for one gets <see cref="NullLogger{T}"/> until a game registers logging of its own, so logging
+    /// is never required and never throws. Register that logging <em>before</em> this call, because the fallback is
+    /// added only when nothing is there yet.
     /// </remarks>
     public static IServiceCollection AddAgeCore(this IServiceCollection services)
     {
@@ -45,6 +45,9 @@ public static class CoreServiceCollectionExtensions
             provider.GetRequiredService<ComponentRegistry>(),
             provider.GetRequiredService<ILogger<SceneSerializer>>(),
             provider.GetService<IPrototypeSource>()));
+
+        services.AddAgeSystems(typeof(World).Assembly);
+        services.AddAgeComponentRegistrations(typeof(World).Assembly);
 
         return services;
     }

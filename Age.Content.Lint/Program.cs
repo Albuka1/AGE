@@ -32,22 +32,13 @@ using ServiceProvider provider = new ServiceCollection()
     .AddAgePhysics()
     .AddAgeUI()
     .AddAgeRendering()
-    .AddAgeSystems(
-        typeof(World).Assembly,
-        typeof(IRenderer).Assembly,
-        typeof(CollisionSystem).Assembly,
-        typeof(UIInputFrame).Assembly)
-    .AddAgeComponentRegistrations(
-        typeof(World).Assembly,
-        typeof(IRenderer).Assembly,
-        typeof(CollisionSystem).Assembly,
-        typeof(UIInputFrame).Assembly)
     .BuildServiceProvider();
 
 PrototypeManager prototypes = provider.GetRequiredService<PrototypeManager>();
 
-// The tool reads the kinds the engine declares itself, because it does not link the assembly of a game: a game that
-// lints its own content reads the same list from its own host, where AddAgeContentKinds registers them.
+// The tool reads the kinds the engine declares itself, because it does not link the assembly of a game: a game that lints its
+// own content registers its kinds the same way, through AddAgeContentKinds, and the two kinds below are the two the engine
+// declares on its own.
 prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
 prototypes.Register(MaterialPrototype.Kind, MaterialPrototype.Read);
 
