@@ -3,18 +3,61 @@ using Age.Core;
 namespace Age.Physics;
 
 /// <summary>
-/// Detects overlapping colliders and resolves them into <see cref="CollisionComponent"/> instances.
+/// Detects overlapping colliders, resolves what a solid pair asks a resolution for, and reports every pair it found as a
+/// contact that began, that stands, or that ended.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The update runs in four steps. First the pairs of the last step are read into a buffer, so the contacts that are over
+/// can be announced. Then the spatial hash is brought in line with the colliders of the world, the pairs that share a cell
+/// are tested, and a pair is kept when each of the two colliders answers the layer of the other. The pairs of the step are
+/// resolved, from the shortest penetration of each pair, unless both sides are immovable or one of them is a trigger.
+/// Finally the pairs of the step are compared with the pairs of the step before, and one event of each of the three is
+/// raised for every pair the comparison names: an enter, a stay or an exit.
+/// </para>
+/// <para>
+/// The order of a resolution is the order of the pairs, which is the identifier of the first entity of a pair and then of
+/// the second, so two runs with the same world resolve the same way. A body that was moved by one pair takes part in the
+/// pairs that follow with the box it has now, which is what keeps a resolution from pushing a body back into another one
+/// without ever settling.
+/// </para>
+/// <para>
+/// A collider that is a trigger, and a body of a battle on a grid of cells is one, is reported and never resolved: what a
+/// cell of a grid decides is where a body stands, and a box of a sprite is a picture of the body rather than its place.
+/// </para>
+/// </remarks>
 public sealed class CollisionSystem : ISystem
 {
     private const float CellSize = 64f;
+    private const int ResolutionIterations = 2;
 
     private readonly List<CollisionPair> _pairs = new();
     private readonly List<Entity> _stale = new();
     private readonly List<Entity> _dropped = new();
     private readonly Dictionary<Entity, Aabb> _boxes = new();
+    private readonly Dictionary<Entity, CollisionLayer> _masks = new();
+    private readonly Dictionary<Entity, bool> _triggers = new();
+    private readonly Dictionary<Entity, bool> _immovable = new();
     private readonly Dictionary<(int X, int Y), List<Entity>> _cells = new();
-    private readonly HashSet<(int A, int B)> _seen = new();
+    private readonly HashSet<(Entity A, Entity B)> _seen = new();
+    private readonly HashSet<(Entity A, Entity B)> _previous = new();
+    private readonly HashSet<(Entity A, Entity B)> _current = new();
+
+    /// <summary>Gets or sets a value indicating whether a solid pair is moved out of its overlap.</summary>
+    /// <remarks>
+    /// <para>
+    /// The flag is on by default, because a system of collisions that only reports an overlap leaves two bodies standing
+    /// in each other, which is what a game that draws a body where its box is cannot show. A game that only reads the
+    /// pairs — a fight on a grid of cells, where every body is a trigger — pays for a resolution that never runs, because
+    /// a pair of two triggers is left where it stands.
+    /// </para>
+    /// <para>
+    /// A game that wants the pairs of a step as they are, without the world having changed by the time it reads them,
+    /// sets this to <see langword="false"/>: the detection and the events are what the system does, and nothing of the
+    /// world is moved.
+    /// </para>
+    /// </remarks>
+    public bool Resolve { get; set; } = true;
 
     /// <summary>Gets the collision pairs that were produced by the most recent update.</summary>
     public IReadOnlyList<CollisionPair> LastPairs => _pairs;
@@ -22,25 +65,26 @@ public sealed class CollisionSystem : ISystem
     /// <summary>Gets the number of cells of the spatial hash that the most recent update left non-empty. A cell is dropped as soon as it holds no box.</summary>
     public int CellCount => _cells.Count;
 
-    /// <summary>Detects the colliders that overlap in the given world and republishes the result.</summary>
+    /// <summary>Detects the colliders that overlap in the given world, resolves what a pair asks for, and republishes the result.</summary>
     /// <param name="world">The world to scan.</param>
     /// <param name="time">The frame time. Collision detection does not use it.</param>
-    /// <remarks>
-    /// The update runs in three steps. First every <see cref="CollisionComponent"/> is removed, so the result never
-    /// mixes with the previous frame. Then the spatial hash, a fixed cell size, is brought in line with the colliders of
-    /// the world: the entries that are gone are dropped and the ones that appeared or moved change cells, while a box
-    /// that did not move keeps the cells it was in. Finally the candidates that share a cell are tested with
-    /// <see cref="Aabb.Intersects"/>, each overlapping pair is added to <see cref="LastPairs"/>, and a
-    /// <see cref="CollisionComponent"/> is attached to both entities, keeping the first partner of each entity.
-    /// </remarks>
     public void Update(World world, in GameTime time)
     {
         ArgumentNullException.ThrowIfNull(world);
 
         RemoveStale(world);
         _pairs.Clear();
+        _current.Clear();
+
         RefreshHash(world);
         BuildPairs(world);
+
+        if (Resolve)
+        {
+            ResolvePairs(world);
+        }
+
+        Report(world);
     }
 
     /// <summary>
@@ -84,6 +128,9 @@ public sealed class CollisionSystem : ISystem
         {
             RemoveFromCells(entity, _boxes[entity]);
             _boxes.Remove(entity);
+            _masks.Remove(entity);
+            _triggers.Remove(entity);
+            _immovable.Remove(entity);
         }
 
         foreach (Entity entity in world.Enumerate<ColliderComponent>())
@@ -93,7 +140,12 @@ public sealed class CollisionSystem : ISystem
                 continue;
             }
 
-            Aabb box = BoxOf(world, entity);
+            ColliderComponent collider = world.Get<ColliderComponent>(entity);
+            Aabb box = BoxOf(world, entity, collider);
+
+            _masks[entity] = collider.Mask == CollisionLayer.None ? CollisionLayer.Everything : collider.Mask;
+            _triggers[entity] = collider.Trigger;
+            _immovable[entity] = collider.Immovable;
 
             if (_boxes.TryGetValue(entity, out Aabb previous))
             {
@@ -110,11 +162,17 @@ public sealed class CollisionSystem : ISystem
         }
     }
 
-    private static Aabb BoxOf(World world, Entity entity)
+    private static Aabb BoxOf(World world, Entity entity, in ColliderComponent collider)
     {
         TransformComponent transform = world.Get<TransformComponent>(entity);
-        ColliderComponent collider = world.Get<ColliderComponent>(entity);
         return Aabb.FromRect(new Rect(transform.Position + collider.Offset, collider.Size * transform.Scale));
+    }
+
+    /// <summary>Returns the box of an entity as it stands now, which a resolution that moved a body reads after every pair.</summary>
+    private static Aabb CurrentBox(World world, Entity entity)
+    {
+        ColliderComponent collider = world.Get<ColliderComponent>(entity);
+        return BoxOf(world, entity, collider);
     }
 
     private void AddToCells(Entity entity, Aabb box)
@@ -171,6 +229,7 @@ public sealed class CollisionSystem : ISystem
     private static bool SameBox(Aabb left, Aabb right) =>
         left.Left == right.Left && left.Top == right.Top && left.Right == right.Right && left.Bottom == right.Bottom;
 
+    /// <summary>Finds the pairs of a step and keeps the ones the layers of the two colliders answer.</summary>
     private void BuildPairs(World world)
     {
         _seen.Clear();
@@ -192,20 +251,187 @@ public sealed class CollisionSystem : ISystem
                         (a, b) = (b, a);
                     }
 
-                    if (!_seen.Add((a.Id, b.Id)) || !_boxes[a].Intersects(_boxes[b]))
+                    if (!_seen.Add((a, b)))
                     {
                         continue;
                     }
 
-                    _pairs.Add(new CollisionPair(a, b));
+                    if (!Answers(world, a, b) || !Answers(world, b, a))
+                    {
+                        continue;
+                    }
+
+                    if (!_boxes[a].Intersects(_boxes[b]))
+                    {
+                        continue;
+                    }
+
+                    bool trigger = _triggers[a] || _triggers[b];
+                    _pairs.Add(new CollisionPair(a, b, trigger));
+                    _current.Add((a, b));
                     Attach(world, a, b);
                     Attach(world, b, a);
-
-                    // The pair is announced as well, so a game reacts to a contact instead of looking for one every step.
-                    world.Events.Raise(new CollisionEvent(a, b));
                 }
             }
         }
+    }
+
+    /// <summary>Returns a value indicating whether the collider of the first entity answers the layer of the second.</summary>
+    /// <remarks>
+    /// A collider that was never given a layer is in <see cref="CollisionLayer.Default"/>, because a document that says
+    /// nothing about the layer of a box asks for the box that a game of collisions had before layers existed. A mask that
+    /// was never given is every layer, which is what the scan of the world reads when it fills
+    /// <see cref="_masks"/> rather than answering a document.
+    /// </remarks>
+    private bool Answers(World world, Entity entity, Entity other)
+    {
+        if (!world.Has<ColliderComponent>(other))
+        {
+            return false;
+        }
+
+        CollisionLayer layer = world.Get<ColliderComponent>(other).Layer;
+
+        if (layer == CollisionLayer.None)
+        {
+            layer = CollisionLayer.Default;
+        }
+
+        CollisionLayer mask = _masks.TryGetValue(entity, out CollisionLayer known) ? known : CollisionLayer.Everything;
+
+        return (mask & layer) != CollisionLayer.None;
+    }
+
+    /// <summary>Moves the bodies of a solid pair out of each other, unless both stand still.</summary>
+    /// <remarks>
+    /// The penetration is measured from the boxes of this step rather than from the boxes of the moment the pair was
+    /// built, so a body that was moved by a pair that came before this one is moved out of the pair it stands in now.
+    /// The resolution runs a fixed number of times rather than while some body is still inside another one, because a
+    /// room of three bodies that all press on each other has no place to put them: the last step reports the pair that
+    /// the space could not be found for, and a game reads the overlap rather than a loop that never ends.
+    /// </remarks>
+    private void ResolvePairs(World world)
+    {
+        if (_pairs.Count == 0)
+        {
+            return;
+        }
+
+        for (var pass = 0; pass < ResolutionIterations; pass++)
+        {
+            var moved = false;
+
+            foreach (CollisionPair pair in _pairs)
+            {
+                if (pair.IsTrigger)
+                {
+                    continue;
+                }
+
+                if (!world.IsAlive(pair.A) || !world.IsAlive(pair.B))
+                {
+                    continue;
+                }
+
+                if (!world.Has<ColliderComponent>(pair.A) || !world.Has<ColliderComponent>(pair.B))
+                {
+                    continue;
+                }
+
+                bool stillA = _immovable.TryGetValue(pair.A, out bool a) && a;
+                bool stillB = _immovable.TryGetValue(pair.B, out bool b) && b;
+
+                if (stillA && stillB)
+                {
+                    continue;
+                }
+
+                Aabb boxA = CurrentBox(world, pair.A);
+                Aabb boxB = CurrentBox(world, pair.B);
+                Vector2 penetration = boxA.Penetration(boxB);
+
+                if (penetration == Vector2.Zero)
+                {
+                    continue;
+                }
+
+                // The body that stands still does not move, and the one that does takes the whole of the penetration;
+                // two bodies that both move share it, which is what a person sees when two people walk into each other.
+                if (stillA)
+                {
+                    Move(world, pair.B, -penetration);
+                }
+                else if (stillB)
+                {
+                    Move(world, pair.A, penetration);
+                }
+                else
+                {
+                    Move(world, pair.A, penetration * 0.5f);
+                    Move(world, pair.B, -penetration * 0.5f);
+                }
+
+                moved = true;
+            }
+
+            if (!moved)
+            {
+                break;
+            }
+        }
+    }
+
+    /// <summary>Moves the transform of an entity and keeps the box of the step in step with it.</summary>
+    private void Move(World world, Entity entity, Vector2 offset)
+    {
+        if (!world.Has<TransformComponent>(entity))
+        {
+            return;
+        }
+
+        world.GetRef<TransformComponent>(entity).Position += offset;
+
+        if (_boxes.TryGetValue(entity, out Aabb box))
+        {
+            RemoveFromCells(entity, box);
+            Aabb moved = box.MovedBy(offset);
+            _boxes[entity] = moved;
+            AddToCells(entity, moved);
+        }
+    }
+
+    /// <summary>Compares the pairs of the step with the pairs of the step before and raises the three events for what changed.</summary>
+    /// <remarks>
+    /// The pairs are remembered as the two entities themselves rather than as the identifiers of their slots, so a slot
+    /// that was handed out again names another entity than the one the contact was about: a pair of a destroyed entity
+    /// and the entity that took its slot are two different pairs, and the one that is over is announced as it was rather
+    /// than as the pair it became. A handler that reads an entity of an exit event reads the one the contact was about,
+    /// which a world that no longer holds it reports as not alive, rather than a different entity that shares its slot.
+    /// </remarks>
+    private void Report(World world)
+    {
+        foreach (CollisionPair pair in _pairs)
+        {
+            if (!_previous.Contains((pair.A, pair.B)))
+            {
+                world.Events.Raise(new CollisionEnterEvent(pair.A, pair.B, pair.IsTrigger));
+            }
+
+            world.Events.Raise(new CollisionEvent(pair.A, pair.B, pair.IsTrigger));
+        }
+
+        foreach ((Entity a, Entity b) in _previous)
+        {
+            if (_current.Contains((a, b)))
+            {
+                continue;
+            }
+
+            world.Events.Raise(new CollisionExitEvent(a, b));
+        }
+
+        _previous.Clear();
+        _previous.UnionWith(_current);
     }
 
     private static void Attach(World world, Entity entity, Entity other)

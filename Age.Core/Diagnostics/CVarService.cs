@@ -40,6 +40,7 @@ public readonly record struct CVar(string Name, Type Type, object Value, string 
 /// float step = cvars.Get&lt;float&gt;("step");
 /// </code>
 /// </example>
+[System]
 public sealed class CVarService
 {
     private readonly Dictionary<string, CVar> _values = new(StringComparer.OrdinalIgnoreCase);

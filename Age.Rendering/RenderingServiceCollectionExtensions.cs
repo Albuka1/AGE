@@ -12,13 +12,13 @@ public static class RenderingServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the window service, the renderer, the texture service, the font service, the splash screen, the render
-    /// pipeline, the render systems, the layout of the interface, the components of this assembly and the Silk.NET game loop as
-    /// singletons.
+    /// pipeline, the render systems, the layout of the interface and the Silk.NET game loop as singletons.
     /// </summary>
     /// <remarks>
     /// <see cref="ITextureService"/> decodes through <see cref="T:Age.Assets.IImageLoader"/> and <see cref="IFontService"/>
     /// reads through <see cref="T:Age.Assets.IAssetLoader"/>, so register the asset services with <c>AddAgeAssets</c> as
-    /// well. <see cref="SilkGameLoop"/> takes the <see cref="FixedTimestep"/> that <c>AddAgeCore</c> registers.
+    /// well. <see cref="SilkGameLoop"/> takes the <see cref="FixedTimestep"/> that <c>AddAgeCore</c> registers. The
+    /// systems and the component registrations of this assembly are read by a scan here.
     /// </remarks>
     public static IServiceCollection AddAgeRendering(this IServiceCollection services)
     {
@@ -27,7 +27,6 @@ public static class RenderingServiceCollectionExtensions
         services.AddSingleton<IRenderer, SilkRenderer>();
         services.AddSingleton<ITextureService, TextureService>();
         services.AddSingleton<ISpriteSheetService, SpriteSheetService>();
-        services.AddSingleton<SpriteAnimationSystem>();
         services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<IShaderService, ShaderService>();
         services.AddSingleton<IMaterialService>(provider => new MaterialService(
@@ -37,7 +36,7 @@ public static class RenderingServiceCollectionExtensions
             provider.GetRequiredService<IRenderer>(),
             provider.GetService<IFontService>(),
             provider.GetService<ITextSource>(),
-            provider.GetService<Microsoft.Extensions.Logging.ILogger<TextRenderer>>(),
+            provider.GetService<ILogger<TextRenderer>>(),
             TextDefaults.Fonts));
         services.AddSingleton<SplashScreen>();
         services.AddSingleton<DevOverlay>();
@@ -45,11 +44,6 @@ public static class RenderingServiceCollectionExtensions
             provider.GetRequiredService<IConsoleService>(),
             provider.GetService<IClipboardService>()));
 
-        // The developer window stands beside the game as a window of the operating system rather than as a panel over the frame: its
-        // host creates the window and the service draws the pages into it. Register a host of your own — a null host leaves it with its
-        // pages and nothing drawn — to change where it is drawn, and the service is what a game pumps each frame. A game that cannot
-        // open a second window is better off with no developer window than with one that hangs it, which is why nothing is drawn when
-        // no host is given.
         services.AddSingleton<IDevWindowHost>(provider => new SilkDevWindowHost(provider.GetService<IWindowService>()));
         services.AddSingleton<IDevWindowService>(provider => new DevWindowService(
             provider.GetRequiredService<IDevWindowHost>())
@@ -63,26 +57,25 @@ public static class RenderingServiceCollectionExtensions
             provider.GetService<TextRenderer>(),
             provider.GetService<ITextSource>(),
             provider.GetService<IClipboardService>()));
+
         services.AddSingleton<IGameShutdownStep, RenderingShutdownStep>();
         services.AddSingleton<IGameShutdownStep, WindowShutdownStep>();
-        services.AddSingleton<IComponentRegistrations, RenderingComponentRegistrations>();
+
         services.AddSingleton<RenderPipeline>();
         services.AddSingleton<RenderSystem>();
         services.AddSingleton<TextRenderSystem>();
         services.AddSingleton<UIRenderSystem>();
-        services.AddSingleton<UILayoutSystem>();
         services.AddSingleton<IGameLoop, SilkGameLoop>();
+
+        services.AddAgeSystems(typeof(SilkRenderer).Assembly);
+        services.AddAgeComponentRegistrations(typeof(SilkRenderer).Assembly);
+
         return services;
     }
 
     /// <summary>
     /// Registers <see cref="SilkInputService"/> as the input service, which reads the window instead of reporting nothing.
     /// </summary>
-    /// <remarks>
-    /// Call it after <c>AddAgeInput</c>, because the last registration of <see cref="IInputService"/> is the one that a
-    /// single resolve returns. The same service answers <see cref="ITextInputService"/>. Use it only when the game runs
-    /// with a window: the service opens the Silk.NET input context from that window on the first frame.
-    /// </remarks>
     public static IServiceCollection AddAgeSilkInput(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);

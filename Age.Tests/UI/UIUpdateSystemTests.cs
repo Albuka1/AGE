@@ -145,14 +145,6 @@ public sealed class UIUpdateSystemTests
         frame.Consumed.Should().BeTrue();
     }
 
-    private static Entity CreateButton(World world, int zOrder)
-    {
-        Entity entity = world.CreateEntity();
-        world.Set(entity, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(100f, 100f), ZOrder = zOrder, Visible = true });
-        world.Set(entity, new ButtonComponent { BaseColor = Color.White, Interactable = true });
-        return entity;
-    }
-
     [Fact]
     public void UIUpdateSystem_APressOnACheckBox_TogglesItAndRaisesTheEvent()
     {
@@ -216,5 +208,88 @@ public sealed class UIUpdateSystemTests
         system.UpdateFrame(world, new GameTime(0d, 0d));
 
         world.Get<SliderComponent>(slider).Value.Should().BeApproximately(10f, 0.001f, "a slider that is not dragged does not follow the pointer");
+    }
+
+    /// <summary>Pins a zone over a picture of the interface to what the pointer does with it.</summary>
+    [Fact]
+    public void UIUpdateSystem_APressOnAZone_ReportsItAsHoveredAndPressed()
+    {
+        var world = new World();
+        var input = new NullInputService();
+        var system = new UIUpdateSystem(input);
+
+        // A zone over a picture of the interface, which is what a window of a game that draws its own card is made of: the zone
+        // takes the pointer and the picture under it is not an element of the interface at all.
+        Entity zone = world.CreateEntity();
+        world.Set(zone, new RectTransformComponent { Position = new Vector2(20f, 30f), Size = new Vector2(80f, 60f), Visible = true });
+        world.Set(zone, new ButtonComponent
+        {
+            BaseColor = new Color(0, 0, 0) { A = 0 },
+            BorderColor = new Color(0, 0, 0) { A = 0 },
+            BorderThickness = 0,
+            Interactable = true,
+        });
+
+        var pressed = new List<ButtonPressedEvent>();
+        world.Events.Subscribe<ButtonPressedEvent>((_, e) => pressed.Add(e));
+
+        // A press inside the rectangle of the zone reaches it, which is what makes a picture of a card answer a click.
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(60f, 60f), true);
+        input.BeginFrame();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+        world.Events.Dispatch();
+
+        world.Get<ButtonComponent>(zone).IsHovered.Should().BeTrue();
+        world.Get<ButtonComponent>(zone).IsPressed.Should().BeTrue();
+        pressed.Should().ContainSingle().Which.Button.Should().Be(zone);
+    }
+
+    /// <summary>Pins a zone over a button to what a press on the zone reaches, which is what a slot over a picture of a card is.</summary>
+    [Fact]
+    public void UIUpdateSystem_AZoneOverAButtonWithATransparentFace_TakesThePressOverTheButtonBelowIt()
+    {
+        var world = new World();
+        var input = new NullInputService();
+        var system = new UIUpdateSystem(input);
+
+        // A button with a visible face, which is what a picture of a card has under it, and a zone over the top half of it, which
+        // is what a slot of the card that the picture draws is.
+        Entity button = world.CreateEntity();
+        world.Set(button, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(100f, 100f), ZOrder = 0, Visible = true });
+        world.Set(button, new ButtonComponent { BaseColor = Color.White, Interactable = true });
+
+        Entity zone = world.CreateEntity();
+        world.Set(zone, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(100f, 50f), ZOrder = 1, Visible = true });
+        world.Set(zone, new ButtonComponent
+        {
+            BaseColor = new Color(0, 0, 0) { A = 0 },
+            BorderColor = new Color(0, 0, 0) { A = 0 },
+            BorderThickness = 0,
+            Interactable = true,
+        });
+
+        var pressed = new List<ButtonPressedEvent>();
+        world.Events.Subscribe<ButtonPressedEvent>((_, e) => pressed.Add(e));
+
+        // The press lands on the top half, where the zone is: the button below is the one the picture draws and the zone is the
+        // slot over it, so the zone is what a press reaches.
+        input.BeginFrame();
+        input.State = new UIInputState(new Vector2(50f, 25f), true);
+        input.BeginFrame();
+        system.UpdateFrame(world, new GameTime(0d, 0d));
+        world.Events.Dispatch();
+
+        world.Get<ButtonComponent>(zone).IsPressed.Should().BeTrue("the zone over the picture is what the pointer reaches");
+        world.Get<ButtonComponent>(button).IsPressed.Should().BeFalse("the button under the zone is not what a press on the zone reaches");
+        pressed.Should().ContainSingle().Which.Button.Should().Be(zone);
+    }
+
+    private static Entity CreateButton(World world, int zOrder)
+    {
+        Entity entity = world.CreateEntity();
+        world.Set(entity, new RectTransformComponent { Position = Vector2.Zero, Size = new Vector2(100f, 100f), ZOrder = zOrder, Visible = true });
+        world.Set(entity, new ButtonComponent { BaseColor = Color.White, Interactable = true });
+        return entity;
     }
 }

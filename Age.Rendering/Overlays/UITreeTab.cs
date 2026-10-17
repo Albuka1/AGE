@@ -4,18 +4,30 @@ using Age.UI;
 namespace Age.Rendering;
 
 /// <summary>
-/// The page of a developer window that shows the interface as a tree: every element of the canvas, its children under it, and the
-/// rectangle each one was laid out at.
+/// The page of a developer window that shows the interface as a tree: every element of the canvas, its children under
+/// it, and the rectangle each one was laid out at.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The tree is what a flat list cannot show: an element that stands inside a panel is printed under it, one level deeper, so a person
-/// reads where a button belongs rather than a list of rectangles that happen to overlap. An element whose parent names an entity the
-/// world does not hold is printed as a root, which is what it is laid out as.
+/// The tree is what a flat list cannot show: an element that stands inside a panel is printed under it, one level deeper,
+/// so a person reads where a button belongs rather than a list of rectangles that happen to overlap. An element whose
+/// parent names an entity the world does not hold is printed as a root, which is what it is laid out as.
 /// </para>
 /// <para>
-/// The world is read through a delegate rather than held, because a game replaces its world when it loads a scene: the page reports the
-/// world that is there now rather than one that was there when the page was registered.
+/// The tree is walked on every frame, because what it shows is what the world holds right now: a window that opened, an
+/// element that was hidden, an entity that was destroyed. What is remembered between two frames is only the elements a
+/// person folded away, which is a property of what they are looking at rather than of the world.
+/// </para>
+/// <para>
+/// The rows are longer than the body of the window more often than not, so the page scrolls: a drag of the bar at the
+/// right edge moves the rows, and the bar says where a person stands in them. A click on a row that has children folds
+/// it away or opens it, which is what a tree is read with when the interface of a window is deeper than the room of the
+/// page.
+/// </para>
+/// <para>
+/// A press that the bar of the page took is a press of the bar rather than a press of the row that stood under it: the
+/// drag of the list and the fold of a row are the two things one press can do, and the bar is what the pointer reached
+/// when it landed on it.
 /// </para>
 /// </remarks>
 public sealed class UITreeTab : IDevWindowTab
@@ -23,9 +35,15 @@ public sealed class UITreeTab : IDevWindowTab
     private static readonly Color TextColour = new(225, 225, 225);
     private static readonly Color HintColour = new(150, 150, 150);
     private static readonly Color LeafColour = new(180, 200, 230);
+    private static readonly Color ToggleColour = new(255, 210, 90);
 
     private readonly Func<World> _world;
     private readonly float _line = BitmapFontMetrics.GlyphHeight + 4f;
+    private readonly List<Row> _rows = [];
+    private readonly HashSet<Entity> _collapsed = [];
+
+    private World? _lastWorld;
+    private ScrollState _scroll;
 
     /// <summary>Initializes the page with the world it reports.</summary>
     /// <param name="world">The world to read, which is asked for on every frame so a scene that replaced it is reported.</param>
@@ -40,12 +58,50 @@ public sealed class UITreeTab : IDevWindowTab
     public string Title => "ui";
 
     /// <inheritdoc />
-    /// <remarks>What this page reports is read from the world on every frame, so it reads no pointer of its own.</remarks>
     public bool Closable => true;
 
     /// <inheritdoc />
     public void Update(in GameTime frame, Rect body, in WindowPointer pointer)
     {
+        World world = _world();
+
+        if (!ReferenceEquals(_lastWorld, world))
+        {
+            _lastWorld = world;
+            _collapsed.Clear();
+            _scroll = default;
+        }
+
+        Build(world);
+
+        // A press that the bar of the page took is a press of the bar rather than a press of the row that stood under it: the
+        // drag of the list and the fold of a row are the two things one press can do, and the bar is what the pointer reached
+        // when it landed on it.
+        bool captured = _scroll.Update(pointer, body, _rows.Count, _line);
+
+        if (captured || !pointer.Pressed || !Contains(body, pointer.Position))
+        {
+            return;
+        }
+
+        int row = _scroll.First + (int)((pointer.Position.Y - body.Y) / _line);
+
+        if (row < 0 || row >= _rows.Count)
+        {
+            return;
+        }
+
+        Row clicked = _rows[row];
+
+        if (!clicked.HasChildren)
+        {
+            return;
+        }
+
+        if (!_collapsed.Remove(clicked.Entity))
+        {
+            _collapsed.Add(clicked.Entity);
+        }
     }
 
     /// <inheritdoc />
@@ -53,41 +109,51 @@ public sealed class UITreeTab : IDevWindowTab
     {
         ArgumentNullException.ThrowIfNull(renderer);
 
-        World world = _world();
-        List<(int Depth, Entity Entity)> rows = Tree(world);
-        int capacity = Math.Max(1, (int)(body.Height / _line));
+        int visible = ScrollState.Visible(body, _line);
+        int count = Math.Min(_rows.Count, visible);
+        int start = Math.Clamp(_scroll.First, 0, Math.Max(0, _rows.Count - count));
 
-        // The tree is longer than the body more often than not, so the rows that fit are the ones at the top: the roots and what
-        // stands under them are what a person is looking for, and the count of what is not shown is printed at the end.
-        int shown = Math.Min(rows.Count, capacity);
-        float y = body.Y;
+        renderer.PushClip(body);
 
-        for (var index = 0; index < shown; index++)
+        try
         {
-            (int depth, Entity entity) = rows[index];
-            string indent = new(' ', depth * 2);
+            float y = body.Y;
 
-            renderer.DrawText($"{indent}{Describe(world, entity)}", new Vector2(body.X, y), depth == 0 ? TextColour : LeafColour);
-            y += _line;
+            for (var index = 0; index < count; index++)
+            {
+                Row row = _rows[start + index];
+                Color colour = row.HasChildren ? TextColour : LeafColour;
+
+                if (row.HasChildren)
+                {
+                    renderer.DrawText(row.Marker, new Vector2(body.X, y), ToggleColour);
+                    renderer.DrawText(row.Text, new Vector2(body.X + (BitmapFontMetrics.GlyphWidth * row.Marker.Length), y), colour);
+                }
+                else
+                {
+                    renderer.DrawText(row.Text, new Vector2(body.X, y), colour);
+                }
+
+                y += _line;
+            }
+
+            if (_rows.Count == 0)
+            {
+                renderer.DrawText("(the interface holds no element)", new Vector2(body.X, body.Y), HintColour);
+            }
+        }
+        finally
+        {
+            renderer.PopClip();
         }
 
-        if (rows.Count == 0)
-        {
-            renderer.DrawText("(the interface holds no element)", new Vector2(body.X, body.Y), HintColour);
-        }
-        else if (shown < rows.Count)
-        {
-            renderer.DrawText($"... {rows.Count - shown} more", new Vector2(body.X, y), HintColour);
-        }
+        _scroll.DrawBar(renderer, body, _rows.Count, _line);
     }
 
-    /// <summary>Walks the interface from its roots downwards, which is the order the tree is printed in.</summary>
-    /// <param name="world">The world to read.</param>
-    /// <returns>Every element with the depth it stands at, a root at zero.</returns>
-    /// <remarks>Every element is visited once, so a cycle does not walk forever, and an element no root reached is printed as a root of its own.</remarks>
-    private static List<(int Depth, Entity Entity)> Tree(World world)
+    private void Build(World world)
     {
-        var rows = new List<(int Depth, Entity Entity)>();
+        _rows.Clear();
+
         var visited = new HashSet<Entity>();
 
         foreach (Entity entity in world.Enumerate<RectTransformComponent>())
@@ -96,43 +162,67 @@ public sealed class UITreeTab : IDevWindowTab
 
             if (!world.IsAlive(parent) || !world.Has<RectTransformComponent>(parent))
             {
-                Walk(world, entity, 0, visited, rows);
+                Walk(world, entity, prefix: string.Empty, isRoot: true, isLast: true, visited);
             }
         }
 
         foreach (Entity entity in world.Enumerate<RectTransformComponent>())
         {
-            if (visited.Add(entity))
-            {
-                Walk(world, entity, 0, visited, rows);
-            }
+            Walk(world, entity, prefix: string.Empty, isRoot: true, isLast: true, visited);
         }
-
-        return rows;
     }
 
-    /// <summary>Adds an element and the elements under it to the rows of the tree, one level deeper.</summary>
-    private static void Walk(World world, Entity entity, int depth, HashSet<Entity> visited, List<(int Depth, Entity Entity)> rows)
+    private void Walk(World world, Entity entity, string prefix, bool isRoot, bool isLast, HashSet<Entity> visited)
     {
         if (!world.IsAlive(entity) || !visited.Add(entity))
         {
             return;
         }
 
-        rows.Add((depth, entity));
+        List<Entity> children = UnvisitedChildren(world, entity, visited);
+        bool hasChildren = children.Count > 0;
+        bool expanded = !_collapsed.Contains(entity);
 
-        if (!world.Has<ChildrenComponent>(entity))
+        string connector = isRoot ? string.Empty : isLast ? "\\ " : "| ";
+        string marker = hasChildren ? (expanded ? "v " : "> ") : "- ";
+
+        _rows.Add(new Row(entity, connector + marker, prefix + connector + marker + Describe(world, entity), hasChildren));
+
+        if (!hasChildren || !expanded)
         {
             return;
         }
 
-        foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
+        string childPrefix = prefix + (isRoot ? string.Empty : isLast ? "  " : "| ");
+
+        for (var index = 0; index < children.Count; index++)
         {
-            Walk(world, world.Resolve(reference), depth + 1, visited, rows);
+            Walk(world, children[index], childPrefix, isRoot: false, isLast: index == children.Count - 1, visited);
         }
     }
 
-    /// <summary>Returns the line a person reads for one element: what it is and where it stands.</summary>
+    private static List<Entity> UnvisitedChildren(World world, Entity entity, HashSet<Entity> visited)
+    {
+        var children = new List<Entity>();
+
+        if (!world.Has<ChildrenComponent>(entity))
+        {
+            return children;
+        }
+
+        foreach (EntityRef reference in world.Get<ChildrenComponent>(entity).Children ?? [])
+        {
+            Entity child = world.Resolve(reference);
+
+            if (world.IsAlive(child) && !visited.Contains(child) && world.Has<RectTransformComponent>(child))
+            {
+                children.Add(child);
+            }
+        }
+
+        return children;
+    }
+
     private static string Describe(World world, Entity entity)
     {
         RectTransformComponent rect = world.Get<RectTransformComponent>(entity);
@@ -142,7 +232,6 @@ public sealed class UITreeTab : IDevWindowTab
         return $"{name} {rect.Position.X:0},{rect.Position.Y:0} {rect.Size.X:0}x{rect.Size.Y:0}{text}";
     }
 
-    /// <summary>Returns what an element is: a button, a canvas, a panel, or the number of the entity that carries nothing known.</summary>
     private static string Name(World world, Entity entity)
     {
         if (world.Has<ButtonComponent>(entity))
@@ -164,4 +253,9 @@ public sealed class UITreeTab : IDevWindowTab
 
         return parts.Count > 0 ? string.Join('+', parts) : $"#{entity.Id}";
     }
+
+    private static bool Contains(Rect rect, Vector2 point) =>
+        point.X >= rect.X && point.X < rect.X + rect.Width && point.Y >= rect.Y && point.Y < rect.Y + rect.Height;
+
+    private readonly record struct Row(Entity Entity, string Marker, string Text, bool HasChildren);
 }

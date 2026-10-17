@@ -8,12 +8,12 @@ namespace Age.Physics;
 /// </summary>
 public static class PhysicsServiceCollectionExtensions
 {
-    /// <summary>Registers <see cref="CollisionSystem"/> as a singleton and the physics components as part of a scene.</summary>
+    /// <summary>Registers the systems and the component registrations of this assembly, which is what a host reads.</summary>
     public static IServiceCollection AddAgePhysics(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddSingleton<CollisionSystem>();
-        services.AddSingleton<IComponentRegistrations, PhysicsComponentRegistrations>();
+        services.AddAgeSystems(typeof(CollisionSystem).Assembly);
+        services.AddAgeComponentRegistrations(typeof(CollisionSystem).Assembly);
         return services;
     }
 }

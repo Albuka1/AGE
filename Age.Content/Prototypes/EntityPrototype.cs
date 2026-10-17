@@ -16,6 +16,7 @@ namespace Age.Content.Prototypes;
 /// prototypes.Register(EntityPrototype.Kind, EntityPrototype.Read);
 /// </code>
 /// </example>
+[PrototypeKind(EntityPrototype.Kind)]
 public sealed class EntityPrototype : IPrototype
 {
     /// <summary>The word that a document writes in its <c>type</c> field to declare an entity.</summary>

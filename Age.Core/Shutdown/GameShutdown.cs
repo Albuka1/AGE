@@ -23,6 +23,7 @@ namespace Age.Core;
 /// provider.GetRequiredService&lt;GameShutdown&gt;().Run();
 /// </code>
 /// </example>
+[System]
 public sealed class GameShutdown
 {
     private readonly IGameShutdownStep[] _steps;

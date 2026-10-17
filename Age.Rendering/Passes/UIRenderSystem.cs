@@ -8,13 +8,19 @@ namespace Age.Rendering;
 /// <see cref="ISystem"/>; a <see cref="RenderPipeline"/> runs it as a pass, after the pass of the world.
 /// </summary>
 /// <remarks>
-/// Elements come from every entity that has a <see cref="RectTransformComponent"/> together with a
-/// <see cref="ButtonComponent"/> or a <see cref="TextComponent"/>. They are sorted by
-/// <see cref="RectTransformComponent.ZOrder"/> with a stable sort, so elements that share a ZOrder keep their entity order.
-/// When an element carries a button and a text, its rectangle is drawn first and its text on top of it, laid out into the
-/// box of the rectangle, which is the size the element has and not the size the text needs: the alignment of the style is
-/// what centers a label in a button. Add this pass after the pass of the world, because the system installs a screen-space
-/// camera of its own and ignores the camera it is handed: the UI does not move with the world camera.
+/// <para>
+/// Elements come from every entity that has a <see cref="RectTransformComponent"/> together with a component of the
+/// interface. They are sorted by <see cref="RectTransformComponent.ZOrder"/> with a stable sort, so elements that share
+/// a ZOrder keep their entity order. An element is drawn only when it and every ancestor of it are visible, which is what
+/// a window hides a whole tree with. Add this pass after the pass of the world, because the system installs a
+/// screen-space camera of its own and ignores the camera it is handed: the UI does not move with the world camera.
+/// </para>
+/// <para>
+/// A rectangle of no alpha is a rectangle that nothing is drawn for, which is what a zone is: an element that stands in the
+/// tree of the interface, is laid out and takes the pointer, and draws nothing of its own. What a person sees of such a
+/// window is the picture under the zones rather than the faces of them, and the pass costs nothing of the zones but the
+/// walk over the elements it does not draw.
+/// </para>
 /// </remarks>
 public sealed class UIRenderSystem : IRenderPass
 {
@@ -34,21 +40,25 @@ public sealed class UIRenderSystem : IRenderPass
     private readonly IRenderer _renderer;
     private readonly SpriteSorter _sorter;
     private readonly TextRenderer _text;
+    private readonly ITextureService? _textures;
     private readonly List<UiItem> _items = new();
 
     /// <summary>Initializes the system with a renderer, a sorter and the renderer of text.</summary>
     /// <param name="renderer">The renderer that draws the elements.</param>
     /// <param name="sorter">The sorter that puts the elements in the order of their <see cref="RectTransformComponent.ZOrder"/>.</param>
     /// <param name="text">The renderer of text, which resolves, lays out and draws every label of the interface.</param>
-    /// <exception cref="ArgumentNullException">One of the arguments is null.</exception>
-    public UIRenderSystem(IRenderer renderer, SpriteSorter sorter, TextRenderer text)
+    /// <param name="textures">The service that resolves the image of an element, or null to draw none of them.</param>
+    /// <exception cref="ArgumentNullException">One of the arguments that is not optional is null.</exception>
+    public UIRenderSystem(IRenderer renderer, SpriteSorter sorter, TextRenderer text, ITextureService? textures = null)
     {
         ArgumentNullException.ThrowIfNull(renderer);
         ArgumentNullException.ThrowIfNull(sorter);
         ArgumentNullException.ThrowIfNull(text);
+
         _renderer = renderer;
         _sorter = sorter;
         _text = text;
+        _textures = textures;
     }
 
     /// <inheritdoc />
@@ -74,14 +84,44 @@ public sealed class UIRenderSystem : IRenderPass
             RectTransformComponent rect = world.Get<RectTransformComponent>(item.Entity);
             var box = new Rect(rect.Position, rect.Size);
 
-            if (item.HasButton)
+            if (item.HasPanel)
             {
-                _renderer.DrawRectangle(box, world.Get<ButtonComponent>(item.Entity).BaseColor);
+                PanelComponent panel = world.Get<PanelComponent>(item.Entity);
+
+                // A rectangle of no alpha is what a zone is: an element that stands in the tree of the interface, is laid out
+                // and takes the pointer, but is nothing a person sees. The draw is skipped rather than handed a transparent
+                // colour, which is what a zone costs over a card that has nothing behind it.
+                if (panel.Color.A != 0)
+                {
+                    _renderer.DrawRectangle(box, panel.Color);
+                }
+
+                DrawBorder(box, panel.BorderColor, panel.BorderThickness);
+            }
+
+            if (item.HasImage && _textures is not null)
+            {
+                DrawImage(world.Get<ImageComponent>(item.Entity), box);
             }
 
             if (item.HasProgressBar)
             {
-                DrawProgressBar(world.Get<ProgressBarComponent>(item.Entity), box);
+                Color fill = item.HasPanel ? world.Get<PanelComponent>(item.Entity).Color : FaceColour;
+                DrawProgressBar(world.Get<ProgressBarComponent>(item.Entity), box, fill);
+            }
+
+            if (item.HasButton)
+            {
+                ButtonComponent button = world.Get<ButtonComponent>(item.Entity);
+
+                // The face of a button is what a card draws, and a zone that draws nothing is a button whose face has no alpha:
+                // the element stays in the tree, the pointer is what it answers, and the frame that draws it has nothing to draw.
+                if (button.BaseColor.A != 0)
+                {
+                    _renderer.DrawRectangle(box, button.BaseColor);
+                }
+
+                DrawBorder(box, button.BorderColor, button.BorderThickness);
             }
 
             if (item.HasSlider)
@@ -94,7 +134,6 @@ public sealed class UIRenderSystem : IRenderPass
                 DrawCheckBox(world.Get<CheckBoxComponent>(item.Entity), box);
             }
 
-            // A drop-down draws its closed element here, among the rest of them, and keeps its open list for the pass below.
             if (item.HasDropdown)
             {
                 DrawDropdown(world.Get<DropdownComponent>(item.Entity), box);
@@ -108,17 +147,12 @@ public sealed class UIRenderSystem : IRenderPass
                 _text.Draw(world, item.Entity, rect.Position, textBox, label);
             }
 
-            // The line of a text field is not a text of the world, so it is drawn as a line of the interface rather than through a
-            // component: the field holds the string and the caret, and the pass draws them where the element stands.
             if (item.HasTextField)
             {
                 DrawTextField(world.Get<TextFieldComponent>(item.Entity), box);
             }
         }
 
-        // An open list hangs over whatever stands under its element, so it is drawn after every element rather than among them: a
-        // list drawn where its element sits would be covered by the elements that come later in the sort, which is the opposite of
-        // what a list that the pointer can choose from is. The order of the lists among themselves is the order of their elements.
         foreach (UiItem item in _items)
         {
             if (!item.HasDropdown)
@@ -140,9 +174,59 @@ public sealed class UIRenderSystem : IRenderPass
         _renderer.EndFrame();
     }
 
+    /// <summary>Draws the frame of a rectangle, which is what a panel and a button say about their edge.</summary>
+    /// <param name="box">The rectangle the frame is drawn inside.</param>
+    /// <param name="color">The colour of the frame, where a transparent colour draws nothing.</param>
+    /// <param name="thickness">How many pixels thick the frame is, where zero draws nothing.</param>
+    /// <remarks>
+    /// The frame is four rectangles rather than a rounded rectangle or a picture, because the rectangle is what the
+    /// renderer draws and the interface of the engine is drawn from rectangles alone. It is drawn inside the box of the
+    /// element rather than beside it, so an element that grows a frame keeps the room it was given. A frame of no alpha
+    /// is not drawn at all, which is what a zone that has no edge of its own costs.
+    /// </remarks>
+    private void DrawBorder(Rect box, Color color, int thickness)
+    {
+        if (thickness <= 0 || color.A == 0 || box.Width <= 0f || box.Height <= 0f)
+        {
+            return;
+        }
+
+        int edge = Math.Min(thickness, (int)MathF.Min(box.Width, box.Height));
+
+        if (edge <= 0)
+        {
+            return;
+        }
+
+        _renderer.DrawRectangle(new Rect(box.Position, new Vector2(box.Width, edge)), color);
+        _renderer.DrawRectangle(new Rect(box.Position + new Vector2(0f, box.Height - edge), new Vector2(box.Width, edge)), color);
+        _renderer.DrawRectangle(new Rect(box.Position, new Vector2(edge, box.Height)), color);
+        _renderer.DrawRectangle(new Rect(box.Position + new Vector2(box.Width - edge, 0f), new Vector2(edge, box.Height)), color);
+    }
+
+    /// <summary>Draws the image of an element inside its rectangle, or its placeholder when the image is not there.</summary>
+    /// <param name="image">The image of the element, whose tint is null when a document named none.</param>
+    /// <param name="box">The rectangle the image is drawn in.</param>
+    /// <remarks>
+    /// What a document that names no tint reads is null rather than transparent, which is what makes a transparent tint
+    /// a colour that a person asked for rather than one that stands for the default. The image as the artist drew it is
+    /// what a document that names no colour is drawn as, and an image that asks for a transparent tint is drawn as the
+    /// image it asked for.
+    /// </remarks>
+    private void DrawImage(in ImageComponent image, Rect box)
+    {
+        if (_textures is null || string.IsNullOrEmpty(image.TexturePath))
+        {
+            return;
+        }
+
+        TextureHandle texture = _textures.Resolve(image.TexturePath);
+        Color tint = image.Tint ?? Color.White;
+
+        _renderer.DrawSprite(texture, box.Position, box.Size, tint);
+    }
+
     /// <summary>Draws a check box: a face, and a mark in it when it is checked.</summary>
-    /// <param name="checkBox">The state of the box.</param>
-    /// <param name="box">The rectangle of the element.</param>
     private void DrawCheckBox(in CheckBoxComponent checkBox, Rect box)
     {
         _renderer.DrawRectangle(box, checkBox.IsHovered ? HoverColour : FaceColour);
@@ -152,14 +236,11 @@ public sealed class UIRenderSystem : IRenderPass
             return;
         }
 
-        // The mark is a rectangle inset from the box rather than a glyph, so a check box is drawn without a font.
         float inset = MathF.Max(3f, MathF.Min(box.Width, box.Height) * 0.25f);
         _renderer.DrawRectangle(new Rect(box.Position + new Vector2(inset, inset), box.Size - new Vector2(inset * 2f, inset * 2f)), MarkColour);
     }
 
     /// <summary>Draws a slider: a track, the part of it the value has reached, and a handle at the value.</summary>
-    /// <param name="slider">The value of the slider.</param>
-    /// <param name="box">The rectangle of the element.</param>
     private void DrawSlider(in SliderComponent slider, Rect box)
     {
         float height = MathF.Min(box.Height, TrackHeight);
@@ -176,17 +257,13 @@ public sealed class UIRenderSystem : IRenderPass
     }
 
     /// <summary>Draws a progress bar: a track and the part of it the value has reached.</summary>
-    /// <param name="bar">The value of the bar.</param>
-    /// <param name="box">The rectangle of the element.</param>
-    private void DrawProgressBar(in ProgressBarComponent bar, Rect box)
+    private void DrawProgressBar(in ProgressBarComponent bar, Rect box, Color fill)
     {
         _renderer.DrawRectangle(box, InkColour);
-        _renderer.DrawRectangle(new Rect(box.Position, new Vector2(box.Width * bar.Normalized, box.Height)), FaceColour);
+        _renderer.DrawRectangle(new Rect(box.Position, new Vector2(box.Width * bar.Normalized, box.Height)), fill);
     }
 
     /// <summary>Draws the closed element of a drop-down, which is the chosen value on a face.</summary>
-    /// <param name="dropdown">The values of the drop-down.</param>
-    /// <param name="box">The rectangle of the closed element.</param>
     private void DrawDropdown(in DropdownComponent dropdown, Rect box)
     {
         _renderer.DrawRectangle(box, dropdown.IsHovered ? HoverColour : FaceColour);
@@ -200,8 +277,6 @@ public sealed class UIRenderSystem : IRenderPass
     }
 
     /// <summary>Draws the open list of a drop-down, which hangs under the closed element and stands over the rest of the interface.</summary>
-    /// <param name="dropdown">The values of the open drop-down.</param>
-    /// <param name="box">The rectangle of the closed element.</param>
     private void DrawDropdownList(in DropdownComponent dropdown, Rect box)
     {
         if (dropdown.Count == 0)
@@ -221,8 +296,6 @@ public sealed class UIRenderSystem : IRenderPass
     }
 
     /// <summary>Draws the line of a text field and the caret at its place.</summary>
-    /// <param name="field">The line the field holds.</param>
-    /// <param name="box">The rectangle of the element.</param>
     private void DrawTextField(in TextFieldComponent field, Rect box)
     {
         _renderer.DrawRectangle(box, field.IsHovered || field.Focused ? HoverColour : FaceColour);
@@ -233,7 +306,6 @@ public sealed class UIRenderSystem : IRenderPass
             return;
         }
 
-        // The caret stands where the characters before it end, which the built-in font measures at a fixed width per glyph.
         float advance = field.Caret * BitmapFontMetrics.GlyphWidth;
         var caret = new Rect(
             new Vector2(box.Position.X + LinePad + advance, box.Position.Y + 2f),
@@ -243,28 +315,28 @@ public sealed class UIRenderSystem : IRenderPass
     }
 
     /// <summary>Collects the elements of a world that are visible, in ascending entity order.</summary>
-    /// <param name="world">The world to read the elements from.</param>
+    /// <remarks>
+    /// An element is what a person sees when it is visible and every ancestor of it is visible: a panel that a window
+    /// hides takes its children with it, which is what a window of the interface is for.
+    /// </remarks>
     private void CollectItems(World world)
     {
         _items.Clear();
 
         foreach (Entity entity in world.Enumerate<RectTransformComponent>())
         {
-            if (!IsVisibleElement(world, entity))
+            if (!IsVisibleElement(world, entity) || !IsEffectivelyVisible(world, entity))
             {
                 continue;
             }
 
             RectTransformComponent rect = world.Get<RectTransformComponent>(entity);
 
-            if (!rect.Visible)
-            {
-                continue;
-            }
-
             _items.Add(new UiItem(
                 entity,
                 rect.ZOrder,
+                world.Has<PanelComponent>(entity),
+                world.Has<ImageComponent>(entity),
                 world.Has<ButtonComponent>(entity),
                 world.Has<TextComponent>(entity),
                 world.Has<CheckBoxComponent>(entity),
@@ -275,15 +347,73 @@ public sealed class UIRenderSystem : IRenderPass
         }
     }
 
+    /// <summary>Returns a value indicating whether an element and every ancestor of it are visible.</summary>
+    /// <param name="world">The world to read.</param>
+    /// <param name="entity">The element to test.</param>
+    /// <returns><see langword="true"/> when the element is drawn, which is when it and every ancestor of it say so.</returns>
+    /// <remarks>
+    /// The walk up the tree stops at an element whose parent is gone, at one that names no parent, and at one the walk has
+    /// already been through, which is what a cycle a game wrote by mistake is. Every element is visited once, so the walk
+    /// is finite without a depth limit that would leave a legitimate tree of a hundred levels unread, and an element of a
+    /// parent that is gone is a root of its own: a tree that a scene dropped is a tree whose children stand where they are
+    /// rather than one that is drawn as nothing.
+    /// </remarks>
+    private static bool IsEffectivelyVisible(World world, Entity entity)
+    {
+        var visited = new HashSet<Entity>();
+        Entity current = entity;
+
+        while (visited.Add(current))
+        {
+            if (!world.IsAlive(current) || !world.Has<RectTransformComponent>(current))
+            {
+                // An element of a parent that is gone is a root of its own, and one that a game holds without a
+                // rectangle is not one this pass reads: the two are left to whatever placed them.
+                return true;
+            }
+
+            if (!world.Get<RectTransformComponent>(current).Visible)
+            {
+                return false;
+            }
+
+            if (!world.Has<ParentComponent>(current))
+            {
+                return true;
+            }
+
+            Entity parent = world.Resolve(world.Get<ParentComponent>(current).Parent);
+
+            if (parent == default(Entity) || parent == current)
+            {
+                return true;
+            }
+
+            current = parent;
+        }
+
+        // The walk reached an element it has already been through, which is what a cycle in the tree is: what has been
+        // checked so far is every element that could have hidden the one the walk began with, and none of them did.
+        return true;
+    }
+
     /// <summary>Returns a value indicating whether an element carries something this pass draws.</summary>
     private static bool IsVisibleElement(World world, Entity entity) =>
-        world.Has<ButtonComponent>(entity) || world.Has<TextComponent>(entity) || world.Has<CheckBoxComponent>(entity) ||
-        world.Has<SliderComponent>(entity) || world.Has<ProgressBarComponent>(entity) || world.Has<DropdownComponent>(entity) ||
+        world.Has<PanelComponent>(entity) ||
+        world.Has<ImageComponent>(entity) ||
+        world.Has<ButtonComponent>(entity) ||
+        world.Has<TextComponent>(entity) ||
+        world.Has<CheckBoxComponent>(entity) ||
+        world.Has<SliderComponent>(entity) ||
+        world.Has<ProgressBarComponent>(entity) ||
+        world.Has<DropdownComponent>(entity) ||
         world.Has<TextFieldComponent>(entity);
 
     private readonly record struct UiItem(
         Entity Entity,
         int ZOrder,
+        bool HasPanel,
+        bool HasImage,
         bool HasButton,
         bool HasLabel,
         bool HasCheckBox,

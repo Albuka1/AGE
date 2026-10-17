@@ -20,6 +20,9 @@ namespace Age.UI;
 [JsonSerializable(typeof(ProgressBarComponent))]
 [JsonSerializable(typeof(TextFieldComponent))]
 [JsonSerializable(typeof(DropdownComponent))]
+[JsonSerializable(typeof(PanelComponent))]
+[JsonSerializable(typeof(ImageComponent))]
+[JsonSerializable(typeof(UiElementComponent))]
 internal sealed partial class AgeUiJsonContext : JsonSerializerContext
 {
 }

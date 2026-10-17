@@ -8,18 +8,20 @@ namespace Age.UI;
 /// </summary>
 public static class UIServiceCollectionExtensions
 {
-    /// <summary>Registers the UI systems as singletons, together with the components of this assembly.</summary>
-    /// <remarks>The components are registered so that a scene can hold them; the registry itself comes from <c>AddAgeCore</c>.</remarks>
+    /// <summary>
+    /// Registers the state of one frame, which the systems of the interface share and the layout system resets on every
+    /// frame, and the systems and the component registrations of this assembly.
+    /// </summary>
+    /// <remarks>
+    /// The state is a singleton because the systems that read the same pointer are: a click that one control took is a
+    /// click the next one does not read, and the first of them resets the state on every frame.
+    /// </remarks>
     public static IServiceCollection AddAgeUI(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        // The state of one frame is shared by the systems that read the same pointer, so a click that one control took is a click the
-        // next one does not read: it is a singleton because the systems are, and it is reset by the first of them on every frame.
         services.AddSingleton<UIInputFrame>();
-        services.AddSingleton<UIUpdateSystem>();
-        services.AddSingleton<TextInputSystem>();
-        services.AddSingleton<IComponentRegistrations, UiComponentRegistrations>();
+        services.AddAgeSystems(typeof(UIInputFrame).Assembly);
+        services.AddAgeComponentRegistrations(typeof(UIInputFrame).Assembly);
         return services;
     }
 }

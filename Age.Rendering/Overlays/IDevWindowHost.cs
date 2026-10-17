@@ -3,13 +3,14 @@ using Age.Core;
 namespace Age.Rendering;
 
 /// <summary>
-/// A window of the operating system that a developer window is drawn into: the surface, its events and the pointer, kept apart from
-/// <see cref="IWindowService"/> so a second window does not have to be the window of the game.
+/// A window of the operating system that a developer window is drawn into: the surface, its events and the pointer, kept
+/// apart from <see cref="IWindowService"/> so a second window does not have to be the window of the game.
 /// </summary>
 /// <remarks>
-/// The engine's own window is <see cref="IWindowService"/>, which owns one window and one context and is what the game is drawn
-/// into. A developer window is a second one, which is why it is a seam of its own: a backend answers it with a platform window, and a
-/// run with no window answers it with a window that is never there, so a game that asks for one is not a game that needs one.
+/// The engine's own window is <see cref="IWindowService"/>, which owns one window and one context and is what the game is
+/// drawn into. A developer window is a second one, which is why it is a seam of its own: a backend answers it with a
+/// platform window, and a run with no window answers it with a window that is never there, so a game that asks for one is
+/// not a game that needs one.
 /// </remarks>
 public interface IDevWindowHost
 {
