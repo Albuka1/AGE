@@ -45,7 +45,7 @@ jobs:
       - run: cp _site/api/toc.html _site/api/index.html
 
       - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deploy
